@@ -1,0 +1,5 @@
+This project was build on the advice found at:
+
+https://docs.docker.com/compose/django/
+
+6/24/2019
