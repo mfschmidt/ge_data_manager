@@ -72,3 +72,6 @@ class ResultSummary(models.Model):
     num_distshuffles = models.IntegerField()
     num_edgeshuffles = models.IntegerField()
     num_splits = models.IntegerField()
+
+    class Meta:
+        ordering = ["summary_date"]
