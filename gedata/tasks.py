@@ -147,7 +147,7 @@ def collect_jobs(self, data_path="/data", new_only=False):
             duration=seconds_elapsed(result.get("elapsed", "")),
             shuffle=result.get("shuffle", ""),
             subject=result.get("sub", ""),
-            hemisphere=result.get("hem", "").upper()[0],
+            hemisphere=result.get("hem", " ").upper()[0],
             cortex=result.get("ctx", ""),
             probes=result.get("prb", ""),
             target=result.get("tgt", ""),
