@@ -22,7 +22,7 @@ class PushResult(models.Model):
     duration = models.IntegerField()
 
     # Data preparation and execution details
-    shuffle = models.CharField(max_length = 16)  # 'none': 'derivatives', 'agnostic': 'shuffles', 'distance': 'distshuffles', 'edges': 'edgeshuffles'
+    shuffle = models.CharField(max_length = 16)  # 'derivatives': 'derivatives', 'agnostic': 'shuffles', 'distance': 'distshuffles', 'edges': 'edgeshuffles'
     subject = models.CharField(max_length = 32)
     hemisphere = models.CharField(max_length = 1)
     cortex = models.CharField(max_length = 3)
@@ -41,13 +41,13 @@ class PushResult(models.Model):
 
     # Representations
     def __str__(self):
-        if self.shuffle == "none":
-            return "{}-{}-{} ({})".format(
+        if self.shuffle == "derivatives":
+            return "{} -x- {} to {} via {}".format(
                 self.subject, self.comparator, self.target, self.algorithm
             )
         else:
-            return "{}-{}-{} ({}, {:3}-{})".format(
-                self.subject, self.comparator, self.target, self.algorithm, self.seed, self.shuffle
+            return "{}: {} -x- {} to {} via {}, seed={}".format(
+                self.shuffle, self.subject, self.comparator, self.target, self.algorithm, self.seed,
             )
 
 

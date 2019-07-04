@@ -28,10 +28,27 @@ def index(request):
 class ResultView(generic.DetailView):
     model = PushResult
     template_name = 'gedata/result.html'
+    # Additional data for the footer
+    def get_context_data(self, **kwargs):
+        context = super(ResultView, self).get_context_data(**kwargs)
+        context['n_results'] = PushResult.objects.count()
+        context['m_results'] = ResultSummary.objects.latest('summary_date').num_results
+        context['latest_result_summary'] = ResultSummary.objects.latest('summary_date')
+        return context
 
 class ResultsView(generic.ListView):
     model = PushResult
     template_name = 'gedata/results.html'
+    # Additional data for the footer
+    def get_context_data(self, **kwargs):
+        context = super(ResultsView, self).get_context_data(**kwargs)
+        context['n_results'] = PushResult.objects.count()
+        context['m_results'] = ResultSummary.objects.latest('summary_date').num_results
+        context['latest_result_summary'] = ResultSummary.objects.latest('summary_date')
+        return context
+
+    def get_queryset(self):
+        return PushResult.objects.filter(shuffle='derivatives')
 
 def rest_refresh(request):
     """ Execute the celery task to refresh the result list, and return json with the task_id necessary for

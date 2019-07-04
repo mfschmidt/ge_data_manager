@@ -1,6 +1,9 @@
 {% extends 'gedata/base.html' %}
 
 {% block content %}
+{% load humanize %}
+
+<p>{{ latest_result_summary.num_actuals|intcomma }} real results ({{ latest_result_summary.num_shuffles|intcomma }} agno + {{ latest_result_summary.num_distshuffles|intcomma }} dist + {{ latest_result_summary.num_edgeshuffles|intcomma }} edge shuffles).</p>
 
 {% if pushresult_list %}
     <ul>

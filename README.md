@@ -15,12 +15,17 @@ Run the following from the linux command line.
     git clone https://github.com/mfschmidt/ge_data_manager.git
     cd ge_data_manager
     
-Either 1. Create a link to your data at <code>/var/ge_data/</code> with a command like <code>$ sudo ln -s /home/mike/ge_data /var/ge_data</code>, 2. Copy all of your data to <code>/var/ge_data/</code>, or 3. Edit <code>docker-compose.yml</code> to map your own <code>PYGEST_DATA</code> path to <code>/data</code>. Any one of these will allow the docker container to find your files.
+Either
+1. Create a link to your data at <code>/var/ge_data/</code> with a command like <code>$ sudo ln -s /home/mike/ge_data /var/ge_data</code>,
+2. Copy all of your data to <code>/var/ge_data/</code>, or
+3. Edit <code>docker-compose.yml</code> to map your own <code>PYGEST_DATA</code> path to <code>/data</code>.
+
+Any <b>one</b> of these will allow the docker container to find your files. Then run the containers.
 
     docker-compose build && docker-compose up
     
 You can now browse to <code>http://localhost:8000</code> to explore ge_data_manager.
-    
+
 ## Additional steps (optional)
 
 You can add yourself as a superuser, although you don't need it for anything. This also demonstrates how to access any django <code>manage.py</code> functions within the container. First, get the name of the docker container you've just started. It's usually the same, but can vary.
