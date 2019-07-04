@@ -15,7 +15,7 @@ Run the following from the linux command line.
     git clone https://github.com/mfschmidt/ge_data_manager.git
     cd ge_data_manager
     
-Edit <code>docker-compose.yml</code> to map your own <code>PYGEST_DATA</code> path to <code>/data</code>.
+Either 1. Create a link to your data at <code>/var/ge_data/</code> with a command like <code>$ sudo ln -s /home/mike/ge_data /var/ge_data</code>, 2. Copy all of your data to <code>/var/ge_data/</code>, or 3. Edit <code>docker-compose.yml</code> to map your own <code>PYGEST_DATA</code> path to <code>/data</code>. Any one of these will allow the docker container to find your files.
 
     docker-compose build && docker-compose up
     
