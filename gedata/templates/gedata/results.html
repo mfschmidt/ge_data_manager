@@ -7,11 +7,8 @@
 
 {% if pushresult_list %}
     <ul>
-    {% for result in pushresult_list %}
-        <h3>{{ result.subject }}</h3>
-        {% for subject in result.subject__set.all|dictsort:"hemisphere" %}
-            <li><a href="{% url 'gedata:result' result.pk %}">{{ result }}</a></li>
-        {% endfor %}
+    {% for result in pushresult_list|dictsort:"subject" %}
+        <li><a href="{% url 'gedata:result' result.pk %}">{{ result }}</a></li>
     {% endfor %}
     </ul>
 {% else %}
