@@ -20,6 +20,6 @@ services:
                 command: >
                         /bin/bash -c "celery worker --app ge_data_manager --hostname=mq --broker "amqp://guest@mq" --loglevel=INFO --events"
                 volumes:
-                        - /home/mike/ge_data:/data
+                        - /var/ge_data:/data
                 depends_on:
                         - mq
