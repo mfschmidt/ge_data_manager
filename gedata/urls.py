@@ -2,8 +2,16 @@ from django.urls import path
 
 from . import views
 
+app_name = "gedata"
 urlpatterns = [
     path('', views.index, name='index'),
-    path('single_curve/', views.single_curve, name='single_curve'),
-    path('compare_batches/', views.compare_batches, name='compare_batches'),
+    path('REST/refresh/', views.rest_refresh, name='refresh'),
+    path('results/', views.ResultsView.as_view(), name='results'),
+    path('result/<int:pk>', views.ResultView.as_view(), name='result'),
 ]
+
+"""
+path('inventory/', views.inventory, name='inventory'),
+path('<str:bids_key>/<str:bids_val>/', views.summarize_bids, name="summarize_bids"),
+path('<str:bids_key1>/<str:bids_val1>/<str:bids_key2>/<str:bids_val2>/', views.summarize_bids, name="summarize_bids"),
+"""

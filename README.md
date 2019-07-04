@@ -17,7 +17,7 @@ Run the following from the linux command line.
     
 Edit <code>docker-compose.yml</code> to map your own <code>PYGEST_DATA</code> path to <code>/data</code>.
 
-    docker-compose up &
+    docker-compose build && docker-compose up
     
 You can now browse to <code>http://localhost:8000</code> to explore ge_data_manager.
     
@@ -38,3 +38,8 @@ And within that shell, in the context of the docker container, you can interact 
     python manage.py migrate
 
 If you created a new superuser, you can log in at http://localhost:8000/admin/ to play around with it. The user you created will only be available on your local instance of ge_data_manager. If you clone it elsewhere, you'll get a fresh new empty database with no users and no results.
+
+## Some debugging help
+
+If you'd like to monitor celery tasks as they run, you can change the worker's command in docker-compose.yml to `--loglevel=debug`. This will emit more detailed logs from the worker container.
+

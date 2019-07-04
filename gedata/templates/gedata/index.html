@@ -1,0 +1,15 @@
+{% extends 'gedata/base.html' %}
+
+{% load humanize %}
+
+{% block content %}
+
+<p>As of {{ latest_result_summary.summary_date }}, {{ n_results|intcomma }} results are available locally.</p>
+<ul>
+    <li>{{ latest_result_summary.num_actuals|intcomma }} results from actual data</li>
+    <li>{{ latest_result_summary.num_shuffles|intcomma }} results from agnostically shuffled data</li>
+    <li>{{ latest_result_summary.num_distshuffles|intcomma }} results from distance-weighted shuffled data</li>
+    <li>{{ latest_result_summary.num_edgeshuffles|intcomma }} results from distance-binned edge-shuffled data</li>
+</ul>
+
+{% endblock %}

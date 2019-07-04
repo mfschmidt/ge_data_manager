@@ -1,3 +1,5 @@
+from __future__ import absolute_import, unicode_literals
+
 """
 Django settings for ge_data_manager project.
 
@@ -32,12 +34,15 @@ ALLOWED_HOSTS = ['*']
 
 INSTALLED_APPS = [
     "gedata.apps.GedataConfig",
+    "celery_progress",
+    "django_celery_results",
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.humanize',
 ]
 
 MIDDLEWARE = [
@@ -109,7 +114,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'America/New_York'
 
 USE_I18N = True
 
@@ -122,3 +127,13 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/2.2/howto/static-files/
 
 STATIC_URL = '/static/'
+
+
+# For celery use
+CELERY_BROKER_URL = 'amqp://mq'
+CELERY_RESULT_BACKEND = 'django-db'  # depends on having django_celery_results installed and configured.
+CELERY_CACHE_BACKEND = 'django-cache'  # depends on having django_celery_results installed and configured.
+CELERY_ACCEPT_CONTENT = ['application/json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE

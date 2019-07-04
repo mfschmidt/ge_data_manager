@@ -8,12 +8,18 @@ services:
         web:
                 build: .
                 command: >
-                    /bin/bash -c "python manage.py migrate &&
-                                  python manage.py runserver 0.0.0.0:8000"
-                volumes:
-                        - /home/mike/ge_data:/data
+                        /bin/bash -c "python manage.py migrate &&
+                                      python manage.py runserver 0.0.0.0:8000"
                 ports:
                         - "8000:8000"
                 depends_on:
                         - db
+                        - mq
+        worker:
+                build: .
+                command: >
+                        /bin/bash -c "celery worker --app ge_data_manager --hostname=mq --broker "amqp://guest@mq" --loglevel=INFO --events"
+                volumes:
+                        - /home/mike/scx_ge_data:/data
+                depends_on:
                         - mq

@@ -1,0 +1,15 @@
+{% extends 'gedata/base.html' %}
+
+{% block content %}
+
+{% if pushresult_list %}
+    <ul>
+    {% for result in pushresult_list %}
+        <li><a href="{% url 'gedata:result' result.pk %}">{{ result }}</a></li>
+    {% endfor %}
+    </ul>
+{% else %}
+    <p>No results are available.</p>
+{% endif %}
+
+{% endblock %}

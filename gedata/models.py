@@ -1,3 +1,5 @@
+from __future__ import absolute_import, unicode_literals
+
 from django.db import models
 import datetime
 
@@ -6,16 +8,17 @@ class PushResult(models.Model):
     """ Each run of PyGEST has many features. They are recorded in the PushResult class. """
 
     # File information
-    json_path = models.FilePathField()
-    tsv_path = models.FilePathField()
-    log_path = models.FilePathField()
+    json_path = models.FilePathField(path="/data", max_length=256)
+    tsv_path = models.FilePathField(path="/data", max_length=256)
+    log_path = models.FilePathField(path="/data", max_length=256)
 
     # Execution details
     start_date = models.DateTimeField('date_started')
     end_date = models.DateTimeField('date_completed')
     host = models.CharField(max_length = 16)
-    command = models.CharField(max_length = 16)
+    command = models.CharField(max_length = 256)
     version = models.CharField(max_length = 16)
+    # duration is in seconds
     duration = models.IntegerField()
 
     # Data preparation and execution details
@@ -28,9 +31,9 @@ class PushResult(models.Model):
     algorithm = models.CharField(max_length = 8)
     normalization = models.CharField(max_length = 16)
     comparator = models.CharField(max_length = 32)
-    mask = models.CharField(max_length = 8)
+    mask = models.CharField(max_length = 32)
     adjustment = models.CharField(max_length = 16)
-    seed = models.CharField(max_length = 8)
+    seed = models.IntegerField()
 
     # Result details
     columns = models.SmallIntegerField()
@@ -51,9 +54,21 @@ class PushResult(models.Model):
 class ConnectivityMatrix(models.Model):
     """ Connectivity matrices can be available in the conn directory. """
 
-    path = models.FilePathField()
+    path = models.FilePathField(path="/data/conn", max_length=256)
     columns = models.SmallIntegerField()
     rows = models.SmallIntegerField()
 
     name = models.CharField(max_length = 64)
     description = models.TextField()
+
+
+class ResultSummary(models.Model):
+    """ After summarizing all of the result files, cache the results here to save processing. """
+
+    summary_date = models.DateTimeField('date_summarized')
+    num_results = models.IntegerField()
+    num_actuals = models.IntegerField()
+    num_shuffles = models.IntegerField()
+    num_distshuffles = models.IntegerField()
+    num_edgeshuffles = models.IntegerField()
+    num_splits = models.IntegerField()

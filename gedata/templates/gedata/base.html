@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+
+{% load static %}
+{% load humanize %}
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <link rel="stylesheet" href="{% static 'gedata/css/main.css' %}">
+</head>
+<body>
+
+<!-- ---------- ========== Header ========== ------------>
+
+<header>
+
+{% block header %}
+    <!-- Fixed navbar -->
+    <nav class="navbar navbar-expand-md navbar-dark fixed-top bg-dark">
+        <a class="navbar-brand" href="{% url 'gedata:index' %}">{{ title }}</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav mr-auto">
+            <li class="nav-item active">
+                <a class="nav-link" href="{% url 'gedata:index' %}">Home <span class="sr-only"></span></a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'gedata:results' %}">Results</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link disabled" href="#" tabindex="-1" aria-disabled="true">Comparisons</a>
+            </li>
+            </ul>
+        </div>
+    </nav>
+{% endblock %}
+
+</header>
+
+<!-- ---------- ========== Main Body ========== ------------>
+
+<main role="main" class="flex-shrink-0">
+<div class="container">
+
+{% block content %}
+{% endblock %}
+
+</div>
+</main>
+
+<!-- ---------- ========== Footer ========== ------------>
+
+<footer class="footer mt-auto py-3 fixed-bottom">
+<div class="container">
+
+{% block footer %}
+    <nav class="navbar" id="bottom_status_bar">
+        <div id="static_progress_bar" style="display: block;">
+            <span id="n_results">As of {{ latest_result_summary.summary_date }}, {{ n_results|intcomma }} results available.</span> &nbsp;
+            <button id="progress-bar-redo-trigger" class="btn" onclick="startCompleteResultMining();"><i class="fas fa-redo"></i></button>
+        </div>
+        <div id="celery_progress_bar" class="progress-wrapper" style="display: none;">
+            <!--<span id="results_ok_check"><i class="fas fa-check"></i></span>-->
+            <div id="progress-bar-message"></div>
+            <div id="progress-bar" class="progress-bar" style="background-color: blue; width: 0; margin-top: 1em;">&nbsp;</div>
+            <div id="progress-bar-peak-total" style="display: none;">0</div>
+        </div>
+    </nav>
+{% endblock %}
+
+</div>
+</footer>
+
+<!-- ---------- ========== Scripts and code and such ========== ------------>
+
+<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+<script src="https://kit.fontawesome.com/05234e97de.js"></script>
+<script src="{% static 'gedata/js/main.js' %}"></script>
+<script src="{% static 'celery_progress/celery_progress.js' %}"></script>
+<script>
+    function startCompleteResultMining() {
+        document.getElementById("celery_progress_bar").style.display = "block";
+        document.getElementById("static_progress_bar").style.display = "none";
+        let refreshUrl = "{% url 'gedata:refresh' %}";
+        request = new XMLHttpRequest();
+        request.onreadystatechange = function() {
+            if (this.readyState === 4 && this.status === 200) {
+                let responseJsonObj = JSON.parse(this.responseText);
+                console.log("Got id: " + responseJsonObj.task_id);
+                let progressUrl = "/celery-progress/" + responseJsonObj.task_id + "/";
+                CeleryProgressBar.initProgressBar(progressUrl, {onSuccess: stopCeleryProcessPolling});
+            }
+        };
+        request.open("GET", refreshUrl, true);
+        request.send();
+        console.log("Beginning celery polling.");
+    }
+    function stopCeleryProcessPolling() {
+        document.getElementById("progress-bar").style.backgroundColor = '#76ce60';
+        let peak = document.getElementById("progress-bar-peak-total").innerHTML.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        document.getElementById("progress-bar-message").innerHTML = "Found " + peak + " results.";
+        document.getElementById("celery_progress_bar").style.display = "none";
+        document.getElementById("static_progress_bar").style.display = "block";
+    }
+</script>
+
+</body>
+</html>

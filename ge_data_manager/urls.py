@@ -15,12 +15,13 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from  django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('gedata/', include('gedata.urls')),
+    path('celery-progress/', include('celery_progress.urls')),
 
     # Redirect root requests to the gedata app
-    path('', lambda r:HttpResponseRedirect('gedata/'))
+    path('', lambda r:HttpResponseRedirect('gedata/')),
 ]
