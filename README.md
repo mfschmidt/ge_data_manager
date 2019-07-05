@@ -28,6 +28,16 @@ You can now browse to <code>http://localhost:8000</code> to explore ge_data_mana
 
 ## Additional steps (optional)
 
+This will run on 'localhost' or '127.0.0.1' by default, but will be accessible from any address on your network. Working alone behind a firewall, no problem. But if you want to run this site while on a larger network or open to a public internet, you should change two variables in settings.py.
+
+    # ORIGINAL, FOR DEBUGGING AND TESTING - ANYONE CAN ACCESS THE SITE AND GET DEBUG INFORMATION
+    DEBUG = True
+    ALLOWED_HOSTS = ['*']
+    
+    # NEW, SAFER FOR USING YOURSELF AND SHARING WITH YOUR COLLEAGUES AT 192.168.1.2 AND 192.168.1.3
+    DEBUG = False
+    ALLOWED_HOSTS = ['localhost', '192.168.1.2', '192.168.1.3']
+    
 You can add yourself as a superuser, although you don't need it for anything. This also demonstrates how to access any django <code>manage.py</code> functions within the container. First, get the name of the docker container you've just started. It's usually the same, but can vary.
 
     docker ps
