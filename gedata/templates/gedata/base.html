@@ -60,7 +60,7 @@
 {% block footer %}
     <nav class="navbar" id="bottom_status_bar">
         <div id="static_progress_bar" style="display: block;">
-            <span id="n_results">As of {{ latest_result_summary.summary_date }}, {{ n_results|intcomma }} results available.</span> &nbsp;
+            <span id="n_results">As of {{ latest_result_summary.summary_date }}, {{ latest_result_summary.num_results|intcomma }} results available.</span> &nbsp;
             <button id="progress-bar-redo-trigger" class="btn" onclick="startCompleteResultMining();"><i class="fas fa-redo"></i></button>
         </div>
         <div id="celery_progress_bar" class="progress-wrapper" style="display: none;">

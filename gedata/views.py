@@ -15,13 +15,10 @@ def index(request):
 
     context={
         'title': 'Gene Expression Main Page',
-        'latest_refresh': 'never',
-        'n_results': 0,
+        'latest_result_summary': ResultSummary.empty(),
     }
-    if ResultSummary.objects.count() > 1:
-        latest_result_summary = ResultSummary.objects.latest('summary_date')
-        context['n_results'] = PushResult.objects.count()
-        context['latest_result_summary'] = latest_result_summary
+    if ResultSummary.objects.count() > 0:
+        context['latest_result_summary'] = ResultSummary.objects.latest('summary_date')
 
     return render(request, 'gedata/index.html', context=context)
 

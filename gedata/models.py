@@ -73,5 +73,16 @@ class ResultSummary(models.Model):
     num_edgeshuffles = models.IntegerField()
     num_splits = models.IntegerField()
 
+    @classmethod
+    def empty(cls):
+        return cls(
+            summary_date = datetime.datetime.strptime("1900-01-01 00:00:00-0400", "%Y-%m-%d %H:%M:%S%z"),
+            num_results = 0,
+            num_actuals = 0,
+            num_shuffles = 0,
+            num_distshuffles = 0,
+            num_edgeshuffles = 0,
+            num_splits = 0,
+        )
     class Meta:
         ordering = ["summary_date"]
