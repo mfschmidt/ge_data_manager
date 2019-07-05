@@ -3,7 +3,7 @@
 {% block content %}
 {% load humanize %}
 
-<h1>{{ pushresult.subject }}-{{ pushresult.hemisphere }}-{{ pushresult.cortex }}-{{ pushresult.probes }} vs {{ pushresult.comparator }}</h1>
+<h2>{{ pushresult.subject }}-{{ pushresult.hemisphere }}-{{ pushresult.cortex }}-{{ pushresult.probes }} vs {{ pushresult.comparator }}</h2>
 
 <p>Ran from {{ pushresult.start_date }} to {{ pushresult.end_date }} ({{ pushresult.duration|intcomma }} seconds) on {{ pushresult.host }} as:<br />
 <code>{{ pushresult.command }}</code></p>
