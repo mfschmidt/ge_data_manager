@@ -8,19 +8,19 @@
 <p>Ran from {{ pushresult.start_date }} to {{ pushresult.end_date }} ({{ pushresult.duration|intcomma }} seconds) on {{ pushresult.host }} as:<br />
 <code>{{ pushresult.command }}</code></p>
 
-<ul>
-    <li>subject      : {{ pushresult.subject }}</li>
-    <li>hemisphere   : {{ pushresult.hemisphere }}</li>
-    <li>cortex       : {{ pushresult.cortex }}</li>
-    <li>probes       : {{ pushresult.probes }}</li>
-    <li>target       : {{ pushresult.target }}</li>
-    <li>algorithm    : {{ pushresult.algorithm }}</li>
-    <li>normalization: {{ pushresult.normalization }}</li>
-    <li>comparator   : {{ pushresult.comparator }}</li>
-    <li>mask         : {{ pushresult.mask }}</li>
-    <li>adjustment   : {{ pushresult.adjustment }}</li>
-    <li>shuffle      : {{ pushresult.shuffle }} (seed {{ pushresult.seed }})</li>
-</ul>
+<table>
+    <tr><td>subject      : </td><td>{{ pushresult.subject }}</td></tr>
+    <tr><td>hemisphere   : </td><td>{{ pushresult.hemisphere }}</td></tr>
+    <tr><td>cortex       : </td><td>{{ pushresult.cortex }}</td></tr>
+    <tr><td>probes       : </td><td>{{ pushresult.probes }}</td></tr>
+    <tr><td>target       : </td><td>{{ pushresult.target }}</td></tr>
+    <tr><td>algorithm    : </td><td>{{ pushresult.algorithm }}</td></tr>
+    <tr><td>normalization: </td><td>{{ pushresult.normalization }}</td></tr>
+    <tr><td>comparator   : </td><td>{{ pushresult.comparator }}</td></tr>
+    <tr><td>mask         : </td><td>{{ pushresult.mask }}</td></tr>
+    <tr><td>adjustment   : </td><td>{{ pushresult.adjustment }}</td></tr>
+    <tr><td>shuffle      : </td><td>{{ pushresult.shuffle }} (seed {{ pushresult.seed }})</td></tr>
+</table>
 
 <a href="{% url 'gedata:index' %}">Back home</a>
 
