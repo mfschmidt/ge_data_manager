@@ -175,5 +175,3 @@ def collect_jobs(self, data_path="/data", new_only=False):
         )
         s.save()
 
-    # results_df = pd.DataFrame(results)
-    # return results_df
