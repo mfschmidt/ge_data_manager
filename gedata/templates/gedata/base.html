@@ -6,8 +6,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>{{ title }}</title>
+    <title>{% block title %}{{ title }}{% endblock %}</title>
+    <link rel="manifest" href="site.webmanifest">
+    <link rel="apple-touch-icon" href="{% static mfs_icon_256.png %}">
+    <link rel="icon" href="{% static mfs_icon_256.png %}" sizes="256x256">
+    <link rel="icon" href="{% static mfs_icon_032.png %}" sizes="32x32">
+    <link rel="icon" href="{% static mfs_icon_032.ico %}" sizes="32x32">
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <link rel="stylesheet" href="{% static 'gedata/css/normalize.css' %}">
     <link rel="stylesheet" href="{% static 'gedata/css/main.css' %}">
 </head>
 <body>
@@ -60,7 +66,9 @@
 {% block footer %}
     <nav class="navbar" id="bottom_status_bar">
         <div id="static_progress_bar" style="display: block;">
-            <span id="n_results">As of {{ latest_result_summary.summary_date }}, {{ latest_result_summary.num_results|intcomma }} results available.</span> &nbsp;
+            <span id="n_results">{{ latest_result_summary.num_actuals|intcomma }} actual,
+                {{ latest_result_summary.num_shuffles|add:latest_result_summary.num_distshuffles|add:latest_result_summary.num_edgeshuffles|intcomma }} permutations,
+                {{ latest_result_summary.num_results|intcomma }} total results available, last refreshed {{ latest_result_summary.summary_date }}.</span> &nbsp;
             <button id="progress-bar-redo-trigger" class="btn" onclick="startCompleteResultMining();"><i class="fas fa-redo"></i></button>
         </div>
         <div id="celery_progress_bar" class="progress-wrapper" style="display: none;">
@@ -81,7 +89,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
 <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
 <script src="https://kit.fontawesome.com/05234e97de.js"></script>
+<script src="{% static 'gedata/js/vendor/modernizr-3.7.1.min.js' %}"></script>
 <script src="{% static 'gedata/js/main.js' %}"></script>
+<script src="{% static 'gedata/js/plugins.js' %}"></script>
 <script src="{% static 'celery_progress/celery_progress.js' %}"></script>
 <script>
     function startCompleteResultMining() {
