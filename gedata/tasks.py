@@ -12,10 +12,12 @@ import pandas as pd
 from ge_data_manager import settings
 
 from statistics import mean
+from scipy.stats import ttest_ind
+
 
 from pygest import plot, algorithms
 from pygest.rawdata import miscellaneous
-from pygest.convenience import bids_val
+from pygest.convenience import bids_val, create_symbol_to_id_map
 
 from .models import PushResult, ResultSummary
 
@@ -412,11 +414,13 @@ def describe_three_relevant_overlaps(relevant_results, phase, threshold):
 
 
 @shared_task(bind=True)
-def build_plot(self, plot_descriptor, data_path="/data"):
+def build_plot(self, plot_descriptor, data_path="/data", threshold=0.01):
     """ Traverse the output and populate the database with completed results.
 
+    :param self: Allows interacting with celery
     :param plot_descriptor: Abbreviated string describing plot's underlying data
     :param data_path: default /data, base path to all of the results
+    :param threshold: At which point in the ranking is a gene deemed relevant?
     """
 
     progress_recorder = ProgressRecorder(self)
@@ -425,34 +429,85 @@ def build_plot(self, plot_descriptor, data_path="/data"):
     parby = "glasser" if plot_descriptor[3].upper() == "G" else "wellid"
     splby = "glasser" if plot_descriptor[4].upper() == "G" else "wellid"
     mask = 'none' if plot_descriptor[5:7] == "00" else plot_descriptor[5:7]
+    algo = 'smrt'
+    phase = 'train'
 
     print("Seeking comp of " + plot_descriptor.upper() + ", resolves to " + comp + ".")
 
     relevant_results_queryset = PushResult.objects.filter(
         samp="glasser", prob="fornito", algo="smrt", comp=comp, parby=parby, splby=splby, mask=mask,
     )
-    progress_recorder.set_progress(0, len(relevant_results_queryset))
+    n = len(relevant_results_queryset)
+    progress_recorder.set_progress(0, n + 100, "Finding results")
 
     print("Found {:,} results ({} {} {} {} {} {} {})".format(
-        len(relevant_results_queryset),
-        "glasser", "fornito", "smrt", comp, parby, splby, mask,
+        n, "glasser", "fornito", algo, comp, parby, splby, mask,
     ))
 
     if len(relevant_results_queryset) > 0:
+        # sym_id_map, hg = create_symbol_to_id_map()
+        # id_sym_map = hg['Symbol'].to_dict()
+
         relevant_results = []
         for i, path in enumerate(relevant_results_queryset.values('tsv_path')):
             if os.path.isfile(path['tsv_path']):
                 relevant_results.append(dict_from_result(path['tsv_path'], base_path=data_path))
-                progress_recorder.set_progress(i + 1, len(relevant_results_queryset))
+                progress_recorder.set_progress(i + 1, n + 100, "Processing {:,}/{:,} results".format(i, n))
             else:
                 print("ERR: DOES NOT EXIST: {}".format(path['tsv_path']))
+        rdf = pd.DataFrame(relevant_results)
 
+        progress_recorder.set_progress(n, n + 100, "Generating plot")
         f_train_test, (a1, a2, a3, a4) = plot.plot_train_vs_test(
-            pd.DataFrame(relevant_results),
-            title="train-vs-test, {}-masked, split by {}, smrt-ranked".format(mask, splby),
+            rdf,
+            title="{}s, split by {}, {}-masked, {}-ranked, by {}".format(parby, splby, mask, algo, comp),
             fig_size=(14, 8), ymin=-0.10, ymax=0.75
         )
 
         # data_path should get into the PYGEST_DATA area, which is symbolically linked to /static, so just one write.
         f_train_test.savefig(os.path.join(data_path, "plots", "train_test_{}.png".format(plot_descriptor.lower())))
-        # f_train_test.savefig(os.path.join(settings.BASE_DIR, "../gedata/static/gedata/plots", "train_test_{}.png".format(plot_descriptor.lower())))
+
+        """ Write out relevant gene lists as html. """
+        progress_recorder.set_progress(n+20, n + 100, "Ranking genes")
+        relevant_tsvs = list(describe_three_relevant_overlaps(rdf, phase, threshold)['path'])
+        survivors = pervasive_probes(relevant_tsvs, threshold)
+        all_ranked = ranked_probes(relevant_tsvs, threshold)
+        all_ranked['rank'] = range(1, len(all_ranked.index) + 1, 1)
+        with open(os.path.join(data_path, "plots", "train_test_{}.html".format(plot_descriptor.lower())), "wt") as f:
+            f.write("<p>In test, real data Mantel correlations differ from shuffled data:\n  <ol>\n")
+            for shf in ['edge', 'dist', 'agno']:
+                t, p = ttest_ind(
+                    # 'test_score' is in the test set, could do 'train_score', too
+                    rdf[rdf['shuffle'] == 'none']['test_score'].values,
+                    rdf[rdf['shuffle'] == shf]['test_score'].values,
+                )
+                f.write("    <li>{}: t = {}, p = {}</li>\n".format(shf, t, p))
+            f.write("  </ol>\n</p>\n")
+
+            """ Next, for the description file, report top genes. """
+            progress_recorder.set_progress(n + 50, n + 100, "Summarizing genes")
+            line = "Pure {} {}-ranked by-{}, mask={}".format(phase, algo, splby, mask)
+            f.write("<p>" + line + "\n  <ol>\n")
+            # print(line)
+            for p in (list(all_ranked.index[0:20]) + [x for x in survivors['probe_id'] if x not in all_ranked.index[0:20]]):
+                asterisk = " *" if p in list(survivors['probe_id']) else ""
+                item_string = "probe {} -> gene {}, mean rank = {:0.1f}{}".format(
+                    p, all_ranked.loc[p, 'entrez_id'], all_ranked.loc[p, 'mean'] + 1.0, asterisk
+                )
+                f.write("    <li value=\"{}\">{}</li>\n".format(all_ranked.loc[p, 'rank'], item_string))
+                # print("{}. {}".format(all_ranked.loc[p, 'rank'], item_string))
+            f.write("  </ol>\n</p>\n")
+            f.write("<div id=\"notes_below\">")
+            f.write("    <p>Asterisks indicate probes that survived to the top 1% in all 16 splits.</p>")
+            f.write("</div>")
+
+        """ Write out ranked gene list as text. 
+        with open(os.path.join(data_path, "plots", "genes-from-{}_top1pct.txt".format(plot_descriptor.lower())), "wt") as f:
+            for p in list(all_ranked.index):
+                if p in id_sym_map.keys():
+                    f.write(id_sym_map[p])
+                else:
+                    f.write("( " + str(p) + " )")
+        """
+
+        progress_recorder.set_progress(n + 100, n + 100, "Finished")

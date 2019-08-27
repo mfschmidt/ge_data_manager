@@ -16,7 +16,7 @@
     <link rel="stylesheet" href="{% static 'gedata/css/main.css' %}">
     <script src="https://kit.fontawesome.com/05234e97de.js"></script>
 </head>
-<body onload="initUi();">
+<body onload="initUi()">
 
 <!-- ---------- ========== Header ========== ------------>
 
@@ -125,6 +125,11 @@
     function buildPlot(image_id, select_id) {
         let select_element = document.getElementById(select_id);
         let image_element = document.getElementById(image_id);
+        if (image_element.innerHTML.includes("img src")) {
+            // Immediately set the image blank, just to give feedback we registered the click.
+            // But don't mess with active spinners (checked via "img src" substring
+            loadPlot(image_element, "/static/gedata/empty.png");
+        }
         let plot_handle = select_element.options[select_element.selectedIndex].value;
         console.log("Checking for " + plot_handle + " image for " + image_id + ".");
         let img_file = "train_test_" + plot_handle.toLowerCase() + ".png";
@@ -168,12 +173,17 @@
         png_http.send();
     }
     function loadPlot(image_element, image_url) {
-        w = Math.round(document.documentElement.clientWidth * 0.45);
+        let w = Math.round(document.documentElement.clientWidth * 0.45);
         image_element.style.color = '#ffffff';
-        html_text = "<a href=\"" + image_url + "\">";
+        let html_text = "<a href=\"" + image_url + "\">";
         html_text += "<img src=\"" + image_url + "\" width=\"" + w + "\">";
         html_text += "</a>";
         image_element.innerHTML = html_text;
+
+        // Also update gene ranking information, if available.
+        if (!image_url.endsWith('empty.png')) {
+            append_probes_from_file(image_element.id.replace('image', 'go'), image_url.replace('png', 'html'));
+        }
     }
 </script>
 
