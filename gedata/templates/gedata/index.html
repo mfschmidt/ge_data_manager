@@ -14,4 +14,57 @@
     <li>{{ latest_result_summary.num_edgeshuffles|intcomma }} results from distance-binned edge-shuffled data</li>
 </ul>
 
+    <p> The earlier analyses each focused on a complete sample from a particular donor. We now focus on a subset of these many analyses that used split-half resampling.
+        All split halves are based on all donors <b>(sub-all)</b>, all hemispheres <b>(hem-A)</b>,
+        but only samples that can fit into left hemisphere Glasser parcellations <b>(samp-glasser)</b>, and the Fornito/Arnatkeviciute selection of probes <b>(prob-fornito)</b>.
+        This results in a starting expression similarity matrix with 15,745 probes and 1,280 samples, <b>[15745, 1280]</b>, for all split-half experiments.
+        In some, we used the 1,280 Glasser-compatible original AHBA wellids for sample locations <b>(parby-wellid)</b>
+        and in others we averaged groups of wellids into 180 Glasser parcels <b>(parby-glasser)</b>, although only 177 are represented.
+        In some, we split the sample in half by randomly dividing wellids <b>(splby-wellid)</b>, leaving some parcels empty and some parcels with fewer samples,
+        and in others we split the sample by Glasser parcels <b>(splby-glasser)</b>, leaving fewer parcels, each with all possible wellids together.
+        These were also described in email May 13th, 2019. And obviously, the wellid-parcellated matrices are larger and take longer to run.
+    </p>
+        <ul>
+            <li>Each wellid-split and wellid-parcelled half is exactly [15745, 640].</li>
+            <li>Each wellid-split and glasser-parcellated half is [15745, 155-165].</li>
+            <li>Glasser-split and wellid-parcellated halves are [15745, 556-724].</li>
+            <li>Glasser-split and glasser-parcellated halves are [15745, 88-89].</li>
+        </ul>
+    <p> Some variables were also altered to allow comparisons of results under different paradigms.
+        We compared these expression similarity matrices with connectivity similarity matrices from two datasets: the HCP data, parcellated into Glasser parcels
+        <b>(comp-glasserconnectivitysim)</b> or left as wellids <b>(comp-hcpniftismoothgrandmeansim)</b>; and the INDI NKI data, parcellated
+        into Glasser parcels <b>(comp-indiglasserconnsim)</b> or left as wellids <b>(comp-indiconnsim)</b>. In the parcellated HCP data, distance-masking
+        was applied at 16mm <b>(mask-16)</b>, 32mm <b>(mask-32)</b>, and 64mm <b>(mask-64)</b>
+        thresholds for comparison with unmasked <b>(mask-none)</b> data. There is a mix of 'once' and 'smrt' algorithms, all 'max' some 'min'
+    </p>
+    <p> So, the available comparisons at this point in time (each with 16 train/test splits and 256 permutations of each shuffle type) are:
+    </p>
+        <ul>HCP:
+            <li><b>parby-glasser_splby glasser ~ glasserconnectivitysim  mask-none (2 + 1,536: May 18)</b></li>
+            <li>parby-glasser_splby glasser ~ glasserconnectivitysim  mask-<b>16</b> (2 + 1,536: May 18)</li>
+            <li>parby-glasser_splby glasser ~ glasserconnectivitysim  mask-<b>32</b> (2 + 1,536: May 23)</li>
+            <li>parby-glasser_splby glasser ~ glasserconnectivitysim  mask-<b>64</b> (2 + 1,536: May 23)</li>
+            <li>parby-glasser_splby <b>wellid</b> ~ glasserconnectivitysim  mask-none (2 + 1,536: 26 - Apr 29)</li>
+            <li>parby-glasser_splby wellid ~ glasserconnectivitysim  mask-16 (2 + 1,536: May 2 - May 3)</li>
+            <li>parby-glasser_splby wellid ~ glasserconnectivitysim  mask-32 (2 + 1,536: about half from May 23 - May 28, half on June 19)</li>
+            <li>parby-glasser_splby wellid ~ glasserconnectivitysim  mask-64 (2 + 1,536: about half from May 23 - May 28, half on June 19)</li>
+            <li>parby-<b>wellid</b>_splby glasser ~ hcpniftismoothgrandmeansim  mask-none (Only 16, all split 205, from July 28)</li>
+            <li>parby-wellid_splby glasser ~ hcpniftismoothgrandmeansim  mask-16 (Only 16, all split 205, from July 28)</li>
+            <li>parby-wellid_splby wellid ~ hcpniftismoothgrandmeansim  mask-none (2 + 1,536 from July 8 - July 28)</li>
+            <li>parby-wellid_splby wellid ~ hcpniftismoothgrandmeansim  mask-16 (Only 16, all split 205, from July 28)</li>
+        </ul>
+        <ul>NKI INDI:
+            <li>parby-glasser_splby glasser ~ <b>indiglasserconnsim</b>  mask-none (2 + 1,536: July 28 - Aug 1)</li>
+            <li>parby-glasser_splby-wellid ~ indiglasserconnsim  mask-none (2 + 1,536: July 28 - Aug 1)</li>
+            <li>parby-wellid_splby glasser ~ indiconnsim  mask-none  (2 + 1,536: Aug 1 - present) ...running...</li>
+            <li>parby-wellid_splby wellid ~ indiconnsim  mask-none  (2 + 1,536: Aug 1 - present)...running...</li>
+        </ul>
+    <p> The primary result is in bold, based on an earlier conversations. Each partially bolded collection has only one variable altered from the primary.
+        We can use each of these to see how chaging that particular variable would have changed our primary results.
+    </p>
+    <ul style="color: gray;">
+        <li>A validation batch was run July 28th to ensure new code with new naming conventions produced identical results to older code.
+            These identical runs eventually overwrote the originals during consolidation of all results, so some timestamps may not match this report.
+        </li>
+    </ul>
 {% endblock %}
