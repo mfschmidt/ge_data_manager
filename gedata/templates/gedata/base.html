@@ -7,16 +7,16 @@
 <head>
     <meta charset="UTF-8">
     <title>{% block title %}{{ title }}{% endblock %}</title>
-    <link rel="manifest" href="site.webmanifest">
     <link rel="apple-touch-icon" href="{% static mfs_icon_256.png %}">
     <link rel="icon" href="{% static mfs_icon_256.png %}" sizes="256x256">
     <link rel="icon" href="{% static mfs_icon_032.png %}" sizes="32x32">
     <link rel="icon" href="{% static mfs_icon_032.ico %}" sizes="32x32">
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
     <link rel="stylesheet" href="{% static 'gedata/css/normalize.css' %}">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
     <link rel="stylesheet" href="{% static 'gedata/css/main.css' %}">
+    <script src="https://kit.fontawesome.com/05234e97de.js"></script>
 </head>
-<body>
+<body onload="initUi();">
 
 <!-- ---------- ========== Header ========== ------------>
 
@@ -38,7 +38,10 @@
                 <a class="nav-link" href="{% url 'gedata:results' %}">Results</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link disabled" href="#" tabindex="-1" aria-disabled="true">Comparisons</a>
+                <a class="nav-link" href="{% url 'gedata:filter' %}">Filter</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'gedata:compare' %}">Comparisons</a>
             </li>
             </ul>
         </div>
@@ -88,7 +91,6 @@
 <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
 <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
-<script src="https://kit.fontawesome.com/05234e97de.js"></script>
 <script src="{% static 'gedata/js/vendor/modernizr-3.7.1.min.js' %}"></script>
 <script src="{% static 'gedata/js/main.js' %}"></script>
 <script src="{% static 'gedata/js/plugins.js' %}"></script>
@@ -97,14 +99,16 @@
     function startCompleteResultMining() {
         document.getElementById("celery_progress_bar").style.display = "block";
         document.getElementById("static_progress_bar").style.display = "none";
-        let refreshUrl = "{% url 'gedata:refresh' %}";
-        request = new XMLHttpRequest();
+        let refreshUrl = "{% url 'gedata:refresh' job_name='collect_jobs' %}";
+        let request = new XMLHttpRequest();
         request.onreadystatechange = function() {
-            if (this.readyState === 4 && this.status === 200) {
-                let responseJsonObj = JSON.parse(this.responseText);
+            if (request.readyState === 4 && request.status === 200) {
+                let responseJsonObj = JSON.parse(request.responseText);
                 console.log("Got id: " + responseJsonObj.task_id);
                 let progressUrl = "/celery-progress/" + responseJsonObj.task_id + "/";
-                CeleryProgressBar.initProgressBar(progressUrl, {onSuccess: stopCeleryProcessPolling});
+                CeleryProgressBar.initProgressBar(progressUrl, {
+                    onSuccess: stopCeleryProcessPolling
+                });
             }
         };
         request.open("GET", refreshUrl, true);
@@ -117,6 +121,59 @@
         document.getElementById("progress-bar-message").innerHTML = "Found " + peak + " results.";
         document.getElementById("celery_progress_bar").style.display = "none";
         document.getElementById("static_progress_bar").style.display = "block";
+    }
+    function buildPlot(image_id, select_id) {
+        let select_element = document.getElementById(select_id);
+        let image_element = document.getElementById(image_id);
+        let plot_handle = select_element.options[select_element.selectedIndex].value;
+        console.log("Checking for " + plot_handle + " image for " + image_id + ".");
+        let img_file = "train_test_" + plot_handle.toLowerCase() + ".png";
+        let img_url = "/static/gedata/plots/" + img_file;
+
+        // The first ajax request determines whether our desired plot already exists or not.
+        let png_http = new XMLHttpRequest();
+        png_http.onreadystatechange = function() {
+            if (png_http.readyState === 4) {
+                if (png_http.status === 200) {
+                    console.log(plot_handle + " exists, loading it rather than rebuilding.");
+                    loadPlot(image_element, img_url);
+                }
+                if (png_http.status === 404) {
+                    console.log(plot_handle + " does not exist. Building it from scratch.");
+                    let refreshUrl = "{% url 'gedata:refresh' job_name=12345 %}".replace(/12345/, img_file);
+
+                    // The second ajax request initiates image creation and starts the spinner.
+                    let request = new XMLHttpRequest();
+                    request.onreadystatechange = function() {
+                        if (request.readyState === 4 && request.status === 200) {
+                            let responseJsonObj = JSON.parse(this.responseText);
+                            if (responseJsonObj.task_id !== "None") {
+                                console.log("Got id: " + responseJsonObj.task_id);
+                                let progressUrl = "/celery-progress/" + responseJsonObj.task_id + "/";
+                                CelerySpinner.initSpinner(progressUrl, {
+                                    onSuccess: loadPlot,
+                                    spinnerId: image_id,
+                                    dataForLater: img_url
+                                });
+                            }
+                        }
+                    };
+                    request.open("GET", refreshUrl, true);
+                    request.send();
+                    console.log("Beginning to build plot for " + plot_handle + " at " + image_id);
+                }
+            }
+        };
+        png_http.open('HEAD', img_url, true);
+        png_http.send();
+    }
+    function loadPlot(image_element, image_url) {
+        w = Math.round(document.documentElement.clientWidth * 0.45);
+        image_element.style.color = '#ffffff';
+        html_text = "<a href=\"" + image_url + "\">";
+        html_text += "<img src=\"" + image_url + "\" width=\"" + w + "\">";
+        html_text += "</a>";
+        image_element.innerHTML = html_text;
     }
 </script>
 
