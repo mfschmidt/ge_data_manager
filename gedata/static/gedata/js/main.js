@@ -102,10 +102,7 @@ function load_file(method, url) {
   });
 }
 
-async function append_probes_from_file(elementID, algo, mask, by) {
-  let text_url = img_url(algo, mask, by);
-  text_url = text_url.replace("img/train-vs-test", "rslt/genes-from-train-vs-test");
-  text_url = text_url.replace("png", "html");
+async function append_probes_from_file(elementID, text_url) {
   console.log(text_url);
   let result = await load_file("GET", text_url);
   document.getElementById(elementID).innerHTML += result;
@@ -157,16 +154,6 @@ function update_right() {
     );
     append_probes_from_file("right_descriptor", "right_algo","right_mask","right_by");
     update_go("right_algo", "right_mask", "right_by", "right_go");
-}
-
-function menuDarken( theEvent ) {
-	theEvent.target.className = theEvent.target.className.replace("light", "dark");
-	theEvent.target.className = theEvent.target.className.replace("black", "dark");
-}
-
-function menuLighten( theEvent ) {
-	theEvent.target.className = theEvent.target.className.replace("dark", "light");
-	theEvent.target.className = theEvent.target.className.replace("black", "light");
 }
 
 function initUi( ) {
