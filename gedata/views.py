@@ -4,9 +4,9 @@ from django.http import HttpResponse
 from django.shortcuts import render
 from django.views import generic
 
-from ge_data_manager.celery import celery_id_from_name
+from ge_data_manager.celery import celery_id_from_name, celery_plots_in_progress
 
-from .tasks import clear_jobs, collect_jobs
+from .tasks import clear_jobs, collect_jobs, build_plot
 from .models import PushResult, ResultSummary
 
 
@@ -47,15 +47,31 @@ class ResultsView(generic.ListView):
     def get_queryset(self):
         return PushResult.objects.filter(shuffle='derivatives')
 
-def rest_refresh(request):
+def rest_refresh(request, job_name):
     """ Execute the celery task to refresh the result list, and return json with the task_id necessary for
         checking on the job periodically and updating the progress bar.
     """
-    jobs_id = celery_id_from_name("collect_jobs")
-    if jobs_id is None:
-        clear_jobs()
-        celery_result = collect_jobs.delay("/data", new_only=False)
-        jobs_id = celery_result.task_id
+
+    jobs_id = celery_id_from_name(job_name)
+    plots_in_progress = celery_plots_in_progress()
+
+    if job_name == "collect_jobs":
+        if jobs_id is None:
+            print("NEW: rest_refresh got job '{}', no id returned. Re-building results database.".format(job_name))
+            clear_jobs()
+            celery_result = collect_jobs.delay("/data", new_only=False)
+            jobs_id = celery_result.task_id
+            print("     new id for '{}' is '{}'.".format(job_name, jobs_id))
+    elif job_name.startswith("train_test_"):
+        if job_name in plots_in_progress:
+            print("DUPE: {} requested, but is already being worked on.".format(job_name))
+        else:
+            print("NEW: rest_refresh got job '{}', no id returned. Building new plot.".format(job_name))
+            for plot in plots_in_progress:
+                print("     already building {}".format(plot))
+            celery_result = build_plot.delay(job_name[11:18].upper(), data_path="/data")
+            jobs_id = celery_result.task_id
+            print("     new id for '{}' is '{}'.".format(job_name, jobs_id))
 
     return HttpResponse("{" + "\"task_id\": \"{}\"".format(jobs_id) + "}")
 
