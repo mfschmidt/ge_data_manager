@@ -132,31 +132,31 @@ function update_go(algo_id, mask_id, by_id, go_id) {
 
 // Functions called from html events
 function update_left() {
-  let img_description = img_alt("left_algo", "left_mask", "left_by");
-  document.getElementById("left_image").innerHTML = img_html(
-    img_url("left_algo", "left_mask", "left_by"), img_description
-  );
-  document.getElementById("left_descriptor").innerHTML =
-    "<p>" + img_description + "</p>";
-  document.getElementById("left_perf_image").innerHTML = img_html(
-    perf_img_url("left_algo", "left_mask", "left_by"), img_description
-  );
-  append_probes_from_file("left_descriptor", "left_algo", "left_mask", "left_by");
-  update_go("left_algo", "left_mask", "left_by", "left_go");
+    let img_description = img_alt("left_algo", "left_mask", "left_by");
+    document.getElementById("left_image").innerHTML = img_html(
+      img_url("left_algo", "left_mask", "left_by"), img_description
+    );
+    document.getElementById("left_descriptor").innerHTML =
+      "<p>" + img_description + "</p>";
+    document.getElementById("left_perf_image").innerHTML = img_html(
+      perf_img_url("left_algo", "left_mask", "left_by"), img_description
+    );
+    append_probes_from_file("left_descriptor", "left_algo", "left_mask", "left_by");
+    update_go("left_algo", "left_mask", "left_by", "left_go");
 }
 
 function update_right() {
-  let img_description = img_alt("right_algo","right_mask","right_by");
-  document.getElementById("right_image").innerHTML = img_html(
-    img_url("right_algo", "right_mask", "right_by"), img_description
-  );
-  document.getElementById("right_descriptor").innerHTML =
-    "<p>" + img_description + "</p>";
-  document.getElementById("right_perf_image").innerHTML = img_html(
-    perf_img_url("right_algo", "right_mask", "right_by"), img_description
-  );
-  append_probes_from_file("right_descriptor", "right_algo","right_mask","right_by");
-  update_go("right_algo", "right_mask", "right_by", "right_go");
+    let img_description = img_alt("right_algo","right_mask","right_by");
+    document.getElementById("right_image").innerHTML = img_html(
+      img_url("right_algo", "right_mask", "right_by"), img_description
+    );
+    document.getElementById("right_descriptor").innerHTML =
+      "<p>" + img_description + "</p>";
+    document.getElementById("right_perf_image").innerHTML = img_html(
+      perf_img_url("right_algo", "right_mask", "right_by"), img_description
+    );
+    append_probes_from_file("right_descriptor", "right_algo","right_mask","right_by");
+    update_go("right_algo", "right_mask", "right_by", "right_go");
 }
 
 function menuDarken( theEvent ) {
@@ -171,10 +171,10 @@ function menuLighten( theEvent ) {
 
 function initUi( ) {
 	console.log("  initializing GE Data Manager UI (in main.js)");
-    let clickables = document.getElementsByClassName("clickable");
-    for( let i = 0; i < clickables.length; i++ ) {
-    	// Add mouseover feedback
-        clickables[i].addEventListener( 'mouseenter', menuDarken );
-        clickables[i].addEventListener( 'mouseleave', menuLighten );
-    }
+
+	// For the compare.html view:
+    // buildPlot('left_image', 'id_left_set');
+    // buildPlot('right_image', 'id_right_set');
+    document.getElementById("id_left_set").addEventListener('change', buildPlot('left_image', 'id_left_set'));
+    document.getElementById("id_right_set").addEventListener('change', buildPlot('right_image', 'id_right_set'));
 }

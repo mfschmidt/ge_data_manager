@@ -1,0 +1,43 @@
+{% extends 'gedata/base.html' %}
+
+{% load humanize %}
+
+{% block title %}Filtered Inventory{% endblock %}
+
+{% block content %}
+
+    {% if submitted %}
+        <p>POST data received.</p>
+    {% else %}
+        <form action="" method="POST" novalidate>
+            <table>
+                {{ form.as_table }}
+                <tr>
+                    <td>&nbsp;</td>
+                    <td><input type="submit" value="Filter"></td>
+                </tr>
+            </table>
+        {% csrf_token %}
+        </form>
+
+        <p>{{ pushresult_list|length|intcomma }} results</p>
+        <p><code>{{ result_path }}</code></p>
+        <ul>
+        {% for comment in comments %}
+            <li style="color: green; font-size: 80%;">{{ comment }}</li>
+        {% endfor %}
+        </ul>
+
+    {% endif %}
+
+    {% if pushresult_list %}
+        <ul>Results:
+        {% for result in pushresult_list|dictsort:"batch" %}
+            <li style="color: blue;"><a href="{% url 'gedata:result' result.pk %}">{{ result.tsv_path }}</a></li>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p>No results are available.</p>
+    {% endif %}
+
+{% endblock %}

@@ -8,8 +8,11 @@ services:
         web:
                 build: .
                 command: >
-                        /bin/bash -c "python manage.py makemigrations && python manage.py migrate &&
+                        /bin/bash -c "rm -f /code/gedata/static/gedata/plots && ln -s /data/plots /code/gedata/static/gedata/plots &&
+                                      python manage.py makemigrations && python manage.py migrate &&
                                       python manage.py runserver 0.0.0.0:8000"
+                volumes:
+                        - /var/ge_data:/data
                 ports:
                         - "8000:8000"
                 depends_on:
@@ -18,7 +21,8 @@ services:
         worker:
                 build: .
                 command: >
-                        /bin/bash -c "celery worker --app ge_data_manager --hostname=mq --broker "amqp://guest@mq" --loglevel=INFO --events"
+                        /bin/bash -c "rm -f /code/gedata/static/gedata/plots && ln -s /data/plots /code/gedata/static/gedata/plots &&
+                                      celery worker --app ge_data_manager --hostname=mq --broker "amqp://guest@mq" --loglevel=INFO --events"
                 volumes:
                         - /var/ge_data:/data
                 depends_on:

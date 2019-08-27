@@ -104,15 +104,23 @@ textarea {
    ========================================================================== */
 
 .left_side {
-  width: 45%;
+  width: 48%;
   float: left;
-  margin-left: 5%;
+  margin-left: 1%;
+  margin-right: 1%;
+}
+#left_image img {
+    float: right;
 }
 
 .right_side {
-  width: 45%;
+  width: 48%;
   float: right;
-  margin-right: 5%;
+  margin-left: 1%;
+  margin-right: 1%;
+}
+#right_image img {
+    float: left;
 }
 
 #notes_below {
@@ -133,15 +141,18 @@ div.descriptor p,ul {
   width: 90%;
 }
 
-table#menu_table {
+td {
+  width: 10%;
+}
+
+table.menu_table {
   width: 80%;
   margin-left: 10%;
   margin-right: 10%;
   text-align: center;
 }
-
-td {
-  width: 10%;
+table.menu_table.td {
+    width: 50%;
 }
 
 .main_title {
@@ -151,6 +162,8 @@ td {
 #celery_progress_bar {
     left: 10px;
 }
+
+.pct_text { margin-top: 0.1em; font-size: 33%; }
 
  /* ==========================================================================
    Helper classes
@@ -263,6 +276,10 @@ td {
  */
 main > .container {
   padding: 60px 15px 0;
+}
+
+body {
+    padding-bottom: 120px;
 }
 
 .footer {

@@ -1,0 +1,55 @@
+{% extends 'gedata/base.html' %}
+
+{% load humanize %}
+
+{% block title %}Compare result sets{% endblock %}
+
+{% block content %}
+
+    {% if submitted %}
+        <p>POST data received.</p>
+    {% else %}
+        <form action="" method="POST" novalidate>
+            {% csrf_token %}
+            {{ form.non_field_errors }}
+            {{ form.source.errors }}
+            {{ form.source }}
+            <div class="left_side">
+                <div>{{ form.left_set.label_tag }}</div>
+                <div>{{ form.left_set }}{{ form.left_set.errors }}</div>
+            </div>
+            <div class="right_side">
+                <div>{{ form.right_set.label_tag }}</div>
+                <div>{{ form.right_set }}{{ form.right_set.errors }}</div>
+            </div>
+            <div style="text-align: center;">
+                <!-- Do not allow actual submission, everything we do is javascript, ajax, and celery. Reloading the page may start things over. -->
+                <input type="button" value="Compare" onclick="buildPlot('left_image', 'id_left_set'); buildPlot('right_image', 'id_right_set');">
+            </div>
+        </form>
+
+        <div class="left_side">
+            <div id="left_image"><!-- replaced onload --><img src="{{ left_image.url }}" alt="{{ left_image.description }}"></div>
+            <div id="left_descriptor" class="descriptor"><!-- replaced onload --></div>
+            <div id="left_go" class="descriptor"><!-- replaced onload --></div>
+        </div>
+        <div class="right_side">
+            <div id="right_image"><!-- replaced onload --><img src="{{ right_image.url }}" alt="{{ right_image.description }}"></div>
+            <div id="right_descriptor" class="descriptor"><!-- replaced onload --></div>
+            <div id="right_go" class="descriptor"><!-- replaced onload --></div>
+        </div>
+        <div id="notes_below">
+            <p>Asterisks indicate probes that survived to the top 1% in all 16 splits.</p>
+        </div>
+        <div class="left_side">
+            <div id="left_perf_image"><!-- replaced onload --></div>
+            <div id="left_perf_descriptor" class="descriptor"><!-- replaced onload --></div>
+        </div>
+        <div class="right_side">
+            <div id="right_perf_image"><!-- replaced onload --></div>
+            <div id="right_perf_descriptor" class="descriptor"><!-- replaced onload --></div>
+        </div>
+
+    {% endif %}
+
+{% endblock %}
