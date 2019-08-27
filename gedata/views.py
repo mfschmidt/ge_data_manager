@@ -59,7 +59,7 @@ def rest_refresh(request, job_name):
         if jobs_id is None:
             print("NEW: rest_refresh got job '{}', no id returned. Re-building results database.".format(job_name))
             clear_jobs()
-            celery_result = collect_jobs.delay("/data", new_only=False)
+            celery_result = collect_jobs.delay("/data")
             jobs_id = celery_result.task_id
             print("     new id for '{}' is '{}'.".format(job_name, jobs_id))
     elif job_name.startswith("train_test_"):

@@ -1,3 +1,4 @@
+scipy
 Django>=2.0,<3.0
 psycopg2>=2.7,<3.0
 celery>=4.3

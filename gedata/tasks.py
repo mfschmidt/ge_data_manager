@@ -9,7 +9,6 @@ import os
 import re
 import pickle
 import pandas as pd
-from ge_data_manager import settings
 
 from statistics import mean
 from scipy.stats import ttest_ind
@@ -17,7 +16,7 @@ from scipy.stats import ttest_ind
 
 from pygest import plot, algorithms
 from pygest.rawdata import miscellaneous
-from pygest.convenience import bids_val, create_symbol_to_id_map
+from pygest.convenience import bids_val  # , create_symbol_to_id_map
 
 from .models import PushResult, ResultSummary
 
