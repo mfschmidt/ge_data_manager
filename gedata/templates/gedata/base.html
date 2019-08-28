@@ -129,6 +129,7 @@
             // Immediately set the image blank, just to give feedback we registered the click.
             // But don't mess with active spinners (checked via "img src" substring
             loadPlot(image_element, "/static/gedata/empty.png");
+
         }
         let plot_handle = select_element.options[select_element.selectedIndex].value;
         console.log("Checking for " + plot_handle + " image for " + image_id + ".");
@@ -181,7 +182,9 @@
         image_element.innerHTML = html_text;
 
         // Also update gene ranking information, if available.
-        if (!image_url.endsWith('empty.png')) {
+        if (image_url.endsWith('empty.png')) {
+            document.getElementById(image_element.id.replace('image', 'go')).innerHTML = "";
+        } else {
             append_probes_from_file(image_element.id.replace('image', 'go'), image_url.replace('png', 'html'));
         }
     }
