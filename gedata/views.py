@@ -55,11 +55,14 @@ def rest_refresh(request, job_name):
     jobs_id = celery_id_from_name(job_name)
     plots_in_progress = celery_plots_in_progress()
 
-    if job_name == "collect_jobs":
+    if job_name in ["collect_jobs", "update_jobs", ]:
         if jobs_id is None:
             print("NEW: rest_refresh got job '{}', no id returned. Re-building results database.".format(job_name))
-            clear_jobs()
-            celery_result = collect_jobs.delay("/data")
+            if job_name == "collect_jobs":
+                clear_jobs()
+                celery_result = collect_jobs.delay("/data", rebuild=True)
+            else:
+                celery_result = collect_jobs.delay("/data", rebuild=False)
             jobs_id = celery_result.task_id
             print("     new id for '{}' is '{}'.".format(job_name, jobs_id))
     elif job_name.startswith("train_test_"):

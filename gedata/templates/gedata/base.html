@@ -72,7 +72,8 @@
             <span id="n_results">{{ latest_result_summary.num_actuals|intcomma }} actual,
                 {{ latest_result_summary.num_shuffles|add:latest_result_summary.num_distshuffles|add:latest_result_summary.num_edgeshuffles|intcomma }} permutations,
                 {{ latest_result_summary.num_results|intcomma }} total results available, last refreshed {{ latest_result_summary.summary_date }}.</span> &nbsp;
-            <button id="progress-bar-redo-trigger" class="btn" onclick="startCompleteResultMining();"><i class="fas fa-redo"></i></button>
+            <button id="progress-bar-sync-trigger" class="btn footer_button" onclick="startResultMining('update_jobs');"><i class="fas fa-sync"></i> update</button>
+            <button id="progress-bar-redo-trigger" class="btn footer_button" onclick="startResultMining('collect_jobs');"><i class="fas fa-redo"></i> rebuild</button>
         </div>
         <div id="celery_progress_bar" class="progress-wrapper" style="display: none;">
             <!--<span id="results_ok_check"><i class="fas fa-check"></i></span>-->
@@ -96,10 +97,10 @@
 <script src="{% static 'gedata/js/plugins.js' %}"></script>
 <script src="{% static 'celery_progress/celery_progress.js' %}"></script>
 <script>
-    function startCompleteResultMining() {
+    function startResultMining(job_name) {
         document.getElementById("celery_progress_bar").style.display = "block";
         document.getElementById("static_progress_bar").style.display = "none";
-        let refreshUrl = "{% url 'gedata:refresh' job_name='collect_jobs' %}";
+        let refreshUrl = "{% url 'gedata:refresh' job_name=12345 %}".replace(/12345/, job_name);
         let request = new XMLHttpRequest();
         request.onreadystatechange = function() {
             if (request.readyState === 4 && request.status === 200) {
@@ -113,7 +114,7 @@
         };
         request.open("GET", refreshUrl, true);
         request.send();
-        console.log("Beginning celery polling.");
+        console.log("Beginning celery polling for " + job_name + ".");
     }
     function stopCeleryProcessPolling() {
         document.getElementById("progress-bar").style.backgroundColor = '#76ce60';

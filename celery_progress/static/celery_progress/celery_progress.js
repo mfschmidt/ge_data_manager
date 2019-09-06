@@ -77,7 +77,7 @@ var CelerySpinner = (function () {
         spinnerElement.innerHTML = html_for_failure;
     }
 
-    function onProgressDefault(spinnerInnerElement, spinnerMessageElement,  progress) {
+    function onProgressDefault(spinnerInnerElement, spinnerMessageElement, progress) {
         spinnerInnerElement.innerHTML = Math.round(progress.percent) + '%';
         spinnerMessageElement.innerHTML = progress.message;
     }

@@ -112,7 +112,13 @@ class CompareForm(forms.Form):
         ('HCPGW64', 'parby-glasser_splby-wellid ~ glasserconnectivitysim mask-64'),
         ('HCPWW00', 'parby-wellid_splby-wellid ~ hcpniftismoothgrandmeansim mask-none'),
         ('NKIGG00', 'parby-glasser_splby-glasser ~ indiglasserconnsim mask-none'),
+        ('NKIGG16', 'parby-glasser_splby-glasser ~ indiglasserconnsim mask-16'),
+        ('NKIGG32', 'parby-glasser_splby-glasser ~ indiglasserconnsim mask-32'),
+        ('NKIGG64', 'parby-glasser_splby-glasser ~ indiglasserconnsim mask-64'),
         ('NKIGW00', 'parby-glasser_splby-wellid ~ indiglasserconnsim mask-none'),
+        ('NKIGW16', 'parby-glasser_splby-wellid ~ indiglasserconnsim mask-16'),
+        ('NKIGW32', 'parby-glasser_splby-wellid ~ indiglasserconnsim mask-32'),
+        ('NKIGW64', 'parby-glasser_splby-wellid ~ indiglasserconnsim mask-64'),
         ('NKIWG00', 'parby-wellid_splby-glasser ~ indiconnsim mask-none'),
         ('NKIWW00', 'parby-wellid_splby-wellid ~ indiconnsim mask-none'),
     ]

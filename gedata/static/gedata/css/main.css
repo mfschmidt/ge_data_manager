@@ -163,7 +163,23 @@ table.menu_table.td {
     left: 10px;
 }
 
-.pct_text { margin-top: 0.1em; font-size: 33%; }
+.pct_text {
+    margin-top: 0.1em;
+    font-size: 33%;
+}
+
+button.footer_button {
+    background-color: aliceblue;
+    border: 2px solid navy;
+    border-radius: 4px;
+    transition-duration: 0.4s;
+    -webkit-transition-duration: 0.4s;
+}
+
+button.footer_button:hover {
+    background-color: navy;
+    color: aliceblue;
+}
 
  /* ==========================================================================
    Helper classes
