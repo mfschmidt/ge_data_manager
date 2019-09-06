@@ -1,9 +1,12 @@
 from __future__ import absolute_import, unicode_literals
 from celery import shared_task
 from celery_progress.backend import ProgressRecorder
+
 import time
 from datetime import datetime
-from django.utils import timezone
+import pytz
+
+from django.utils import timezone as django_timezone
 
 import os
 import re
@@ -41,56 +44,65 @@ def test_task(self, seconds):
     return 'done'
 
 
+def json_contents(json_file):
+    """ Parse contents of json file into a dict
+
+        I tried the standard json parser, but had repeated issues and failures.
+        Regex works well and the code is still fairly clean.
+    """
+    items = {}
+    with open(json_file, "r") as jf:
+        for line in jf.readlines():
+            clean_line = line.strip().rstrip(",").replace(": ", ":")
+            m = re.match(".*\"(?P<k>.+)\":\"(?P<v>.+)\".*", clean_line)
+            if m:
+                k = m.group('k')
+                v = m.group('v')
+                items[k] = v
+    return items
+
+
+def seconds_elapsed(elapsed):
+    parts = elapsed.split(":")
+    if len(parts) != 3:
+        return 0
+    seconds = int(float(parts[2]))
+    minutes = int(parts[1])
+    if "days" in parts[0]:
+        hours = int(parts[0].split(" days, ")[1])
+        days = int(parts[0].split(" days, ")[0])
+    elif "day" in parts[0]:
+        hours = int(parts[0].split(" day, ")[1])
+        days = int(parts[0].split(" day, ")[0])
+    else:
+        hours = int(parts[0])
+        days = 0
+    return seconds + (minutes * 60) + (hours * 3600) + (days * 3600 * 24)
+
+
+def tz_aware_file_mtime(path):
+    return pytz.timezone("America/New_York").localize(
+        datetime.fromtimestamp(os.path.getmtime(path))
+    )
+
+
 @shared_task
 def clear_jobs():
     PushResult.objects.all().delete()
 
 
 @shared_task(bind=True)
-def collect_jobs(self, data_path="/data"):
+def collect_jobs(self, data_path="/data", rebuild=False):
     """ Traverse the output and populate the database with completed results.
 
     :param self: available through "bind=True", allows a reference to the celery task this function becomes a part of.
     :param data_path: default /data, base path to all of the results
+    :param rebuild: set to True to clear the entire database and build results from scratch, otherwise just updates
     """
 
     progress_recorder = ProgressRecorder(self)
 
-    def json_contents(json_file):
-        """ Parse contents of json file into a dict
-
-            I tried the standard json parser, but had repeated issues and failures.
-            Regex works well and the code is still fairly clean.
-        """
-        items = {}
-        with open(json_file, "r") as jf:
-            for line in jf.readlines():
-                clean_line = line.strip().rstrip(",").replace(": ", ":")
-                m = re.match(".*\"(?P<k>.+)\":\"(?P<v>.+)\".*", clean_line)
-                if m:
-                    k = m.group('k')
-                    v = m.group('v')
-                    items[k] = v
-        return items
-
-
-    def seconds_elapsed(elapsed):
-        parts = elapsed.split(":")
-        if len(parts) != 3:
-            return 0
-        seconds = int(float(parts[2]))
-        minutes = int(parts[1])
-        if "days" in parts[0]:
-            hours = int(parts[0].split(" days, ")[1])
-            days = int(parts[0].split(" days, ")[0])
-        elif "day" in parts[0]:
-            hours = int(parts[0].split(" day, ")[1])
-            days = int(parts[0].split(" day, ")[0])
-        else:
-            hours = int(parts[0])
-            days = 0
-        return seconds + (minutes * 60) + (hours * 3600) + (days * 3600 * 24)
-
+    last_result_datetime = ResultSummary.objects.latest('summary_date').summary_date
     results = []
     i = 0
     n = 0
@@ -102,20 +114,18 @@ def collect_jobs(self, data_path="/data"):
             for root, dirs, files in os.walk(d, topdown=True):
                 for f in files:
                     if f[(-4):] == "json":
-                        result = {
-                            'data_dir': data_path,
-                            'shuffle': shuffle,
-                            'path': root,
-                            'json_file': f,
-                            'tsv_file': f.replace("json", "tsv"),
-                            'log_file': f.replace("json", "log"),
-                        }
-                        results.append(result)
-                        n += 1
-                        progress_recorder.set_progress(i, n) #  Calculating...
-                        # self.update_state(state="PROGRESS",
-                        #                   meta={'current': i, 'total': i, 'message': "Discovering file {:,}".format(i)}
-                        # )
+                        if rebuild or (tz_aware_file_mtime(os.path.join(root, f)) > last_result_datetime):
+                            result = {
+                                'data_dir': data_path,
+                                'shuffle': shuffle,
+                                'path': root,
+                                'json_file': f,
+                                'tsv_file': f.replace("json", "tsv"),
+                                'log_file': f.replace("json", "log"),
+                            }
+                            results.append(result)
+                            n += 1
+                            progress_recorder.set_progress(i, n)
 
     # Gather information about each result.
     for i, result in enumerate(results):
@@ -176,7 +186,7 @@ def collect_jobs(self, data_path="/data"):
 
     if PushResult.objects.count() > 0:
         s = ResultSummary(
-            summary_date=timezone.now(),
+            summary_date=django_timezone.now(),
             num_results=PushResult.objects.count(),
             num_actuals=PushResult.objects.filter(shuffle='derivatives').count(),
             num_shuffles=PushResult.objects.filter(shuffle='shuffles').count(),
