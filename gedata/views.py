@@ -55,6 +55,8 @@ def rest_refresh(request, job_name):
     jobs_id = celery_id_from_name(job_name)
     plots_in_progress = celery_plots_in_progress()
 
+    # print("  in rest_refresh, job is {}, id is {}.".format(job_name, jobs_id))
+
     if job_name in ["collect_jobs", "update_jobs", ]:
         if jobs_id is None:
             print("NEW: rest_refresh got job '{}', no id returned. Re-building results database.".format(job_name))
@@ -72,7 +74,7 @@ def rest_refresh(request, job_name):
             print("NEW: rest_refresh got job '{}', no id returned. Building new plot.".format(job_name))
             for plot in plots_in_progress:
                 print("     already building {}".format(plot))
-            celery_result = build_plot.delay(job_name[11:18].upper(), data_path="/data")
+            celery_result = build_plot.delay(job_name[11:19].lower(), data_path="/data")
             jobs_id = celery_result.task_id
             print("     new id for '{}' is '{}'.".format(job_name, jobs_id))
 
