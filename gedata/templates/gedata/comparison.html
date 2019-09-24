@@ -1,113 +1,86 @@
-<!DOCTYPE html>
+{% extends 'gedata/base.html' %}
 
-{%  load static %}
+{% load humanize %}
 
-<html lang="en">
+{% block title %}Result set comparisons{% endblock %}
 
-<head>
-  <meta charset="utf-8">
-  <title></title>
-  <meta name="description" content="">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+{% block content %}
 
-  <link rel="manifest" href="site.webmanifest">
-  <link rel="apple-touch-icon" href="icon.png">
-  <link rel="icon" href="mfs_icon_256.png" sizes="256x256">
-  <link rel="icon" href="mfs_icon_032.png" sizes="32x32">
-  <link rel="icon" href="mfs_icon_032.ico" sizes="32x32">
-  <!-- Place favicon.ico in the root directory -->
+    {% if submitted %}
+        <p>POST data received.</p>
+    {% else %}
+        <form action="" method="POST" novalidate>
+            {% csrf_token %}
+            {{ form.non_field_errors }}
+            {{ form.source.errors }}
+            {{ form.source }}
+            <div class="left_side">
+                <table>
+                    <tr>
+                        <td><div>{{ form.left_parcel.label_tag }}</div></td>
+                        <td><div>{{ form.left_split.label_tag }}</div></td>
+                        <td><div>{{ form.left_comp.label_tag }}</div></td>
+                        <td><div>{{ form.left_train_mask.label_tag }}</div></td>
+                        <td><div>{{ form.left_algo.label_tag }}</div></td>
+                    </tr>
+                    <tr>
+                        <td><div>{{ form.left_parcel }}<br />{{ form.left_parcel.errors }}</div></td>
+                        <td><div>{{ form.left_split }}<br />{{ form.left_split.errors }}</div></td>
+                        <td><div>{{ form.left_comp }}<br />{{ form.left_comp.errors }}</div></td>
+                        <td><div>{{ form.left_train_mask }}<br />{{ form.left_train_mask.errors }}</div></td>
+                        <td><div>{{ form.left_algo }}<br />{{ form.left_algo.errors }}</div></td>
+                    </tr>
+                </table>
+            </div>
+            <div class="right_side">
+                <table>
+                    <tr>
+                        <td><div>{{ form.right_parcel.label_tag }}</div></td>
+                        <td><div>{{ form.right_split.label_tag }}</div></td>
+                        <td><div>{{ form.right_comp.label_tag }}</div></td>
+                        <td><div>{{ form.right_train_mask.label_tag }}</div></td>
+                        <td><div>{{ form.right_algo.label_tag }}</div></td>
+                    </tr>
+                    <tr>
+                        <td><div>{{ form.right_parcel }}<br />{{ form.right_parcel.errors }}</div></td>
+                        <td><div>{{ form.right_split }}<br />{{ form.right_split.errors }}</div></td>
+                        <td><div>{{ form.right_comp }}<br />{{ form.right_comp.errors }}</div></td>
+                        <td><div>{{ form.right_train_mask }}<br />{{ form.right_train_mask.errors }}</div></td>
+                        <td><div>{{ form.right_algo }}<br />{{ form.right_algo.errors }}</div></td>
+                    </tr>
+                </table>
+            </div>
+            <div style="text-align: center;">
+                <!-- Do not allow actual submission, everything we do is javascript, ajax, and celery. Reloading the page may start things over. -->
+                <span id="left_set_string" style="display: none;">empty</span>
+                <input type="button" value="Compare" onclick="buildPlot('left_image', 'left_set_string'); buildPlot('right_image', 'right_set_string');">
+                <span id="right_set_string" style="display: none;">empty</span>
+            </div>
+        </form>
 
-  <link rel="stylesheet" href="css/normalize.css">
-  <link rel="stylesheet" href="css/main.css">
+        <div class="left_side">
+            <div id="left_image"><!-- replaced onload --><img src="{{ left_image.url }}" alt="{{ left_image.description }}"></div>
+            <div id="left_caption" class="descriptor"><!-- replaced onload --></div>
+            <div id="left_descriptor" class="descriptor"><!-- replaced onload --></div>
+            <div id="left_go" class="descriptor"><!-- replaced onload --></div>
+        </div>
+        <div class="right_side">
+            <div id="right_image"><!-- replaced onload --><img src="{{ right_image.url }}" alt="{{ right_image.description }}"></div>
+            <div id="right_caption" class="descriptor"><!-- replaced onload --></div>
+            <div id="right_descriptor" class="descriptor"><!-- replaced onload --></div>
+            <div id="right_go" class="descriptor"><!-- replaced onload --></div>
+        </div>
+        <div class="left_side">
+            <div id="left_perf_image"><!-- replaced onload --></div>
+            <div id="left_perf_descriptor" class="descriptor"><!-- replaced onload --></div>
+        </div>
+        <div class="right_side">
+            <div id="right_perf_image"><!-- replaced onload --></div>
+            <div id="right_perf_descriptor" class="descriptor"><!-- replaced onload --></div>
+        </div>
 
-  <meta name="theme-color" content="#fafafa">
-</head>
+    {% endif %}
 
-<body onload="update_left(); update_right();">
-  <!--[if IE]>
-    <p class="browserupgrade">You are using an <strong>outdated</strong> browser. Please <a href="https://browsehappy.com/">upgrade your browser</a> to improve your experience and security.</p>
-  <![endif]-->
+    <p><!-- just for a bit of space --></p>
 
-  <div class="content">
-
-    <h1 class="main_title">Train-test plots</h1>
-    <p style="text-align: center;">Select options on the left and right to see different sets of results side-by-side.</p>
-
-    <table id="menu_table">
-      <tr>
-        <td>
-          <label>Algo<br /><select id="left_algo" name="left_algo" onchange="update_left();">
-            <option value="once">once</option>
-            <option value="smrt" selected="selected">smart</option>
-          </select></label>
-        </td>
-        <td>
-          <label>Mask<br /><select id="left_mask" name="left_mask" onchange="update_left();">
-            <option value="none" selected="selected">none</option>
-            <option value="16">&gt;16mm</option>
-            <option value="32">&gt;32mm</option>
-            <option value="64">&gt;64mm</option>
-          </select></label>
-        </td>
-        <td>
-          <label>Split by<br /><select id="left_by" name="left_by" onchange="update_left();">
-            <option value="wellid">wellid</option>
-            <option value="glasser" selected="selected">Glasser parcel</option>
-          </select></label>
-        </td>
-        <td colspan="4"> </td>
-        <td>
-          <label>Algo<br /><select id="right_algo" name="right_algo" onchange="update_right();">
-            <option value="once">once</option>
-            <option value="smrt" selected="selected">smart</option>
-          </select></label>
-        </td>
-        <td>
-          <label>Mask<br /><select id="right_mask" name="right_mask" onchange="update_right();">
-            <option value="none">none</option>
-            <option value="16">&gt;16mm</option>
-            <option value="32">&gt;32mm</option>
-            <option value="64" selected="selected">&gt;64mm</option>
-          </select></label>
-        </td>
-        <td>
-          <label>Split by<br /><select id="right_by" name="right_by" onchange="update_right();">
-            <option value="wellid">wellid</option>
-            <option value="glasser" selected="selected">Glasser parcel</option>
-          </select></label>
-        </td>
-      </tr>
-    </table>
-
-    <div class="left_side">
-      <div id="left_image"><!-- replaced onload --></div>
-      <div id="left_descriptor" class="descriptor"><!-- replaced onload --></div>
-      <div id="left_go" class="descriptor"><!-- replaced onload --></div>
-    </div>
-    <div class="right_side">
-      <div id="right_image"><!-- replaced onload --></div>
-      <div id="right_descriptor" class="descriptor"><!-- replaced onload --></div>
-      <div id="right_go" class="descriptor"><!-- replaced onload --></div>
-    </div>
-    <div id="notes_below">
-      <p>Asterisks indicate probes that survived to the top 1% in all 16 splits.</p>
-    </div>
-    <div class="left_side">
-      <div id="left_perf_image"><!-- replaced onload --></div>
-      <div id="left_perf_descriptor" class="descriptor"><!-- replaced onload --></div>
-    </div>
-    <div class="right_side">
-      <div id="right_perf_image"><!-- replaced onload --></div>
-      <div id="right_perf_descriptor" class="descriptor"><!-- replaced onload --></div>
-    </div>
-  </div>
-
-  <script src="js/vendor/modernizr-3.7.1.min.js"></script>
-  <script src="https://code.jquery.com/jquery-3.3.1.min.js" integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8=" crossorigin="anonymous"></script>
-  <script>window.jQuery || document.write('<script src="js/vendor/jquery-3.3.1.min.js"><\/script>')</script>
-  <script src="js/plugins.js"></script>
-  <script src="js/main.js"></script>
-
-</body>
-
-</html>
+{% endblock %}
