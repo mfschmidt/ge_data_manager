@@ -10,6 +10,7 @@ urlpatterns = [
     path('result/<int:pk>', views.ResultView.as_view(), name='result'),
     path('filter/', forms.filter_results, name='filter'),
     path('compare/', forms.compare_results, name='compare'),
+    path('comparison/', forms.comparison_results, name='comparison'),
 ]
 
 """
