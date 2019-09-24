@@ -12,7 +12,7 @@ services:
                                       python manage.py makemigrations && python manage.py migrate &&
                                       python manage.py runserver 0.0.0.0:8000"
                 volumes:
-                        - /var/ge_data:/data
+                        - /data:/data
                 ports:
                         - "8000:8000"
                 depends_on:
@@ -24,6 +24,6 @@ services:
                         /bin/bash -c "rm -f /code/gedata/static/gedata/plots && ln -s /data/plots /code/gedata/static/gedata/plots &&
                                       celery worker --app ge_data_manager --hostname=mq --broker "amqp://guest@mq" --loglevel=INFO --events"
                 volumes:
-                        - /var/ge_data:/data
+                        - /data:/data
                 depends_on:
                         - mq
