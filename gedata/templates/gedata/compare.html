@@ -24,7 +24,9 @@
             </div>
             <div style="text-align: center;">
                 <!-- Do not allow actual submission, everything we do is javascript, ajax, and celery. Reloading the page may start things over. -->
-                <input type="button" value="Compare" onclick="buildPlot('left_image', 'id_left_set'); buildPlot('right_image', 'id_right_set');">
+                <span id="left_set_string" style="display: none;">empty</span>
+                <input type="button" value="Compare" onclick="buildPlot('left_image', 'left_set_string'); buildPlot('right_image', 'right_set_string');">
+                <span id="right_set_string" style="display: none;">empty</span>
             </div>
         </form>
 
@@ -48,5 +50,7 @@
         </div>
 
     {% endif %}
+
+    <p><!-- just for a bit of space --></p>
 
 {% endblock %}
