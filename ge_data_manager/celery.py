@@ -60,7 +60,7 @@ def celery_id_from_name(job_name):
     [{
         'id': '97b8c300-9193-4834-9a04-0472997e5d54',
         'name': 'gedata.tasks.build_plot',
-        'args': "('HCPGW64',)",
+        'args': "('hcpgw64s',)",
         'kwargs': "{'data_path': '/data'}",
         'type': 'gedata.tasks.build_plot',
         'hostname': 'celery@mq',
@@ -92,6 +92,6 @@ def celery_plots_in_progress():
         for k in task_dict.keys():
             for d in task_dict[k]:
                 if 'build_plot' in d['name']:
-                    plots.append("train_test_{}.png".format(d['args'][2:9].lower()))
+                    plots.append("train_test_{}.png".format(d['args'][2:10].lower()))
 
     return plots
