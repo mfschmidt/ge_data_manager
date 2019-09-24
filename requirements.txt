@@ -3,5 +3,6 @@ Django>=2.0,<3.0
 psycopg2>=2.7,<3.0
 celery>=4.3
 django-celery-results
+numpy
 pandas
 -e git://github.com/mfschmidt/PyGEST.git#egg=PyGEST
