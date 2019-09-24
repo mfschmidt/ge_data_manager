@@ -102,31 +102,31 @@ def filter_results(request):
 
 class CompareForm(forms.Form):
     complete_sets = [
-        ('HCPGG00', 'parby-glasser_splby-glasser ~ glasserconnectivitysim mask-none'),
-        ('HCPGG16', 'parby-glasser_splby-glasser ~ glasserconnectivitysim mask-16'),
-        ('HCPGG32', 'parby-glasser_splby-glasser ~ glasserconnectivitysim mask-32'),
-        ('HCPGG64', 'parby-glasser_splby-glasser ~ glasserconnectivitysim mask-64'),
-        ('HCPGW00', 'parby-glasser_splby-wellid ~ glasserconnectivitysim mask-none'),
-        ('HCPGW16', 'parby-glasser_splby-wellid ~ glasserconnectivitysim mask-16'),
-        ('HCPGW32', 'parby-glasser_splby-wellid ~ glasserconnectivitysim mask-32'),
-        ('HCPGW64', 'parby-glasser_splby-wellid ~ glasserconnectivitysim mask-64'),
-        ('HCPWW00', 'parby-wellid_splby-wellid ~ hcpniftismoothgrandmeansim mask-none'),
-        ('NKIGG00', 'parby-glasser_splby-glasser ~ indiglasserconnsim mask-none'),
-        ('NKIGG16', 'parby-glasser_splby-glasser ~ indiglasserconnsim mask-16'),
-        ('NKIGG32', 'parby-glasser_splby-glasser ~ indiglasserconnsim mask-32'),
-        ('NKIGG64', 'parby-glasser_splby-glasser ~ indiglasserconnsim mask-64'),
-        ('NKIGW00', 'parby-glasser_splby-wellid ~ indiglasserconnsim mask-none'),
-        ('NKIGW16', 'parby-glasser_splby-wellid ~ indiglasserconnsim mask-16'),
-        ('NKIGW32', 'parby-glasser_splby-wellid ~ indiglasserconnsim mask-32'),
-        ('NKIGW64', 'parby-glasser_splby-wellid ~ indiglasserconnsim mask-64'),
-        ('NKIWG00', 'parby-wellid_splby-glasser ~ indiconnsim mask-none'),
-        ('NKIWW00', 'parby-wellid_splby-wellid ~ indiconnsim mask-none'),
+        ('hcpgg00s', 'parby-glasser_splby-glasser ~ glasserconnectivitysim mask-none'),
+        ('hcpgg16s', 'parby-glasser_splby-glasser ~ glasserconnectivitysim mask-16'),
+        ('hcpgg32s', 'parby-glasser_splby-glasser ~ glasserconnectivitysim mask-32'),
+        ('hcpgg64s', 'parby-glasser_splby-glasser ~ glasserconnectivitysim mask-64'),
+        ('hcpgw00s', 'parby-glasser_splby-wellid ~ glasserconnectivitysim mask-none'),
+        ('hcpgw16s', 'parby-glasser_splby-wellid ~ glasserconnectivitysim mask-16'),
+        ('hcpgw32s', 'parby-glasser_splby-wellid ~ glasserconnectivitysim mask-32'),
+        ('hcpgw64s', 'parby-glasser_splby-wellid ~ glasserconnectivitysim mask-64'),
+        ('hcpww00s', 'parby-wellid_splby-wellid ~ hcpniftismoothgrandmeansim mask-none'),
+        ('nkigg00s', 'parby-glasser_splby-glasser ~ indiglasserconnsim mask-none'),
+        ('nkigg16s', 'parby-glasser_splby-glasser ~ indiglasserconnsim mask-16'),
+        ('nkigg32s', 'parby-glasser_splby-glasser ~ indiglasserconnsim mask-32'),
+        ('nkigg64s', 'parby-glasser_splby-glasser ~ indiglasserconnsim mask-64'),
+        ('nkigw00s', 'parby-glasser_splby-wellid ~ indiglasserconnsim mask-none'),
+        ('nkigw16s', 'parby-glasser_splby-wellid ~ indiglasserconnsim mask-16'),
+        ('nkigw32s', 'parby-glasser_splby-wellid ~ indiglasserconnsim mask-32'),
+        ('nkigw64s', 'parby-glasser_splby-wellid ~ indiglasserconnsim mask-64'),
+        ('nkiwg00s', 'parby-wellid_splby-glasser ~ indiconnsim mask-none'),
+        ('nkiww00s', 'parby-wellid_splby-wellid ~ indiconnsim mask-none'),
     ]
     left_set = forms.ChoiceField(
-        label="start with", widget=forms.Select, choices=complete_sets, initial='HCPGG00',
+        label="start with", widget=forms.Select, choices=complete_sets, initial='hcpgg00sc',
     )
     right_set = forms.ChoiceField(
-        label="compare with", widget=forms.Select, choices=complete_sets, initial='NKIGG00',
+        label="compare with", widget=forms.Select, choices=complete_sets, initial='nkigg00sc',
     )
 
 
@@ -137,25 +137,55 @@ def image_dict_from_selection(selection):
         'url': "/static/plots/train_test_{}.png".format(selection.lower()),
     }
 
-    if selection[:3].upper() == "HCP":
-        if selection[3].upper() == "G":
+    if selection[:3].lower() == "hcp":
+        if selection[3].lower() == "g":
             image_dict['comp'] = "glasserconnectivitysim"
-        elif selection[3].upper() == "W":
+        elif selection[3].lower() == "w":
             image_dict['comp'] = "hcpniftismoothgrandmeansim"
-    elif selection[:3].upper() == "NKI":
-        if selection[3].upper() == "G":
+    elif selection[:3].lower() == "nki":
+        if selection[3].lower() == "g":
             image_dict['comp'] = "indiglasserconnsim"
-        elif selection[3].upper() == "W":
+        elif selection[3].lower() == "w":
             image_dict['comp'] = "indiconnsim"
 
-    image_dict['description'] = "parby-{}_splby-{} ~ {} mask-{}".format(
-        "glasser" if selection[3].upper() == "G" else "wellid",
-        "glasser" if selection[4].upper() == "G" else "wellid",
+    image_dict['description'] = "parby-{}_splby-{} ~ {} mask-{} {} (test {})".format(
+        "glasser" if selection[3].lower() == "g" else "wellid",
+        "glasser" if selection[4].lower() == "g" else "wellid",
         image_dict['comp'],
         "none" if selection[5:] == "00" else selection[5:],
+        "once" if selection[7] == "o" else "smart",
     )
 
     return image_dict
+
+
+def image_dict_from_selections(clean_form_data, side):
+    """ Convert a collection of selections into a single string allowing selection of the correct plot image. """
+
+    summary_string = "empty"
+    summary_template = "{comp}{pby}{sby}{mask}{algo}{test_with_mask}"
+    if side.upper()[0] == "L":
+        summary_string = summary_template.format(
+            comp=clean_form_data['left_comp'].lower(),
+            pby=clean_form_data['left_parcel'].lower()[0],
+            sby=clean_form_data['left_split'].lower()[0],
+            mask=clean_form_data['left_train_mask'],
+            algo=clean_form_data['left_algo'],
+        )
+    elif side.upper()[0] == "R":
+        summary_string = summary_template.format(
+            comp=clean_form_data['right_comp'].lower(),
+            pby=clean_form_data['right_parcel'].lower()[0],
+            sby=clean_form_data['right_split'].lower()[0],
+            mask=clean_form_data['right_train_mask'],
+            algo=clean_form_data['right_algo'],
+        )
+    image_dict = {
+        'url': "/static/plots/train_test_{}.png".format(summary_string),
+        'alt': summary_string,
+    }
+    return image_dict
+
 
 def compare_results(request):
     """ Render the CompareForm """
@@ -182,3 +212,53 @@ def compare_results(request):
         'right_image': right_image,
         'latest_result_summary': ResultSummary.objects.latest('summary_date'),
     })
+
+
+class ComparisonForm(forms.Form):
+    parcels = [ ('w', 'wellid'), ('g', 'Glasser'), ]
+    comps = [ ('nki', 'NKI'), ('hcp', 'HCP'), ]
+    masks = [ ('00', 'none'), ('16', '16'), ('32', '32'), ('64', '64'), ]
+    algos = [ ('s', 'smrt'), ('o', 'once'), ]
+
+    left_parcel = forms.ChoiceField(label="parcel", widget=forms.Select, choices=parcels, initial="w")
+    left_split = forms.ChoiceField(label="split by", widget=forms.Select, choices=parcels, initial="w")
+    left_comp = forms.ChoiceField(label="connectivity", widget=forms.Select, choices=comps, initial="nki")
+    left_train_mask = forms.ChoiceField(label="train mask", widget=forms.Select, choices=masks, initial="00")
+    left_algo = forms.ChoiceField(label="algorithm", widget=forms.Select, choices=algos, initial="s")
+
+    right_parcel = forms.ChoiceField(label="parcel", widget=forms.Select, choices=parcels, initial="w")
+    right_split = forms.ChoiceField(label="split by", widget=forms.Select, choices=parcels, initial="w")
+    right_comp = forms.ChoiceField(label="connectivity", widget=forms.Select, choices=comps, initial="nki")
+    right_train_mask = forms.ChoiceField(label="train mask", widget=forms.Select, choices=masks, initial="00")
+    right_algo = forms.ChoiceField(label="algorithm", widget=forms.Select, choices=algos, initial="s")
+
+
+def comparison_results(request):
+    """ Render the ComparisonForm """
+
+    submitted = False
+    left_image = {'url': '/static/gedata/empty.png', 'description': 'nonexistent'}
+    right_image = {'url': '/static/gedata/empty.png', 'description': 'nonexistent'}
+
+    if request.method == 'POST':
+        form = ComparisonForm(request.POST)
+        if form.is_valid():
+            left_image = image_dict_from_selections(form.cleaned_data, 'left')
+            right_image = image_dict_from_selections(form.cleaned_data, 'right')
+            print("We calculated the image names, {} & {}, in python. I didn't think we'd ever POST form data.".format(
+                left_image, right_image
+            ))
+    else:
+        # Create a blank form
+        form = ComparisonForm()
+        if 'submitted' in request.GET:
+            submitted = True
+
+    return render(request, 'gedata/comparison.html', {
+        'form': form,
+        'submitted': submitted,
+        'left_image': left_image,
+        'right_image': right_image,
+        'latest_result_summary': ResultSummary.objects.latest('summary_date'),
+    })
+
