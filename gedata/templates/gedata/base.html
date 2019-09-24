@@ -41,7 +41,10 @@
                 <a class="nav-link" href="{% url 'gedata:filter' %}">Filter</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" href="{% url 'gedata:compare' %}">Comparisons</a>
+                <a class="nav-link" href="{% url 'gedata:compare' %}">Old Compare</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'gedata:comparison' %}">New Compare</a>
             </li>
             </ul>
         </div>
@@ -96,100 +99,6 @@
 <script src="{% static 'gedata/js/main.js' %}"></script>
 <script src="{% static 'gedata/js/plugins.js' %}"></script>
 <script src="{% static 'celery_progress/celery_progress.js' %}"></script>
-<script>
-    function startResultMining(job_name) {
-        document.getElementById("celery_progress_bar").style.display = "block";
-        document.getElementById("static_progress_bar").style.display = "none";
-        let refreshUrl = "{% url 'gedata:refresh' job_name=12345 %}".replace(/12345/, job_name);
-        let request = new XMLHttpRequest();
-        request.onreadystatechange = function() {
-            if (request.readyState === 4 && request.status === 200) {
-                let responseJsonObj = JSON.parse(request.responseText);
-                console.log("Got id: " + responseJsonObj.task_id);
-                let progressUrl = "/celery-progress/" + responseJsonObj.task_id + "/";
-                CeleryProgressBar.initProgressBar(progressUrl, {
-                    onSuccess: stopCeleryProcessPolling
-                });
-            }
-        };
-        request.open("GET", refreshUrl, true);
-        request.send();
-        console.log("Beginning celery polling for " + job_name + ".");
-    }
-    function stopCeleryProcessPolling() {
-        document.getElementById("progress-bar").style.backgroundColor = '#76ce60';
-        let peak = document.getElementById("progress-bar-peak-total").innerHTML.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-        document.getElementById("progress-bar-message").innerHTML = "Found " + peak + " results.";
-        document.getElementById("celery_progress_bar").style.display = "none";
-        document.getElementById("static_progress_bar").style.display = "block";
-    }
-    function buildPlot(image_id, select_id) {
-        let select_element = document.getElementById(select_id);
-        let image_element = document.getElementById(image_id);
-        if (image_element.innerHTML.includes("img src")) {
-            // Immediately set the image blank, just to give feedback we registered the click.
-            // But don't mess with active spinners (checked via "img src" substring
-            loadPlot(image_element, "/static/gedata/empty.png");
-
-        }
-        let plot_handle = select_element.options[select_element.selectedIndex].value;
-        console.log("Checking for " + plot_handle + " image for " + image_id + ".");
-        let img_file = "train_test_" + plot_handle.toLowerCase() + ".png";
-        let img_url = "/static/gedata/plots/" + img_file;
-
-        // The first ajax request determines whether our desired plot already exists or not.
-        let png_http = new XMLHttpRequest();
-        png_http.onreadystatechange = function() {
-            if (png_http.readyState === 4) {
-                if (png_http.status === 200) {
-                    console.log(plot_handle + " exists, loading it rather than rebuilding.");
-                    loadPlot(image_element, img_url);
-                }
-                if (png_http.status === 404) {
-                    console.log(plot_handle + " does not exist. Building it from scratch.");
-                    let refreshUrl = "{% url 'gedata:refresh' job_name=12345 %}".replace(/12345/, img_file);
-
-                    // The second ajax request initiates image creation and starts the spinner.
-                    let request = new XMLHttpRequest();
-                    request.onreadystatechange = function() {
-                        if (request.readyState === 4 && request.status === 200) {
-                            let responseJsonObj = JSON.parse(this.responseText);
-                            if (responseJsonObj.task_id !== "None") {
-                                console.log("Got id: " + responseJsonObj.task_id);
-                                let progressUrl = "/celery-progress/" + responseJsonObj.task_id + "/";
-                                CelerySpinner.initSpinner(progressUrl, {
-                                    onSuccess: loadPlot,
-                                    spinnerId: image_id,
-                                    dataForLater: img_url
-                                });
-                            }
-                        }
-                    };
-                    request.open("GET", refreshUrl, true);
-                    request.send();
-                    console.log("Beginning to build plot for " + plot_handle + " at " + image_id);
-                }
-            }
-        };
-        png_http.open('HEAD', img_url, true);
-        png_http.send();
-    }
-    function loadPlot(image_element, image_url) {
-        let w = Math.round(document.documentElement.clientWidth * 0.45);
-        image_element.style.color = '#ffffff';
-        let html_text = "<a href=\"" + image_url + "\">";
-        html_text += "<img src=\"" + image_url + "\" width=\"" + w + "\">";
-        html_text += "</a>";
-        image_element.innerHTML = html_text;
-
-        // Also update gene ranking information, if available.
-        if (image_url.endsWith('empty.png')) {
-            document.getElementById(image_element.id.replace('image', 'go')).innerHTML = "";
-        } else {
-            append_probes_from_file(image_element.id.replace('image', 'go'), image_url.replace('png', 'html'));
-        }
-    }
-</script>
 
 </body>
 </html>
