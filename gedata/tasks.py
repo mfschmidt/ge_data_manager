@@ -16,6 +16,9 @@ import pandas as pd
 import seaborn as sns
 import logging
 
+from matplotlib import pyplot as plt
+import matplotlib.patches as patches
+
 from statistics import mean
 from scipy.stats import ttest_ind
 
@@ -748,18 +751,8 @@ def plot_all_train_vs_test(df, title="Title", fig_size=(8, 8), ymin=None, ymax=N
                  )
 
 
-@shared_task(bind=True)
-def build_plot(self, plot_descriptor, data_path="/data", threshold=0.01):
-    """ Traverse the output and populate the database with completed results.
-
-    :param self: Allows interacting with celery
-    :param plot_descriptor: Abbreviated string describing plot's underlying data
-    :param data_path: default /data, base path to all of the results
-    :param threshold: At which point in the ranking is a gene deemed relevant?
-    """
-
-    progress_recorder = ProgressRecorder(self)
-
+def interpret_descriptor(plot_descriptor):
+    """ Parse the plot descriptor into parts """
     comp = comp_from_signature(plot_descriptor.upper()[:4])
     parby = "glasser" if plot_descriptor[3].lower() == "g" else "wellid"
     splby = "glasser" if plot_descriptor[4].lower() == "g" else "wellid"
@@ -768,28 +761,43 @@ def build_plot(self, plot_descriptor, data_path="/data", threshold=0.01):
     phase = 'train'
     opposite_phase = 'test'
 
-    print("Seeking comp of " + plot_descriptor.lower() + ", resolves to " + comp + ".")
-
     relevant_results_queryset = PushResult.objects.filter(
         samp="glasser", prob="fornito", algo=algo, comp=comp, parby=parby, splby=splby, mask=mask,
         batch__startswith=phase,
     )
 
-    n = len(relevant_results_queryset)
+    return comp, parby, splby, mask, algo, phase, opposite_phase, relevant_results_queryset
+
+
+@shared_task(bind=True)
+def build_plot(self, plot_descriptor, data_root="/data", threshold=0.01):
+    """ Traverse the output and populate the database with completed results.
+
+    :param self: Allows interacting with celery
+    :param plot_descriptor: Abbreviated string describing plot's underlying data
+    :param data_root: default /data, base path to all of the results
+    :param threshold: At which point in the ranking is a gene deemed relevant?
+    """
+
+    progress_recorder = ProgressRecorder(self)
+
+    comp, parby, splby, mask, algo, phase, opposite_phase, results = interpret_descriptor(plot_descriptor)
+
+    n = len(results)
     progress_recorder.set_progress(0, n + 100, "Finding results")
 
     print("Found {:,} results ({} {} {} {} {} {} {})".format(
         n, "glasser", "fornito", algo, comp, parby, splby, mask,
     ))
 
-    if len(relevant_results_queryset) > 0:
+    if len(results) > 0:
         relevant_results = []
 
         """ Calculate (or load) stats for individual tsv files. """
-        for i, path in enumerate(relevant_results_queryset.values('tsv_path')):
+        for i, path in enumerate(results.values('tsv_path')):
             if os.path.isfile(path['tsv_path']):
                 relevant_results.append(
-                    dict_from_result(path['tsv_path'], base_path=data_path, probe_sig_threshold=threshold)
+                    dict_from_result(path['tsv_path'], base_path=data_root, probe_sig_threshold=threshold)
                 )
                 progress_recorder.set_progress(i + 1, n + 100, "Processing {:,}/{:,} results".format(i, n))
             else:
@@ -802,7 +810,7 @@ def build_plot(self, plot_descriptor, data_path="/data", threshold=0.01):
             # We can only do this in training data, unless we want to double the workload above for test, too.
             rdf.loc[shuffle_mask, 'train_overlap'] = algorithms.pct_similarity_list(list(rdf.loc[shuffle_mask, 'path']))
 
-        rdf.to_pickle(os.path.join(data_path, "plots", "pickled_dataframe_for_{}.df".format(plot_descriptor.lower())))
+        rdf.to_pickle(os.path.join(data_root, "plots", "pickled_dataframe_for_{}.df".format(plot_descriptor.lower())))
 
         progress_recorder.set_progress(n, n + 100, "Generating plot")
         f_train_test, axes = plot_all_train_vs_test(
@@ -810,7 +818,7 @@ def build_plot(self, plot_descriptor, data_path="/data", threshold=0.01):
             fig_size=(12, 12), ymin=-0.15, ymax=0.90
         )
         # data_path should get into the PYGEST_DATA area, which is symbolically linked to /static, so just one write.
-        f_train_test.savefig(os.path.join(data_path, "plots", "train_test_{}.png".format(plot_descriptor.lower())))
+        f_train_test.savefig(os.path.join(data_root, "plots", "train_test_{}.png".format(plot_descriptor.lower())))
 
         progress_recorder.set_progress(n + 20, n + 100, "Building probe to gene map")
         sym_id_map = create_symbol_to_id_map()
@@ -822,7 +830,7 @@ def build_plot(self, plot_descriptor, data_path="/data", threshold=0.01):
         survivors = pervasive_probes(relevant_tsvs, threshold)
         all_ranked = ranked_probes(relevant_tsvs, threshold)
         all_ranked['rank'] = range(1, len(all_ranked.index) + 1, 1)
-        with open(os.path.join(data_path, "plots", "train_test_{}.html".format(plot_descriptor.lower())), "wt") as f:
+        with open(os.path.join(data_root, "plots", "train_test_{}.html".format(plot_descriptor.lower())), "wt") as f:
             f.write("<p><span class=\"heavy\">Mantel correlations in independent test data.</span> ")
             f.write("Gene lists from training on real data result in higher correlations in real, independent \n")
             f.write("test data than gene lists from shuffled data.\n</p>")
@@ -879,6 +887,94 @@ def build_plot(self, plot_descriptor, data_path="/data", threshold=0.01):
         progress_recorder.set_progress(n + 100, n + 100, "Finished")
 
     else:
-        with open(os.path.join(data_path, "plots", "train_test_{}.html".format(plot_descriptor.lower())), "wt") as f:
+        with open(os.path.join(data_root, "plots", "train_test_{}.html".format(plot_descriptor.lower())), "wt") as f:
             f.write("<p>No results for {}</p>\n".format(plot_descriptor.lower()))
         progress_recorder.set_progress(n + 100, n + 100, "No results")
+
+
+def plot_scores_over_thresholds(relevant_results, phase, shuffle):
+    """ Generate a plot for viewing different metrics dependent on the threshold applied to the top probes. """
+
+    plot_data = relevant_results[(relevant_results['phase'] == phase) & (relevant_results['shuffle'] == shuffle)]
+
+    fig, ax = plt.subplots(figsize=(12, 8))
+
+    sns.lineplot(x="threshold", y="top_score", data=plot_data, color="gray", ax=ax, label="peak")
+    sns.lineplot(x="threshold", y="train_score", data=plot_data, color="green", ax=ax, label="train")
+    sns.lineplot(x="threshold", y="test_score", data=plot_data, color="red", ax=ax, label="test")
+    sns.lineplot(x="threshold", y="test_overlap", data=plot_data, color="orchid", ax=ax, label="overlap")
+
+    rect = patches.Rectangle((158, -0.3), 5.0, 1.0, facecolor='gray', fill=True, alpha=0.25)
+    ax.add_patch(rect)
+
+    ax.legend(labels=['peak', 'train', 'test', 'overlap'])
+    plt.suptitle("Scores by top probe threshold in '{}, {}-shuffled' data".format(phase, shuffle))
+    ax.set_ylabel('Mantel correlation')
+    return fig, ax
+
+
+@shared_task(bind=True)
+def assess_performance(self, plot_descriptor, data_root="/data"):
+    """ Calculate metrics at different thresholds for relevant genes and plot them.
+
+    :param self: Allows interacting with celery
+    :param plot_descriptor: Abbreviated string describing plot's underlying data
+    :param data_root: default /data, base path to all of the results
+    """
+
+    # It's tough to pass a list of thresholds via url, so it's hard-coded here.
+    thresholds = [4, 8, 12, 16, 20, 24, 32, 64, 128, 157, 160, 256, 320, 512, 1024]
+    progress_recorder = ProgressRecorder(self)
+
+    comp, parby, splby, mask, algo, phase, opposite_phase, results = interpret_descriptor(plot_descriptor)
+
+    n = len(results)
+    total = n * len(thresholds) + 10
+    progress_recorder.set_progress(0, total, "Finding results")
+    print("Found {:,} results ({} {} {} {} {} {} {})".format(n, "glasser", "fornito", algo, comp, parby, splby, mask))
+
+    if len(results) > 0:
+        relevant_results = []
+
+        """ Calculate (or load) stats for individual tsv files. """
+        for i, path in enumerate(results.values('tsv_path')):
+            if os.path.isfile(path['tsv_path']):
+                for j, threshold in enumerate(thresholds):
+                    relevant_results.append(
+                        dict_from_result(path['tsv_path'], base_path=data_root, probe_sig_threshold=threshold)
+                    )
+                    progress_recorder.set_progress(
+                        i * len(thresholds) + j, total, "Processing {:,}/{:,} results".format(i, n)
+                    )
+            else:
+                print("ERR: DOES NOT EXIST: {}".format(path['tsv_path']))
+        rdf = pd.DataFrame(relevant_results)
+
+        # Just temporarily, in case debugging offline is necessary
+        rdf.to_pickle(os.path.join(data_root, "plots", "rdf.df"))
+
+        """ Calculate grouped stats, overlap between each tsv file and its shuffle-based 'peers'. """
+        progress_recorder.set_progress(n * len(thresholds), total, "Generating overlap lists")
+        shuffles = list(set(rdf['shuffle']))
+        # for k, shuffle in enumerate(shuffles):
+        #     shuffle_mask = rdf['shuffle'] == shuffle
+        #     # We can only do this in training data, unless we want to double the workload above for test, too.
+        #     # Generate a list of lists for each file's single 'train_overlap' cell in our dataframe.
+        #     rdf.loc[shuffle_mask, 'train_overlap'] = [
+        #         algorithms.pct_similarity_list(list(rdf.loc[shuffle_mask, 'path']), top=t) for t in thresholds
+        #     ]
+        #     progress_recorder.set_progress(n * len(thresholds) + (k * 2), total, "overlap list {}/{}".format(
+        #         k, len(shuffles)
+        #     ))
+
+        progress_recorder.set_progress(n * len(thresholds) + (len(shuffles) * 2), total, "Generating plot")
+        # Plot performance of thresholds on correlations.
+        phase_mask = rdf['phase'] == phase
+        f_perf, a_perf = plot_scores_over_thresholds(
+            rdf[phase_mask & (rdf['shuffle'] == 'none')], phase, 'none'
+        )
+        f_perf.savefig(os.path.join(data_root, "plots", "performance_{}.png".format(plot_descriptor)))
+
+        progress_recorder.set_progress(total, total, "Finished")
+
+    return None
