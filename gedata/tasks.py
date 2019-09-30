@@ -113,7 +113,11 @@ def collect_jobs(self, data_path="/data", rebuild=False):
 
     progress_recorder = ProgressRecorder(self)
 
-    last_result_datetime = ResultSummary.objects.latest('summary_date').summary_date
+    if ResultSummary.objects.count() > 0:
+        last_result_datetime = ResultSummary.objects.latest('summary_date').summary_date
+    else:
+        last_result_datetime = ResultSummary.empty().summary_date
+
     results = []
     i = 0
     n = 0
