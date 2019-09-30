@@ -123,6 +123,16 @@ textarea {
     float: left;
 }
 
+.center_side {
+  width: 60%;
+  float: none;
+  margin-left: 20%;
+  margin-right: 20%;
+}
+#right_image img {
+    float: none;
+}
+
 #notes_below {
   margin-left: 10%;
   width: 80%;
