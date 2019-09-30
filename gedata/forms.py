@@ -1,5 +1,6 @@
 from django import forms
 from django.shortcuts import render
+from django.db.utils import ProgrammingError
 
 from os import path
 from .models import PushResult, ResultSummary
@@ -8,7 +9,12 @@ from .models import PushResult, ResultSummary
 def unique_tuples(k, enumerated=False):
     """ Return a list of tuples, containing all values matching the k key, useful for select box widgets """
 
-    unique_values = PushResult.objects.order_by().values_list(k).distinct()
+    # Upon initial run, the database may not exist yet and trigger a ProgrammingError when queried.
+    try:
+        unique_values = PushResult.objects.order_by().values_list(k).distinct()
+    except ProgrammingError:
+        unique_values = []
+
     vs = (('*', '*', ), )
     for i, v in enumerate(sorted(unique_values)):
         if enumerated:
@@ -148,7 +154,7 @@ def image_dict_from_selection(selection):
         elif selection[3].lower() == "w":
             image_dict['comp'] = "indiconnsim"
 
-    image_dict['description'] = "parby-{}_splby-{} ~ {} mask-{} {} (test {})".format(
+    image_dict['description'] = "parby-{}_splby-{} ~ {} mask-{} {}".format(
         "glasser" if selection[3].lower() == "g" else "wellid",
         "glasser" if selection[4].lower() == "g" else "wellid",
         image_dict['comp'],
@@ -162,9 +168,11 @@ def image_dict_from_selection(selection):
 def image_dict_from_selections(clean_form_data, side):
     """ Convert a collection of selections into a single string allowing selection of the correct plot image. """
 
+    prefix='na'
     summary_string = "empty"
     summary_template = "{comp}{pby}{sby}{mask}{algo}{test_with_mask}"
     if side.upper()[0] == "L":
+        prefix = 'train_test'
         summary_string = summary_template.format(
             comp=clean_form_data['left_comp'].lower(),
             pby=clean_form_data['left_parcel'].lower()[0],
@@ -173,6 +181,7 @@ def image_dict_from_selections(clean_form_data, side):
             algo=clean_form_data['left_algo'],
         )
     elif side.upper()[0] == "R":
+        prefix = 'train_test'
         summary_string = summary_template.format(
             comp=clean_form_data['right_comp'].lower(),
             pby=clean_form_data['right_parcel'].lower()[0],
@@ -180,8 +189,17 @@ def image_dict_from_selections(clean_form_data, side):
             mask=clean_form_data['right_train_mask'],
             algo=clean_form_data['right_algo'],
         )
+    elif side.lower() == "performance":
+        prefix='performance'
+        summary_string = summary_template.format(
+            comp=clean_form_data['comp'].lower(),
+            pby=clean_form_data['parcel'].lower()[0],
+            sby=clean_form_data['split'].lower()[0],
+            mask=clean_form_data['train_mask'],
+            algo=clean_form_data['algo'],
+        )
     image_dict = {
-        'url': "/static/plots/train_test_{}.png".format(summary_string),
+        'url': "/static/plots/{}_{}.png".format(prefix, summary_string),
         'alt': summary_string,
     }
     return image_dict
@@ -259,6 +277,46 @@ def comparison_results(request):
         'submitted': submitted,
         'left_image': left_image,
         'right_image': right_image,
+        'latest_result_summary': ResultSummary.objects.latest('summary_date'),
+    })
+
+
+class PerformanceForm(forms.Form):
+    parcels = [ ('w', 'wellid'), ('g', 'Glasser'), ]
+    comps = [ ('nki', 'NKI'), ('hcp', 'HCP'), ]
+    masks = [ ('00', 'none'), ('16', '16'), ('32', '32'), ('64', '64'), ]
+    algos = [ ('s', 'smrt'), ('o', 'once'), ]
+
+    parcel = forms.ChoiceField(label="parcel", widget=forms.Select, choices=parcels, initial="w")
+    split = forms.ChoiceField(label="split by", widget=forms.Select, choices=parcels, initial="w")
+    comp = forms.ChoiceField(label="connectivity", widget=forms.Select, choices=comps, initial="nki")
+    train_mask = forms.ChoiceField(label="train mask", widget=forms.Select, choices=masks, initial="00")
+    algo = forms.ChoiceField(label="algorithm", widget=forms.Select, choices=algos, initial="s")
+
+
+def performance(request):
+    """ Render the ComparisonForm """
+
+    submitted = False
+    image = {'url': '/static/gedata/empty.png', 'description': 'nonexistent'}
+
+    if request.method == 'POST':
+        form = ComparisonForm(request.POST)
+        if form.is_valid():
+            image = image_dict_from_selections(form.cleaned_data, 'performance')
+            print("We calculated the image name, {}, in python. I didn't think we'd ever POST form data.".format(
+                image
+            ))
+    else:
+        # Create a blank form
+        form = PerformanceForm()
+        if 'submitted' in request.GET:
+            submitted = True
+
+    return render(request, 'gedata/performance.html', {
+        'form': form,
+        'submitted': submitted,
+        'image': image,
         'latest_result_summary': ResultSummary.objects.latest('summary_date'),
     })
 
