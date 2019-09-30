@@ -204,6 +204,74 @@ function buildPlot(image_id, select_id) {
     png_http.send();
 }
 
+function assessPerformance(image_id, select_id) {
+    // Calculate the image id string from forms, then use it to load plot images
+    let select_element = document.getElementById(select_id);
+    select_element.innerText = image_id_from_selections(select_id.toLowerCase());  // "performance"
+    console.log("in assessPerformance, select_id = " + select_id + "; containing '" + select_element.innerText + "'.");
+    let image_element = document.getElementById(image_id);
+
+    // This function is called a lot just to refresh and update, as well as after changed form fields.
+    // If the desired plot is already loaded, we should just ignore the change and quit. No harm done.
+    if( image_element.innerHTML.includes(select_element.innerText)) {
+        // The desired image is already built and loaded. Nothing to do here.
+        console.log("  doing nothing with " + select_element.innerText + "; it's already built and loaded.");
+        return;
+    } else if (image_element.innerHTML.includes("img src")) {
+        // Immediately set the image blank, just to give feedback we registered the click.
+        // But don't mess with active spinners (which do not contain "img src" substring)
+        console.log("  priming the " + select_id.toUpperCase()[0] + " image spot for " + select_element.innerText + " with empty.");
+        loadPlot(image_element, "/static/gedata/empty.png");
+    } else if( image_element.innerHTML.includes("fa-spinner")) {
+        // Already working on it; ignore further requests.
+        // But with async, many requests may be made for the same thing before this is triggered.
+        console.log("  " + select_id + " is already building a plot. Wait until it's done!");
+        return;
+    }
+
+    console.log("Checking for " + select_element.innerText + " image for " + image_id + ".");
+    let img_file = "performance_" + select_element.innerText.toLowerCase() + ".png";
+    let img_url = "/static/gedata/plots/" + img_file;
+
+    // The first ajax request determines whether our desired plot already exists or not.
+    let png_http = new XMLHttpRequest();
+    png_http.onreadystatechange = function () {
+        if (png_http.readyState === 4) {
+            if (png_http.status === 200) {
+                console.log(select_element.innerText + " exists, loading it rather than rebuilding.");
+                loadPlot(image_element, img_url);
+            }
+            if (png_http.status === 404) {
+                console.log(select_element.innerText + " does not exist. Building it from scratch.");
+                // let refreshUrl = "{% url 'gedata:refresh' job_name=12345 %}".replace(/12345/, img_file);
+                let refreshUrl = "/gedata/REST/refresh/" + img_file;
+
+                // The second ajax request initiates image creation and starts the spinner.
+                let request = new XMLHttpRequest();
+                request.onreadystatechange = function () {
+                    if (request.readyState === 4 && request.status === 200) {
+                        let responseJsonObj = JSON.parse(this.responseText);
+                        if (responseJsonObj.task_id !== "None") {
+                            console.log("Got id: " + responseJsonObj.task_id);
+                            let progressUrl = "/celery-progress/" + responseJsonObj.task_id + "/";
+                            CelerySpinner.initSpinner(progressUrl, {
+                                onSuccess: loadPlot,
+                                spinnerId: image_id,
+                                dataForLater: img_url
+                            });
+                        }
+                    }
+                };
+                request.open("GET", refreshUrl, true);
+                request.send();
+                console.log("Beginning to assess performance for " + select_element.innerText + " at " + image_id);
+            }
+        }
+    };
+    png_http.open('HEAD', img_url, true);
+    png_http.send();
+}
+
 function loadPlot(image_element, image_url) {
     let w = Math.round(document.documentElement.clientWidth * 0.45);
     image_element.style.color = '#ffffff';
@@ -213,11 +281,13 @@ function loadPlot(image_element, image_url) {
     image_element.innerHTML = html_text;
 
     // Also update gene ranking information, if available.
-    if (image_url.endsWith('empty.png')) {
-        document.getElementById(image_element.id.replace('image', 'go')).innerHTML = "";
-    } else {
-        append_probes_from_file(image_element.id.replace('image', 'go'), image_url.replace('png', 'html'));
-        document.getElementById(image_element.id.replace('image', 'caption')).innerHTML = caption(2);
+    if( image_url.includes("train_test_") ) {
+        if (image_url.endsWith('empty.png')) {
+            document.getElementById(image_element.id.replace('image', 'go')).innerHTML = "";
+        } else {
+            append_probes_from_file(image_element.id.replace('image', 'go'), image_url.replace('png', 'html'));
+            document.getElementById(image_element.id.replace('image', 'caption')).innerHTML = caption(2);
+        }
     }
 }
 
@@ -295,6 +365,14 @@ function image_id_from_selections(side) {
             summary_string += document.getElementById('id_right_split').value.toLowerCase()[0];
             summary_string += document.getElementById('id_right_train_mask').value;
             summary_string += document.getElementById('id_right_algo').value;
+        }
+    } else if (side === "center_set_string") {
+        if( document.title === "Result set performance" ) {
+            summary_string += document.getElementById('id_comp').value.toLowerCase();
+            summary_string += document.getElementById('id_parcel').value.toLowerCase()[0];
+            summary_string += document.getElementById('id_split').value.toLowerCase()[0];
+            summary_string += document.getElementById('id_train_mask').value;
+            summary_string += document.getElementById('id_algo').value;
         }
     }
     console.log("    calculated " + side + " summary_string of '" + summary_string + "'");
