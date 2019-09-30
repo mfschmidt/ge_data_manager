@@ -35,13 +35,10 @@
                 <a class="nav-link" href="{% url 'gedata:index' %}">Home <span class="sr-only"></span></a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" href="{% url 'gedata:results' %}">Results</a>
-            </li>
-            <li class="nav-item">
                 <a class="nav-link" href="{% url 'gedata:filter' %}">Filter</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" href="{% url 'gedata:comparison' %}">New Compare</a>
+                <a class="nav-link" href="{% url 'gedata:comparison' %}">Compare</a>
             </li>
             <li class="nav-item">
                 <a class="nav-link" href="{% url 'gedata:performance' %}">Performance</a>
@@ -58,8 +55,10 @@
 <main role="main" class="flex-shrink-0">
 <div class="container">
 
+<p><!-- Take up a little space behind the header. --><br /></p>
 {% block content %}
 {% endblock %}
+<p><!-- Take up a little space behind the footer. --><br /><br /></p>
 
 </div>
 </main>
@@ -72,11 +71,13 @@
 {% block footer %}
     <nav class="navbar" id="bottom_status_bar">
         <div id="static_progress_bar" style="display: block;">
-            <span id="n_results">{{ latest_result_summary.num_actuals|intcomma }} actual,
-                {{ latest_result_summary.num_shuffles|add:latest_result_summary.num_distshuffles|add:latest_result_summary.num_edgeshuffles|intcomma }} permutations,
-                {{ latest_result_summary.num_results|intcomma }} total results available, last refreshed {{ latest_result_summary.summary_date }}.</span> &nbsp;
-            <button id="progress-bar-sync-trigger" class="btn footer_button" onclick="startResultMining('update_jobs');"><i class="fas fa-sync"></i> update</button>
-            <button id="progress-bar-redo-trigger" class="btn footer_button" onclick="startResultMining('collect_jobs');"><i class="fas fa-redo"></i> rebuild</button>
+            <table class="footer_summary"><tr><td colspan="3">
+                <span id="latest_result_summary"><!-- updated by js --></span>
+            </td><td colspan="1">
+                <button id="progress-bar-sync-trigger" class="btn footer_button" onclick="startResultMining('update_jobs');"><i class="fas fa-sync"></i> update</button>
+            </td><td colspan="1">
+                <button id="progress-bar-redo-trigger" class="btn footer_button" onclick="startResultMining('collect_jobs');"><i class="fas fa-redo"></i> rebuild</button>
+            </td></tr></table>
         </div>
         <div id="celery_progress_bar" class="progress-wrapper" style="display: none;">
             <!--<span id="results_ok_check"><i class="fas fa-check"></i></span>-->

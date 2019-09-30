@@ -6,14 +6,6 @@
 
 {% block content %}
 
-<p>As of {{ latest_result_summary.summary_date }}, {{ latest_result_summary.num_results|intcomma }} results are available locally.</p>
-<ul>
-    <li>{{ latest_result_summary.num_actuals|intcomma }} results from actual data</li>
-    <li>{{ latest_result_summary.num_shuffles|intcomma }} results from agnostically shuffled data</li>
-    <li>{{ latest_result_summary.num_distshuffles|intcomma }} results from distance-weighted shuffled data</li>
-    <li>{{ latest_result_summary.num_edgeshuffles|intcomma }} results from distance-binned edge-shuffled data</li>
-</ul>
-
     <p> The earlier analyses each focused on a complete sample from a particular donor. We now focus on a subset of these many analyses that used split-half resampling.
         All split halves are based on all donors <b>(sub-all)</b>, all hemispheres <b>(hem-A)</b>,
         but only samples that can fit into left hemisphere Glasser parcellations <b>(samp-glasser)</b>, and the Fornito/Arnatkeviciute selection of probes <b>(prob-fornito)</b>.

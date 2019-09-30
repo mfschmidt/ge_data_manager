@@ -10,10 +10,7 @@ def unique_tuples(k, enumerated=False):
     """ Return a list of tuples, containing all values matching the k key, useful for select box widgets """
 
     # Upon initial run, the database may not exist yet and trigger a ProgrammingError when queried.
-    try:
-        unique_values = PushResult.objects.order_by().values_list(k).distinct()
-    except ProgrammingError:
-        unique_values = []
+    unique_values = [] if PushResult.objects.count() == 0 else PushResult.objects.order_by().values_list(k).distinct()
 
     vs = (('*', '*', ), )
     for i, v in enumerate(sorted(unique_values)):
@@ -102,7 +99,7 @@ def filter_results(request):
         'pushresult_list': query_set.filter(shuffle='derivatives'),
         'result_path': path.join("derivatives", result_expression, result_split, result_process, result_file),
         'comments': comments,
-        'latest_result_summary': ResultSummary.objects.latest('summary_date')
+        # 'latest_result_summary': ResultSummary.objects.latest('summary_date')
     })
 
 
@@ -228,7 +225,7 @@ def compare_results(request):
         'submitted': submitted,
         'left_image': left_image,
         'right_image': right_image,
-        'latest_result_summary': ResultSummary.objects.latest('summary_date'),
+        # 'latest_result_summary': ResultSummary.objects.latest('summary_date'),
     })
 
 
@@ -277,7 +274,7 @@ def comparison_results(request):
         'submitted': submitted,
         'left_image': left_image,
         'right_image': right_image,
-        'latest_result_summary': ResultSummary.objects.latest('summary_date'),
+        # 'latest_result_summary': ResultSummary.objects.latest('summary_date'),
     })
 
 
@@ -317,6 +314,6 @@ def performance(request):
         'form': form,
         'submitted': submitted,
         'image': image,
-        'latest_result_summary': ResultSummary.objects.latest('summary_date'),
+        # 'latest_result_summary': ResultSummary.objects.latest('summary_date'),
     })
 

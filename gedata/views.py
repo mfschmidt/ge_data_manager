@@ -4,6 +4,8 @@ from django.http import HttpResponse
 from django.shortcuts import render
 from django.views import generic
 
+import datetime
+
 from ge_data_manager.celery import celery_id_from_name, celery_plots_in_progress
 
 from .tasks import clear_jobs, collect_jobs, build_plot, assess_performance
@@ -17,8 +19,8 @@ def index(request):
         'title': 'Gene Expression Main Page',
         'latest_result_summary': ResultSummary.empty(),
     }
-    if ResultSummary.objects.count() > 0:
-        context['latest_result_summary'] = ResultSummary.objects.latest('summary_date')
+    # if ResultSummary.objects.count() > 0:
+    #     context['latest_result_summary'] = ResultSummary.objects.latest('summary_date')
 
     return render(request, 'gedata/index.html', context=context)
 
@@ -30,7 +32,7 @@ class ResultView(generic.DetailView):
         context = super(ResultView, self).get_context_data(**kwargs)
         context['n_results'] = PushResult.objects.count()
         context['m_results'] = ResultSummary.objects.latest('summary_date').num_results
-        context['latest_result_summary'] = ResultSummary.objects.latest('summary_date')
+        # context['latest_result_summary'] = ResultSummary.objects.latest('summary_date')
         return context
 
 class ResultsView(generic.ListView):
@@ -89,6 +91,13 @@ def rest_refresh(request, job_name):
             print("     new id for '{}' is '{}'.".format(job_name, jobs_id))
 
     return HttpResponse("{" + "\"task_id\": \"{}\"".format(jobs_id) + "}")
+
+
+def rest_latest(request):
+    """ Return json with the latest state of the data. """
+
+    r = ResultSummary.empty() if ResultSummary.objects.count() == 0 else ResultSummary.objects.latest('summary_date')
+    return HttpResponse(r.to_json())
 
 """
 def summarize_bids(request, bids_key, bids_val):

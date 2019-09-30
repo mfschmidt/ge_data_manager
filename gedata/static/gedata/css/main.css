@@ -154,6 +154,10 @@ div.descriptor p,ul {
 td {
   width: 10%;
 }
+table.footer_summary td {
+    padding: 8px;
+    width: auto;
+}
 
 table.menu_table {
   width: 80%;

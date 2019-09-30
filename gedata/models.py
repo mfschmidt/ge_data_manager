@@ -76,6 +76,7 @@ class ResultSummary(models.Model):
     num_edgeshuffles = models.IntegerField()
     num_splits = models.IntegerField()
 
+    # @classmethod decorator allows this method to be called on the class, without an instance
     @classmethod
     def empty(cls):
         return cls(
@@ -87,5 +88,18 @@ class ResultSummary(models.Model):
             num_edgeshuffles = 0,
             num_splits = 0,
         )
+
+    def to_json(self):
+        json = "{\n"
+        json += "    \"{}\":\"{}\",\n".format("summary_date", self.summary_date.strftime("%m/%d/%Y %H:%M"))
+        json += "    \"{}\":\"{:,}\",\n".format("num_results", self.num_results)
+        json += "    \"{}\":\"{:,}\",\n".format("num_actuals", self.num_actuals)
+        json += "    \"{}\":\"{:,}\",\n".format("num_shuffles", self.num_shuffles)
+        json += "    \"{}\":\"{:,}\",\n".format("num_distshuffles", self.num_distshuffles)
+        json += "    \"{}\":\"{:,}\",\n".format("num_edgeshuffles", self.num_edgeshuffles)
+        json += "    \"{}\":\"{:,}\"\n".format("num_splits", self.num_splits)
+        json += "}"
+        return json
+
     class Meta:
         ordering = ["summary_date"]

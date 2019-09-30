@@ -5,4 +5,3 @@ celery>=4.3
 django-celery-results
 numpy
 pandas
--e git://github.com/mfschmidt/PyGEST.git#egg=PyGEST
