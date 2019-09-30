@@ -6,7 +6,7 @@ from django.views import generic
 
 from ge_data_manager.celery import celery_id_from_name, celery_plots_in_progress
 
-from .tasks import clear_jobs, collect_jobs, build_plot
+from .tasks import clear_jobs, collect_jobs, build_plot, assess_performance
 from .models import PushResult, ResultSummary
 
 
@@ -74,7 +74,17 @@ def rest_refresh(request, job_name):
             print("NEW: rest_refresh got job '{}', no id returned. Building new plot.".format(job_name))
             for plot in plots_in_progress:
                 print("     already building {}".format(plot))
-            celery_result = build_plot.delay(job_name[11:19].lower(), data_path="/data")
+            celery_result = build_plot.delay(job_name[11:19].lower(), data_root="/data")
+            jobs_id = celery_result.task_id
+            print("     new id for '{}' is '{}'.".format(job_name, jobs_id))
+    elif job_name.startswith("performance"):
+        if job_name in plots_in_progress:
+            print("DUPE: {} requested, but is already being worked on.".format(job_name))
+        else:
+            print("NEW: rest_refresh got job '{}', no id returned. New performance assessment.".format(job_name))
+            for plot in plots_in_progress:
+                print("     already building {}".format(plot))
+            celery_result = assess_performance.delay(job_name[12:20].lower(), data_root="/data")
             jobs_id = celery_result.task_id
             print("     new id for '{}' is '{}'.".format(job_name, jobs_id))
 
