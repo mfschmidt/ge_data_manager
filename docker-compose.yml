@@ -3,6 +3,8 @@ version: '3'
 services:
         db:
                 image: postgres
+                volumes:
+                        - ./pgdata:/var/lib/postgresql/data/
         mq:
                 image: rabbitmq
         web:
@@ -13,6 +15,7 @@ services:
                                       python manage.py runserver 0.0.0.0:8000"
                 volumes:
                         - /data:/data
+                        - .:/code
                 ports:
                         - "8000:8000"
                 depends_on:
@@ -25,5 +28,7 @@ services:
                                       celery worker --app ge_data_manager --hostname=mq --broker "amqp://guest@mq" --loglevel=INFO --events"
                 volumes:
                         - /data:/data
+                        - .:/code
                 depends_on:
                         - mq
+                        - web
