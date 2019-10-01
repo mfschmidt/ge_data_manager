@@ -7,6 +7,7 @@ urlpatterns = [
     path('', views.index, name='index'),
     path('REST/refresh/<str:job_name>', views.rest_refresh, name='refresh'),
     path('REST/latest/', views.rest_latest, name='latest'),
+    path('REST/inventory/<str:signature>', views.rest_inventory, name='inventory'),
     path('results/', views.ResultsView.as_view(), name='results'),
     path('result/<int:pk>', views.ResultView.as_view(), name='result'),
     path('filter/', forms.filter_results, name='filter'),
