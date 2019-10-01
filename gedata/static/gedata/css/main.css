@@ -103,6 +103,11 @@ textarea {
    Author's custom styles
    ========================================================================== */
 
+.main_title {
+  text-align: center;
+}
+
+/* Comparison columns */
 .left_side {
   width: 48%;
   float: left;
@@ -123,6 +128,7 @@ textarea {
     float: left;
 }
 
+/* Performance center column */
 .center_side {
   width: 60%;
   float: none;
@@ -154,23 +160,36 @@ div.descriptor p,ul {
 td {
   width: 10%;
 }
+
+/* Footer two-cell table */
 table.footer_summary td {
     padding: 8px;
     width: auto;
 }
 
+/* Inventory table */
+table#inventory_table th {
+    background-color: lightgray;
+    text-align: center;
+}
+table#inventory_table td {
+    width: auto;
+    padding: 4px;
+    margin: 4px;
+}
+table#inventory_table td.data_cell {
+    border: 1px solid black;
+}
+
+/* Comparison and Performance menus */
 table.menu_table {
   width: 80%;
   margin-left: 10%;
   margin-right: 10%;
   text-align: center;
 }
-table.menu_table.td {
+table.menu_table td {
     width: 50%;
-}
-
-.main_title {
-  text-align: center;
 }
 
 #celery_progress_bar {
@@ -186,6 +205,7 @@ table.menu_table.td {
     font-weight: bold;
 }
 
+/* Buttons */
 button.footer_button {
     background-color: aliceblue;
     border: 2px solid navy;
