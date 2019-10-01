@@ -31,32 +31,115 @@
     </p>
     <p> So, the available comparisons at this point in time (each with 16 train/test splits and 256 permutations of each shuffle type) are:
     </p>
-        <ul>HCP:
-            <li><b>parby-glasser_splby glasser ~ glasserconnectivitysim  mask-none (2 + 1,536: May 18)</b></li>
-            <li>parby-glasser_splby glasser ~ glasserconnectivitysim  mask-<b>16</b> (2 + 1,536: May 18)</li>
-            <li>parby-glasser_splby glasser ~ glasserconnectivitysim  mask-<b>32</b> (2 + 1,536: May 23)</li>
-            <li>parby-glasser_splby glasser ~ glasserconnectivitysim  mask-<b>64</b> (2 + 1,536: May 23)</li>
-            <li>parby-glasser_splby <b>wellid</b> ~ glasserconnectivitysim  mask-none (2 + 1,536: 26 - Apr 29)</li>
-            <li>parby-glasser_splby wellid ~ glasserconnectivitysim  mask-16 (2 + 1,536: May 2 - May 3)</li>
-            <li>parby-glasser_splby wellid ~ glasserconnectivitysim  mask-32 (2 + 1,536: about half from May 23 - May 28, half on June 19)</li>
-            <li>parby-glasser_splby wellid ~ glasserconnectivitysim  mask-64 (2 + 1,536: about half from May 23 - May 28, half on June 19)</li>
-            <li>parby-<b>wellid</b>_splby glasser ~ hcpniftismoothgrandmeansim  mask-none (Only 16, all split 205, from July 28)</li>
-            <li>parby-wellid_splby glasser ~ hcpniftismoothgrandmeansim  mask-16 (Only 16, all split 205, from July 28)</li>
-            <li>parby-wellid_splby wellid ~ hcpniftismoothgrandmeansim  mask-none (2 + 1,536 from July 8 - July 28)</li>
-            <li>parby-wellid_splby wellid ~ hcpniftismoothgrandmeansim  mask-16 (Only 16, all split 205, from July 28)</li>
-        </ul>
-        <ul>NKI INDI:
-            <li>parby-glasser_splby glasser ~ <b>indiglasserconnsim</b>  mask-none (2 + 1,536: July 28 - Aug 1)</li>
-            <li>parby-glasser_splby glasser ~ indiglasserconnsim  mask-16 (32 + 1,536: Aug 25-31)</li>
-            <li>parby-glasser_splby glasser ~ indiglasserconnsim  mask-32 (32 + 1,536: Aug 25-31)</li>
-            <li>parby-glasser_splby glasser ~ indiglasserconnsim  mask-64 (32 + 1,536: Aug 25-31)</li>
-            <li>parby-glasser_splby-wellid ~ indiglasserconnsim  mask-none (2 + 1,536: July 28 - Aug 1)</li>
-            <li>parby-glasser_splby wellid ~ indiglasserconnsim  mask-16 (32 + 1,536: Aug 25-31)</li>
-            <li>parby-glasser_splby wellid ~ indiglasserconnsim  mask-32 (32 + 1,536: Aug 25-31)</li>
-            <li>parby-glasser_splby wellid ~ indiglasserconnsim  mask-64 (32 + 1,536: Aug 25-31)</li>
-            <li>parby-wellid_splby glasser ~ indiconnsim  mask-none  (2 + 1,536: Aug 1 - Aug 25)</li>
-            <li>parby-wellid_splby wellid ~ indiconnsim  mask-none  (2 + 1,536: Aug 1 - Aug 25)</li>
-        </ul>
+
+    <table id="inventory_table">
+        <!-- Table Header -->
+        <tr>
+            <th>parcel</th>
+            <th>split</th>
+            <th>comp</th>
+            <th colspan="4">mask</th>
+        </tr>
+        <tr>
+            <th colspan="3"></th>
+            <th>none</th>
+            <th>&lt; 16mm</th>
+            <th>&lt; 32mm</th>
+            <th>&lt; 64mm</th>
+        </tr>
+        <!-- Table Body -->
+        <tr>
+            <th rowspan="4">wellid</th>
+            <th rowspan="2">wellid</th>
+            <th>hcp</th>
+            <td id="hcpww00s" class="data_cell"><!-- filled in by js --></td>
+            <td id="hcpww16s" class="data_cell"><!-- filled in by js --></td>
+            <td id="hcpww32s" class="data_cell"><!-- filled in by js --></td>
+            <td id="hcpww64s" class="data_cell"><!-- filled in by js --></td>
+        </tr>
+        <tr>
+            <th>nki</th>
+            <td id="nkiww00s" class="data_cell"><!-- filled in by js --></td>
+            <td id="nkiww16s" class="data_cell"><!-- filled in by js --></td>
+            <td id="nkiww32s" class="data_cell"><!-- filled in by js --></td>
+            <td id="nkiww64s" class="data_cell"><!-- filled in by js --></td>
+        </tr>
+        <tr>
+            <th rowspan="2">glasser</th>
+            <th>hcp</th>
+            <td id="hcpwg00s" class="data_cell"><!-- filled in by js --></td>
+            <td id="hcpwg16s" class="data_cell"><!-- filled in by js --></td>
+            <td id="hcpwg32s" class="data_cell"><!-- filled in by js --></td>
+            <td id="hcpwg64s" class="data_cell"><!-- filled in by js --></td>
+        </tr>
+        <tr>
+            <th>nki</th>
+            <td id="nkiwg00s" class="data_cell"><!-- filled in by js --></td>
+            <td id="nkiwg16s" class="data_cell"><!-- filled in by js --></td>
+            <td id="nkiwg32s" class="data_cell"><!-- filled in by js --></td>
+            <td id="nkiwg64s" class="data_cell"><!-- filled in by js --></td>
+        </tr>
+        <tr>
+            <th rowspan="4">glasser</th>
+            <th rowspan="2">wellid</th>
+            <th>hcp</th>
+            <td id="hcpgw00s" class="data_cell"><!-- filled in by js --></td>
+            <td id="hcpgw16s" class="data_cell"><!-- filled in by js --></td>
+            <td id="hcpgw32s" class="data_cell"><!-- filled in by js --></td>
+            <td id="hcpgw64s" class="data_cell"><!-- filled in by js --></td>
+        </tr>
+        <tr>
+            <th>nki</th>
+            <td id="nkigw00s" class="data_cell"><!-- filled in by js --></td>
+            <td id="nkigw16s" class="data_cell"><!-- filled in by js --></td>
+            <td id="nkigw32s" class="data_cell"><!-- filled in by js --></td>
+            <td id="nkigw64s" class="data_cell"><!-- filled in by js --></td>
+        </tr>
+        <tr>
+            <th rowspan="2">glasser</th>
+            <th>hcp</th>
+            <td id="hcpgg00s" class="data_cell"><!-- filled in by js --></td>
+            <td id="hcpgg16s" class="data_cell"><!-- filled in by js --></td>
+            <td id="hcpgg32s" class="data_cell"><!-- filled in by js --></td>
+            <td id="hcpgg64s" class="data_cell"><!-- filled in by js --></td>
+        </tr>
+        <tr>
+            <th>nki</th>
+            <td id="nkigg00s" class="data_cell"><!-- filled in by js --></td>
+            <td id="nkigg16s" class="data_cell"><!-- filled in by js --></td>
+            <td id="nkigg32s" class="data_cell"><!-- filled in by js --></td>
+            <td id="nkigg64s" class="data_cell"><!-- filled in by js --></td>
+        </tr>
+    </table>
+    <button id="inventory_table_refresh_button" class="btn footer_button" onclick="fillInventoryTable();"><i class="fas fa-sync"></i> fill table</button>
+
+
+    <ul>HCP:
+        <li><b>parby-glasser_splby glasser ~ glasserconnectivitysim  mask-none (2 + 1,536: May 18)</b></li>
+        <li>parby-glasser_splby glasser ~ glasserconnectivitysim  mask-<b>16</b> (2 + 1,536: May 18)</li>
+        <li>parby-glasser_splby glasser ~ glasserconnectivitysim  mask-<b>32</b> (2 + 1,536: May 23)</li>
+        <li>parby-glasser_splby glasser ~ glasserconnectivitysim  mask-<b>64</b> (2 + 1,536: May 23)</li>
+        <li>parby-glasser_splby <b>wellid</b> ~ glasserconnectivitysim  mask-none (2 + 1,536: 26 - Apr 29)</li>
+        <li>parby-glasser_splby wellid ~ glasserconnectivitysim  mask-16 (2 + 1,536: May 2 - May 3)</li>
+        <li>parby-glasser_splby wellid ~ glasserconnectivitysim  mask-32 (2 + 1,536: about half from May 23 - May 28, half on June 19)</li>
+        <li>parby-glasser_splby wellid ~ glasserconnectivitysim  mask-64 (2 + 1,536: about half from May 23 - May 28, half on June 19)</li>
+        <li>parby-<b>wellid</b>_splby glasser ~ hcpniftismoothgrandmeansim  mask-none (Only 16, all split 205, from July 28)</li>
+        <li>parby-wellid_splby glasser ~ hcpniftismoothgrandmeansim  mask-16 (Only 16, all split 205, from July 28)</li>
+        <li>parby-wellid_splby wellid ~ hcpniftismoothgrandmeansim  mask-none (2 + 1,536 from July 8 - July 28)</li>
+        <li>parby-wellid_splby wellid ~ hcpniftismoothgrandmeansim  mask-16 (Only 16, all split 205, from July 28)</li>
+    </ul>
+    <ul>NKI INDI:
+        <li>parby-glasser_splby glasser ~ <b>indiglasserconnsim</b>  mask-none (2 + 1,536: July 28 - Aug 1)</li>
+        <li>parby-glasser_splby glasser ~ indiglasserconnsim  mask-16 (32 + 1,536: Aug 25-31)</li>
+        <li>parby-glasser_splby glasser ~ indiglasserconnsim  mask-32 (32 + 1,536: Aug 25-31)</li>
+        <li>parby-glasser_splby glasser ~ indiglasserconnsim  mask-64 (32 + 1,536: Aug 25-31)</li>
+        <li>parby-glasser_splby-wellid ~ indiglasserconnsim  mask-none (2 + 1,536: July 28 - Aug 1)</li>
+        <li>parby-glasser_splby wellid ~ indiglasserconnsim  mask-16 (32 + 1,536: Aug 25-31)</li>
+        <li>parby-glasser_splby wellid ~ indiglasserconnsim  mask-32 (32 + 1,536: Aug 25-31)</li>
+        <li>parby-glasser_splby wellid ~ indiglasserconnsim  mask-64 (32 + 1,536: Aug 25-31)</li>
+        <li>parby-wellid_splby glasser ~ indiconnsim  mask-none  (2 + 1,536: Aug 1 - Aug 25)</li>
+        <li>parby-wellid_splby wellid ~ indiconnsim  mask-none  (2 + 1,536: Aug 1 - Aug 25)</li>
+    </ul>
     <p> The primary result is in bold, based on an earlier conversations. Each partially bolded collection has only one variable altered from the primary.
         We can use each of these to see how changing that particular variable would have changed our primary results.
     </p>
