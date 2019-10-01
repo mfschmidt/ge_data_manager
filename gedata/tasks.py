@@ -757,7 +757,7 @@ def plot_all_train_vs_test(df, title="Title", fig_size=(8, 8), ymin=None, ymax=N
 
 def interpret_descriptor(plot_descriptor):
     """ Parse the plot descriptor into parts """
-    comp = comp_from_signature(plot_descriptor.upper()[:4])
+    comp = comp_from_signature(plot_descriptor[:4])
     parby = "glasser" if plot_descriptor[3].lower() == "g" else "wellid"
     splby = "glasser" if plot_descriptor[4].lower() == "g" else "wellid"
     mask = 'none' if plot_descriptor[5:7] == "00" else plot_descriptor[5:7]
