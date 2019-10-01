@@ -3,7 +3,7 @@
 function caption(figure) {
     if( figure === 2) {
         return '<p><span class="heavy">Maximizing Mantel correlations between gene expression similarity ' +
-            'and functional connectivity similarity by greedily removing genes.</span> ' +
+            'and functional connectivity similarity by greedily removing genes.</span><br />' +
             '<span class="heavy">A)</span> Mantel correlations for gene expression similarity matrices created ' +
             'from all 15,745 genes are all roughly around zero, as shown in the left-most pane. ' +
             'Repeatedly dropping the gene least supportive ' +
@@ -13,10 +13,10 @@ function caption(figure) {
             'weighted to preserve distance (red, center-right), or had its edges shuffled within distance bins ' +
             '(magenta, center-left). Each shuffling paradigm was applied 16 times, each with a different seed. ' +
             'Shuffled data were then subjected to the same Mantel maximization algorithm. Peak Mantel correlations ' +
-            'for each set are shown in the right-most pane. ' +
+            'for each set are shown in the right-most pane.<br />' +
             '<span class="heavy">B)</span> Genes remaining at the peak of each training were more consistent in ' +
             'real data than in shuffled data. Training on randomly shuffled data resulted in randomly selected ' +
-            'genes, with low similarity. ' +
+            'genes, with low similarity.<br />' +
             '<span class="heavy">C)</span> Filtering actual data, without shuffling, by the genes discovered in ' +
             'the training phase (with real, shuffled, and/or masked data), resulted in slightly lower correlations, ' +
             'but genes discovered in real data drove higher Mantel correlations than genes discovered in shuffled ' +
@@ -24,8 +24,25 @@ function caption(figure) {
             '(center-left pane), an independent test set (center-right pane), and the test set with proximal edges ' +
             '(< 16mm) removed (right-most pane).' +
             '</p>';
+    } else if( figure === 3 ) {
+        return '<p><span class="heavy">Assess algorithm performance at different thresholds.</span><br />' +
+            '<span class="heavy">Peak)</span> The highest Mantel correlation achieved during training, with the ' +
+            'specified training data, masked, shuffled, or otherwise manipulated.<br />' +
+            '<span class="heavy">Train or Test)</span> The Mantel correlation of gene expression similarity, ' +
+            'filtered to include only the top probes at a given threshold, and connectivity similarity. These curves ' +
+            'are in real data, regardless of the training manipulations. At the threshold responsible for the peak ' +
+            'Mantel correlation, in unshuffled and unmasked data, the train line should meet the peak line. See ' +
+            '<a href="https://github.com/mfschmidt/ge_data_manager/blob/master/gedata/tasks.py" target="_blank">' +
+            '<code>tasks.py:test_score</code></a>.<br />' +
+            '<span class="heavy">Overlap)</span> At each threshold, the top probes discovered in the training half ' +
+            'and the top probes discovered in the test half have some probes in common. This overlap is the percent ' +
+            'similarity across split-halves. In other words, This percentage of probes survived beyond the threshold ' +
+            'in both split-halves. See ' +
+            '<a href="https://github.com/mfschmidt/ge_data_manager/blob/master/gedata/tasks.py" target="_blank">' +
+            '<code>tasks.py:test_overlap</code></a>.' +
+            '</p>';
     } else {
-        return "<p></p>";
+        return '<p></p>';
     }
 }
 
@@ -209,6 +226,11 @@ function loadPlot(image_element, image_url) {
         } else {
             append_probes_from_file(image_element.id.replace('image', 'go'), image_url.replace('png', 'html'));
             document.getElementById(image_element.id.replace('image', 'caption')).innerHTML = caption(2);
+        }
+    }
+    if( image_url.includes("performance_") ) {
+        if (!image_url.endsWith('empty.png')) {
+            document.getElementById(image_element.id.replace('image', 'caption')).innerHTML = caption(3);
         }
     }
 }
