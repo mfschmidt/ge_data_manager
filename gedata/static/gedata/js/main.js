@@ -329,12 +329,79 @@ function initUi() {
     }
 
     // This is supposed to manage highlighting the active menu item, but doesn't work. One day I'll debug it.
-    $(".nav .nav-link").on("click", function(){
-        $(".nav").find(".active").removeClass("active");
+
+    $(".nav-item .nav-link").on("click", function(){
+        $(".nav-item").find(".active").removeClass("active");
         $(this).addClass("active");
     });
 
     console.log("  completed initing GE Data Manager UI (in main.js)");
+}
+
+function inventory_td_contents(jsonObject) {
+
+    // First, set up the table cell with a few extra spans. We can fill them in later.
+    let cell_text = jsonObject.none + " (" + jsonObject.agno + "+" + jsonObject.dist + "+" + jsonObject.edge + ")";
+    document.getElementById(jsonObject.signature).innerHTML = "<p>" + cell_text +
+        " <span id=\"" + jsonObject.signature + "tt\"></span>" +
+        " <span id=\"" + jsonObject.signature + "dna\"></span>" +
+        " <span id=\"" + jsonObject.signature + "pf\"></span>" +
+        "</p>";
+
+    // Fill in the train_test_ span.
+    let ttString = "";
+    let ttUrl = "/static/gedata/plots/train_test_" + jsonObject.signature + ".png";
+    let ttRequest = new XMLHttpRequest();
+    ttRequest.onreadystatechange = function() {
+        if(ttRequest.readyState === 4) {
+            if(ttRequest.status === 200) {
+                ttString = "<a href=\"" + ttUrl + "\" target=\"blank\"><i class=\"fas fa-box-up\"></i></a>";
+            }
+            if(ttRequest.status === 404) {
+                ttString = "<i class=\"fal fa-box-up\"></i>";
+            }
+            document.getElementById(jsonObject.signature + "tt").innerHTML = ttString;
+        }
+    };
+    ttRequest.open('HEAD', ttUrl, true);
+    ttRequest.send();
+
+    // Fill in the performance_ span.
+    let pfString = "";
+    let pfUrl = "/static/gedata/plots/performance_" + jsonObject.signature + ".png";
+    let pfRequest = new XMLHttpRequest();
+    pfRequest.onreadystatechange = function() {
+        if(pfRequest.readyState === 4) {
+            if(pfRequest.status === 200) {
+                pfString = "<a href=\"" + pfUrl + "\" target=\"blank\"><i class=\"fas fa-chart-line\"></i></a>";
+            }
+            if(pfRequest.status === 404) {
+                pfString = "<i class=\"fal fa-chart-line-down\"></i>";
+            }
+            document.getElementById(jsonObject.signature + "pf").innerHTML = pfString;
+        }
+    };
+    pfRequest.open('HEAD', pfUrl, true);
+    pfRequest.send();
+
+    // Fill in the gene_list_ span.
+    let dnaString = "";
+    let dnaUrl = "/static/gedata/plots/train_test_" + jsonObject.signature + ".html";
+    let dnaRequest = new XMLHttpRequest();
+    dnaRequest.onreadystatechange = function() {
+        if(dnaRequest.readyState === 4) {
+            if(dnaRequest.status === 200) {
+                dnaString = "<a href=\"" + dnaUrl + "\" target=\"blank\"><i class=\"fas fa-dna\"></i></a>";
+            }
+            if(dnaRequest.status === 404) {
+                dnaString = "<i class=\"fal fa-dna\"></i>";
+            }
+            document.getElementById(jsonObject.signature + "dna").innerHTML = dnaString;
+        }
+    };
+    dnaRequest.open('HEAD', dnaUrl, true);
+    dnaRequest.send();
+
 }
 
 function fillInventoryTable() {
@@ -355,8 +422,7 @@ function fillInventoryTable() {
                         if (request.readyState === 4 && request.status === 200) {
                             let responseJsonObj = JSON.parse(this.responseText);
                             if (responseJsonObj.signature === idString) {
-                                let iString = responseJsonObj.none + " (" + responseJsonObj.agno + "+" + responseJsonObj.dist + "+" + responseJsonObj.edge + ")";
-                                document.getElementById(idString).innerText = iString;
+                                inventory_td_contents(responseJsonObj);
                             }
                         }
                     };
