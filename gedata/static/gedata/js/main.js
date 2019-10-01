@@ -32,14 +32,14 @@ function caption(figure) {
             'filtered to include only the top probes at a given threshold, and connectivity similarity. These curves ' +
             'are in real data, regardless of the training manipulations. At the threshold responsible for the peak ' +
             'Mantel correlation, in unshuffled and unmasked data, the train line should meet the peak line. See ' +
-            '<a href="https://github.com/mfschmidt/ge_data_manager/blob/master/gedata/tasks.py">' +
-            '<pre>tasks.py:test_score</pre></a>.<br />' +
+            '<a href="https://github.com/mfschmidt/ge_data_manager/blob/master/gedata/tasks.py" target="_blank">' +
+            '<code>tasks.py:test_score</code></a>.<br />' +
             '<span class="heavy">Overlap)</span> At each threshold, the top probes discovered in the training half ' +
             'and the top probes discovered in the test half have some probes in common. This overlap is the percent ' +
             'similarity across split-halves. In other words, This percentage of probes survived beyond the threshold ' +
             'in both split-halves. See ' +
-            '<a href="https://github.com/mfschmidt/ge_data_manager/blob/master/gedata/tasks.py">' +
-            '<pre>tasks.py:test_overlap</pre></a>.' +
+            '<a href="https://github.com/mfschmidt/ge_data_manager/blob/master/gedata/tasks.py" target="_blank">' +
+            '<code>tasks.py:test_overlap</code></a>.' +
             '</p>';
     } else {
         return '<p></p>';
