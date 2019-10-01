@@ -8,7 +8,7 @@ import datetime
 
 from ge_data_manager.celery import celery_id_from_name, celery_plots_in_progress
 
-from .tasks import clear_jobs, collect_jobs, build_plot, assess_performance
+from .tasks import clear_jobs, collect_jobs, build_plot, assess_performance, interpret_descriptor
 from .models import PushResult, ResultSummary
 
 
@@ -48,6 +48,22 @@ class ResultsView(generic.ListView):
 
     def get_queryset(self):
         return PushResult.objects.filter(shuffle='derivatives')
+
+def rest_inventory(request, signature):
+    """ From an inventory id, like 'hcpww00s', return four-part inventory json. """
+
+    comp, parby, splby, mask, algo, phase, opposite_phase, relevant_results_queryset = interpret_descriptor(signature)
+    sign_string = "\"{}\":\"{}\"".format("signature", signature)
+    none_string = "\"{}\":\"{}\"".format("none", len(relevant_results_queryset.filter(shuffle="derivatives")))
+    agno_string = "\"{}\":\"{}\"".format("agno", len(relevant_results_queryset.filter(shuffle="shuffles")))
+    dist_string = "\"{}\":\"{}\"".format("dist", len(relevant_results_queryset.filter(shuffle="distshuffles")))
+    edge_string = "\"{}\":\"{}\"".format("edge", len(relevant_results_queryset.filter(shuffle="edgeshuffles")))
+    return HttpResponse(
+        "{\n    " + ",\n    ".join(
+            [sign_string, none_string, agno_string, dist_string, edge_string, ]
+        ) + "\n}"
+    )
+
 
 def rest_refresh(request, job_name):
     """ Execute the celery task to refresh the result list, and return json with the task_id necessary for
