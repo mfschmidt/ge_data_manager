@@ -24,6 +24,19 @@ function caption(figure) {
             '(center-left pane), an independent test set (center-right pane), and the test set with proximal edges ' +
             '(< 16mm) removed (right-most pane).' +
             '</p>';
+    } else if( figure === 3 ) {
+        return '<p><span class="heavy">Assess algorithm performance at different thresholds.</span> ' +
+            '<span class="heavy">Peak)</span> The highest Mantel correlation achieved during training, with the ' +
+            'specified training data, masked, shuffled, or otherwise manipulated. ' +
+            '<span class="heavy">Train or Test)</span> The Mantel correlation of gene expression similarity, ' +
+            'filtered to include only the top probes at a given threshold, and connectivity similarity. These curves ' +
+            'are in real data, regardless of the training manipulations. At the threshold responsible for the peak ' +
+            'Mantel correlation, in unshuffled and unmasked data, the train line should meet the peak line. ' +
+            '<span class="heavy">Overlap)</span> At each threshold, the top probes discovered in the training half ' +
+            'and the top probes discovered in the test half have some probes in common. This overlap is the percent ' +
+            'similarity across split-halves. In other words, This percentage of probes survived beyond the threshold ' +
+            'in both split-halves.' +
+            '</p>';
     } else {
         return "<p></p>";
     }
@@ -209,6 +222,11 @@ function loadPlot(image_element, image_url) {
         } else {
             append_probes_from_file(image_element.id.replace('image', 'go'), image_url.replace('png', 'html'));
             document.getElementById(image_element.id.replace('image', 'caption')).innerHTML = caption(2);
+        }
+    }
+    if( image_url.includes("performance_") ) {
+        if (!image_url.endsWith('empty.png')) {
+            document.getElementById(image_element.id.replace('image', 'caption')).innerHTML = caption(3);
         }
     }
 }
