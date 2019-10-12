@@ -108,7 +108,7 @@ function buildPlot(image_id, select_id) {
     }
 
     console.log("Checking for " + select_element.innerText + " image for " + image_id + ".");
-    let img_file = "train_test_" + select_element.innerText.toLowerCase() + ".png";
+    let img_file = select_element.innerText.toLowerCase() + "_traintest" + ".png";
     let img_url = "/static/gedata/plots/" + img_file;
 
     // The first ajax request determines whether our desired plot already exists or not.
@@ -162,7 +162,7 @@ function assessPerformance(image_id, select_id) {
     }
 
     console.log("Checking for " + select_element.innerText + " image for " + image_id + ".");
-    let img_file = "performance_" + select_element.innerText.toLowerCase() + ".png";
+    let img_file = select_element.innerText.toLowerCase() + "_performance" + ".png";
     let img_url = "/static/gedata/plots/" + img_file;
 
     // The first ajax request determines whether our desired plot already exists or not.
@@ -207,13 +207,12 @@ function assessPerformance(image_id, select_id) {
 function loadPlot(image_element, image_url) {
     let w = Math.round(document.documentElement.clientWidth * 0.45);
     image_element.style.color = '#ffffff';
-    let html_text = "<a href=\"" + image_url + "\">";
-    html_text += "<img src=\"" + image_url + "\" width=\"" + w + "\" alt=\"" + image_url + "\">";
-    html_text += "</a>";
-    image_element.innerHTML = html_text;
+    image_element.innerHTML = "<a href=\"" + image_url + "\" target=\"_blank\">" +
+                              "<img src=\"" + image_url + "\" width=\"" + w + "\" alt=\"" + image_url + "\">" +
+                              "</a>";
 
     // Also update gene ranking information, if available.
-    if( image_url.includes("train_test_") ) {
+    if( image_url.includes("traintest") ) {
         if (image_url.endsWith('empty.png')) {
             document.getElementById(image_element.id.replace('image', 'go')).innerHTML = "";
         } else {
@@ -221,7 +220,7 @@ function loadPlot(image_element, image_url) {
             document.getElementById(image_element.id.replace('image', 'caption')).innerHTML = caption(2);
         }
     }
-    if( image_url.includes("performance_") ) {
+    if( image_url.includes("performance") ) {
         if (!image_url.endsWith('empty.png')) {
             document.getElementById(image_element.id.replace('image', 'caption')).innerHTML = caption(3);
         }
@@ -365,7 +364,7 @@ function inventory_td_contents(jsonObject) {
 
     // Fill in the train_test_ span.
     let ttString = "";
-    let ttUrl = "/static/gedata/plots/train_test_" + jsonObject.signature + ".png";
+    let ttUrl = "/static/gedata/plots/" + jsonObject.signature + "_traintest" + ".png";
     let ttRequest = new XMLHttpRequest();
     ttRequest.onreadystatechange = function() {
         if(ttRequest.readyState === 4) {
@@ -383,7 +382,7 @@ function inventory_td_contents(jsonObject) {
 
     // Fill in the performance_ span.
     let pfString = "";
-    let pfUrl = "/static/gedata/plots/performance_" + jsonObject.signature + ".png";
+    let pfUrl = "/static/gedata/plots/" + jsonObject.signature + "_performance" + ".png";
     let pfRequest = new XMLHttpRequest();
     pfRequest.onreadystatechange = function() {
         if(pfRequest.readyState === 4) {
@@ -401,7 +400,7 @@ function inventory_td_contents(jsonObject) {
 
     // Fill in the gene_list_ span.
     let dnaString = "";
-    let dnaUrl = "/static/gedata/plots/train_test_" + jsonObject.signature + ".html";
+    let dnaUrl = "/static/gedata/plots/" + jsonObject.signature + "_traintest" + ".html";
     let dnaRequest = new XMLHttpRequest();
     dnaRequest.onreadystatechange = function() {
         if(dnaRequest.readyState === 4) {
