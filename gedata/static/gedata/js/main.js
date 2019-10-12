@@ -14,10 +14,7 @@ function caption(figure) {
             '(magenta, center-left). Each shuffling paradigm was applied 16 times, each with a different seed. ' +
             'Shuffled data were then subjected to the same Mantel maximization algorithm. Peak Mantel correlations ' +
             'for each set are shown in the right-most pane.<br />' +
-            '<span class="heavy">B)</span> Genes remaining at the peak of each training were more consistent in ' +
-            'real data than in shuffled data. Training on randomly shuffled data resulted in randomly selected ' +
-            'genes, with low similarity.<br />' +
-            '<span class="heavy">C)</span> Filtering actual data, without shuffling, by the genes discovered in ' +
+            '<span class="heavy">B)</span> Filtering actual data, without shuffling, by the genes discovered in ' +
             'the training phase (with real, shuffled, and/or masked data), resulted in slightly lower correlations, ' +
             'but genes discovered in real data drove higher Mantel correlations than genes discovered in shuffled ' +
             'data. This was true in training data (left-most pane), training data with edges nearer than 16mm ' +
