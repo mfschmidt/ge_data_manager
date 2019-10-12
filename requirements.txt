@@ -5,3 +5,6 @@ celery>=4.3
 django-celery-results
 numpy
 pandas
+matplotlib
+seaborn
+pytz

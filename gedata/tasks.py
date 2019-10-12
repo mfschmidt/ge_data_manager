@@ -15,6 +15,8 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import logging
+import json
+from scipy import stats
 
 from matplotlib import pyplot as plt
 import matplotlib.patches as patches
@@ -411,7 +413,7 @@ def test_score(tsv_file, base_path='/data', own_expr=False, mask='none', probe_s
     return np.corrcoef(expr_vec, comp_vec)[0, 1]
 
 
-def test_overlap(tsv_file, probe_significance_threshold=0.01):
+def train_vs_test_overlap(tsv_file, probe_significance_threshold=0.01):
     """ Determine the percentage of overlap between the provided tsv_file and
         its complementary train/test tsv_file. """
 
@@ -428,15 +430,16 @@ def test_overlap(tsv_file, probe_significance_threshold=0.01):
     )
 
 
-def dict_from_result(tsv_file, base_path, probe_sig_threshold=0.01, force_recalc=False):
-    """ Return a key-value description of a single result. """
+def results_as_dict(tsv_file, base_path, probe_sig_threshold=0.01, use_cache=True):
+    """ Return a key-value description of a single result.
+        This is the workhorse of all of these plots. All calculations from these runs come from this function.
+    """
 
     # These calculations can be expensive when run a lot. Load a cached copy if possible.
-    analyzed_path = tsv_file.replace(".tsv", ".top-{}.dict".format(probe_sig_threshold))
-    if not force_recalc:
-        if os.path.isfile(analyzed_path):
-            with open(analyzed_path, 'rb') as f:
-                return pickle.load(f)
+    analyzed_path = tsv_file.replace(".tsv", ".top-{}.v1.json".format(probe_sig_threshold))
+    if use_cache and os.path.isfile(analyzed_path):
+        saved_dict = json.load(open(analyzed_path, 'r'))
+        return saved_dict
 
     # There's no cached copy; go ahead and calculate everything.
     splby = 'glasser' if 'splby-glasser' in tsv_file else 'wellid'
@@ -456,10 +459,10 @@ def dict_from_result(tsv_file, base_path, probe_sig_threshold=0.01, force_recalc
     else:
         shuffle = 'none'
 
-    top_score = algorithms.best_score(tsv_file)
-    initial_score = algorithms.initial_score(tsv_file)
     mask = bids_val('mask', tsv_file)
     algo = bids_val('algo', tsv_file)
+
+    tsv_results = algorithms.run_results(tsv_file, probe_sig_threshold)
 
     result_dict = {
         # Characteristics available in the path, if necessary
@@ -472,9 +475,13 @@ def dict_from_result(tsv_file, base_path, probe_sig_threshold=0.01, force_recalc
         'shuffle': shuffle,
         # Neither path nor calculation, the threshold we use for calculations
         'threshold': probe_sig_threshold,
-        # Calculations on the data within the tsv file
-        'top_score': top_score,
-        'initial_score': initial_score,
+        # Calculations on the data within the tsv file - think about what we want to maximize, beyond Mantel.
+        # These use data from this file, its original train and test expression data, and conn-sim data to calculate
+        # the following.
+        'initial_score': tsv_results['initial'],
+        'top_score': tsv_results['best'],
+        'peak': tsv_results['peak'],
+        'n': tsv_results['n'],
         'train_score': test_score(
             tsv_file, base_path, own_expr=True, mask='none', probe_significance_threshold=probe_sig_threshold),
         'test_score': test_score(
@@ -483,12 +490,11 @@ def dict_from_result(tsv_file, base_path, probe_sig_threshold=0.01, force_recalc
             tsv_file, base_path, own_expr=True, mask=mask, probe_significance_threshold=probe_sig_threshold),
         'masked_test_score': test_score(
             tsv_file, base_path, own_expr=False, mask=mask, probe_significance_threshold=probe_sig_threshold),
-        'test_overlap': test_overlap(tsv_file, probe_significance_threshold=probe_sig_threshold),
+        'train_vs_test_overlap': train_vs_test_overlap(tsv_file, probe_significance_threshold=probe_sig_threshold),
     }
 
     # Cache results to prevent repeated recalculation of the same thing.
-    with open(analyzed_path, 'wb') as f:
-        pickle.dump(result_dict, f)
+    json.dump(result_dict, open(analyzed_path, 'w'))
 
     return result_dict
 
@@ -585,6 +591,283 @@ def describe_three_relevant_overlaps(relevant_results, phase, threshold):
     return more_relevant_results
 
 
+def interpret_descriptor(plot_descriptor):
+    """ Parse the plot descriptor into parts """
+    comp = comp_from_signature(plot_descriptor[:4])
+    parby = "glasser" if plot_descriptor[3].lower() == "g" else "wellid"
+    splby = "glasser" if plot_descriptor[4].lower() == "g" else "wellid"
+    mask = 'none' if plot_descriptor[5:7] == "00" else plot_descriptor[5:7]
+    algo = 'once' if plot_descriptor[7] == "o" else "smrt"
+    phase = 'train'
+    opposite_phase = 'test'
+
+    relevant_results_queryset = PushResult.objects.filter(
+        samp="glasser", prob="fornito", algo=algo, comp=comp, parby=parby, splby=splby, mask=mask,
+        batch__startswith=phase,
+    )
+
+    return comp, parby, splby, mask, algo, phase, opposite_phase, relevant_results_queryset
+
+
+def calc_ttests(row, df):
+    """ for a given dataframe row, if it's a real result, return its t-test t-value vs all shuffles in df. """
+    if row.shuffle == 'none':
+        return stats.ttest_1samp(
+            df[(df['threshold'] == row.threshold)]['train_score'],
+            row.train_score,
+        )[0]
+    else:
+        return 0.0
+
+
+def calc_real_v_shuffle_overlaps(row, df):
+    """ for a given dataframe row, if it's a real result, return its overlap pctage vs all shuffles in df. """
+    if row.shuffle == 'none':
+        overlaps = []
+        for shuffled_tsv in df[(df['threshold'] == row.threshold)]['path']:
+            overlaps.append(algorithms.pct_similarity([row.path, shuffled_tsv], top=row.threshold))
+        return np.mean(overlaps)
+    else:
+        return 0.0
+
+
+def calc_total_overlap(row, df):
+    """ This doesn't really work, yet, as experimentation is being done for what it should mean. """
+    if row.shuffle == 'none':
+        overlaps = []
+        for shuffled_tsv in df[(df['threshold'] == row.threshold)]['path']:
+            overlaps.append(algorithms.pct_similarity([row.path, shuffled_tsv], top=row.threshold))
+        return np.mean(overlaps)
+    else:
+        return 0.0
+
+
+def batch_seed(path):
+    """ Scrape the batch seed, used to split halves, from the path and return it as an integer. """
+    try:
+        i = path.find("batch-train") + 11
+        return int(path[i:i + 5])
+    except ValueError:
+        return 0
+
+
+@shared_task(bind=True)
+def build_plot(self, plot_descriptor, data_root="/data", threshold=0.01):
+    """ Traverse the output and populate the database with completed results.
+
+    :param self: Allows interacting with celery
+    :param plot_descriptor: Abbreviated string describing plot's underlying data
+    :param data_root: default /data, base path to all of the results
+    :param threshold: At which point in the ranking is a gene deemed relevant?
+    """
+
+    progress_recorder = ProgressRecorder(self)
+
+    comp, parby, splby, mask, algo, phase, opposite_phase, results = interpret_descriptor(plot_descriptor)
+
+    n = len(results)
+    progress_recorder.set_progress(0, n + 100, "Finding results")
+
+    print("Found {:,} results ({} {} {} {} {} {} {})".format(
+        n, "glasser", "fornito", algo, comp, parby, splby, mask,
+    ))
+
+    if len(results) > 0:
+        relevant_results = []
+
+        """ Calculate (or load) stats for individual tsv files. """
+        for i, path in enumerate(results.values('tsv_path')):
+            if os.path.isfile(path['tsv_path']):
+                relevant_results.append(
+                    results_as_dict(path['tsv_path'], base_path=data_root, probe_sig_threshold=threshold)
+                )
+            else:
+                print("ERR: DOES NOT EXIST: {}".format(path['tsv_path']))
+            progress_recorder.set_progress(i + 1, n + 100, "Processing {:,}/{:,} results".format(i, n))
+
+        rdf = pd.DataFrame(relevant_results)
+
+        os.makedirs(os.path.join(data_root, "plots", "cache"), exist_ok=True)
+        rdf.to_pickle(os.path.join(data_root, "plots", "cache", "{}_tt_pre.df".format(plot_descriptor.lower())))
+
+        """ Calculate grouped stats, overlap within each group of tsv files. """
+        progress_recorder.set_progress(n, n + 100, "Calculating overlaps")
+        for shuffle in list(set(rdf['shuffle'])):
+            shuffle_mask = rdf['shuffle'] == shuffle
+            # We can only do this in training data, unless we want to double the workload above for test, too.
+            rdf.loc[shuffle_mask, 'train_overlap'] = algorithms.pct_similarity_list(list(rdf.loc[shuffle_mask, 'path']))
+
+        rdf.to_pickle(os.path.join(data_root, "plots", "cache", "{}_tt_post.df".format(plot_descriptor.lower())))
+
+        progress_recorder.set_progress(n + 10, n + 100, "Generating plot")
+        f_train_test, axes = plot_all_train_vs_test(
+            rdf, title="{}s, split by {}, {}-masked, {}-ranked, by {}".format(
+                parby, splby, mask, algo, plot_descriptor[:3].upper()
+            ),
+            fig_size=(12, 12), ymin=-0.15, ymax=0.90
+        )
+        # data_path should get into the PYGEST_DATA area, which is symbolically linked to /static, so just one write.
+        f_train_test.savefig(os.path.join(data_root, "plots", "{}_traintest.png".format(plot_descriptor.lower())))
+
+        progress_recorder.set_progress(n + 20, n + 100, "Building probe to gene map")
+        sym_id_map = create_symbol_to_id_map()
+        id_sym_map = create_id_to_symbol_map()
+
+        """ Write out relevant gene lists as html. """
+        progress_recorder.set_progress(n + 50, n + 100, "Ranking genes")
+        relevant_tsvs = list(describe_three_relevant_overlaps(rdf, phase, threshold)['path'])
+        survivors = pervasive_probes(relevant_tsvs, threshold)
+        all_ranked = ranked_probes(relevant_tsvs, threshold)
+        all_ranked['rank'] = range(1, len(all_ranked.index) + 1, 1)
+
+        with open(os.path.join(data_root, "plots", "{}_traintest.html".format(plot_descriptor.lower())), "wt") as f:
+            f.write("<p><span class=\"heavy\">Mantel correlations in independent test data.</span> ")
+            f.write("Correlations in real, independent data are higher if using gene lists discovered by training \n")
+            f.write("on real data than gene lists discovered by training on shuffled data.\n</p>")
+            f.write("  <ol>\n")
+            for shf in ['edge', 'dist', 'agno']:
+                t, p = ttest_ind(
+                    # 'test_score' is in the test set, could do 'train_score', too
+                    rdf[rdf['shuffle'] == 'none']['test_score'].values,
+                    rdf[rdf['shuffle'] == shf]['test_score'].values,
+                )
+                f.write("    <li>{}: t = {:0.2f}, p = {:0.10f}</li>\n".format(shf, t, p))
+            f.write("  </ol>\n")
+
+            """ Next, for the description file, report top genes. """
+            progress_recorder.set_progress(n + 70, n + 100, "Summarizing genes")
+            line = "Top {} genes from {}, {}-ranked by-{}, mask={}".format(threshold, phase, algo, splby, mask)
+            f.write("<p>" + line + "\n  <ol>\n")
+            # print(line)
+            for p in (list(all_ranked.index[0:20]) + [x for x in survivors['probe_id'] if
+                                                      x not in all_ranked.index[0:20]]):
+                asterisk = " *" if p in list(survivors['probe_id']) else ""
+                gene_id = all_ranked.loc[p, 'entrez_id']
+                gene_id_string = "<a href=\"https://www.ncbi.nlm.nih.gov/gene/{g}\" target=\"_blank\">{g}</a>".format(
+                    g=gene_id
+                )
+                if gene_id in id_sym_map:
+                    gene_symbol = id_sym_map[gene_id]
+                elif gene_id in sym_id_map:
+                    gene_symbol = sym_id_map[gene_id]
+                else:
+                    gene_symbol = "not_found"
+                gene_symbol_string = "<a href=\"https://www.ncbi.nlm.nih.gov/gene/?term={g}\" target=\"_blank\">{g}</a>".format(
+                    g=gene_symbol
+                )
+                item_string = "probe {} -> entrez {} -> gene {}, mean rank {:0.1f}{}".format(
+                    p, gene_id_string, gene_symbol_string, all_ranked.loc[p, 'mean'] + 1.0, asterisk
+                )
+                f.write("    <li value=\"{}\">{}</li>\n".format(all_ranked.loc[p, 'rank'], item_string))
+                # print("{}. {}".format(all_ranked.loc[p, 'rank'], item_string))
+            f.write("  </ol>\n</p>\n")
+            f.write("<div id=\"notes_below\">")
+            f.write("    <p>Asterisks indicate probes making the top {} in all 16 splits.</p>".format(threshold))
+            f.write("</div>")
+
+        progress_recorder.set_progress(n + 100, n + 100, "Finished")
+
+    else:
+        with open(os.path.join(data_root, "plots", "{}_traintest.html".format(plot_descriptor.lower())), "wt") as f:
+            f.write("<p>No results for {}</p>\n".format(plot_descriptor.lower()))
+        progress_recorder.set_progress(n + 100, n + 100, "No results")
+
+
+@shared_task(bind=True)
+def assess_performance(self, plot_descriptor, data_root="/data"):
+    """ Calculate metrics at different thresholds for relevant genes and plot them.
+
+    :param self: Allows interacting with celery
+    :param plot_descriptor: Abbreviated string describing plot's underlying data
+    :param data_root: default /data, base path to all of the results
+    """
+
+    # It's tough to pass a list of thresholds via url, so it's hard-coded here.
+    thresholds = [4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 28, 32, 48, 64, 80, 96, 128, 157, 160, 192, 224, 256, 298, 320, 352, 384, 416, 448, 480, 512, ]
+    progress_recorder = ProgressRecorder(self)
+
+    comp, parby, splby, mask, algo, phase, opposite_phase, results = interpret_descriptor(plot_descriptor)
+
+    # Determine an end-point, correlating to 100%
+    # There are two sections: first, results * thresholds; second, overlaps, which will just have to normalize to 50/50
+    n = len(results)
+    total = n * len(thresholds) * 2  # The *2 allows for later overlaps to constitute 50% of the reported percentage
+    progress_recorder.set_progress(0, total, "Finding results")
+    print("Found {:,} results ({} {} {} {} {} {} {})".format(n, "glasser", "fornito", algo, comp, parby, splby, mask))
+
+    if len(results) > 0:
+        relevant_results = []
+
+        """ Calculate (or load) stats for individual tsv files. """
+        for i, path in enumerate(results.values('tsv_path')):
+            if os.path.isfile(path['tsv_path']):
+                for j, threshold in enumerate(thresholds):
+                    relevant_results.append(
+                        results_as_dict(path['tsv_path'], base_path=data_root, probe_sig_threshold=threshold)
+                    )
+                    progress_recorder.set_progress(
+                        i * len(thresholds) + j, total, "Processing {:,}/{:,} results".format(i, n)
+                    )
+            else:
+                print("ERR: DOES NOT EXIST: {}".format(path['tsv_path']))
+        rdf = pd.DataFrame(relevant_results)
+
+        # Just temporarily, in case debugging offline is necessary
+        os.makedirs(os.path.join(data_root, "plots", "cache"), exist_ok=True)
+        rdf.to_pickle(os.path.join(data_root, "plots", "cache", "{}_ap_pre.df".format(plot_descriptor.lower())))
+        post_file = os.path.join(data_root, "plots", "cache", "{}_ap_post.df".format(plot_descriptor.lower()))
+
+        """ Calculate grouped stats, overlap between each tsv file and its shuffle-based 'peers'. """
+        if os.path.isfile(post_file):
+            with open(post_file, "rb") as f:
+                rdf = pickle.load(f)
+        else:
+            progress_recorder.set_progress(n * len(thresholds), total, "Generating overlap lists")
+            rdf['split'] = rdf['path'].apply(batch_seed)
+            splits = list(set(rdf['split']))
+            shuffles = list(set(rdf['shuffle']))
+            calcs = len(splits) * len(shuffles)
+            for k, shuffle in enumerate(shuffles):
+                shuffle_mask = rdf['shuffle'] == shuffle
+                for l, split in enumerate(splits):
+                    progress_recorder.set_progress(
+                        (n * len(thresholds)) + int(((k * len(splits) + l) / calcs) * (n * len(thresholds) / 2)),
+                        total + calcs,
+                        "overlap list {}:{}/{}:{}".format(k, len(shuffles), l, len(splits))
+                    )
+                    split_mask = rdf['split'] == split
+                    # We can only do this in training data, unless we want to double the workload above for test, too.
+                    # Generate a list of lists for each file's single 'train_overlap' cell in our dataframe.
+                    # At this point, rdf is typically a (num thresholds *) 784-row dataframe of each result.tsv path and its scores.
+                    # We apply these functions to only the 'none'-shuffled rows, but pass them the shuffled rows for comparison
+                    rdf["t_mantel_" + shuffle] = rdf[rdf['shuffle'] == 'none'].apply(
+                        calc_ttests, axis=1, df=rdf[shuffle_mask & split_mask]
+                    )
+                    rdf["overlap_vs_" + shuffle] = rdf[rdf['shuffle'] == 'none'].apply(
+                        calc_real_v_shuffle_overlaps, axis=1, df=rdf[shuffle_mask & split_mask]
+                    )
+                    # rdf["complete_overlap_vs_" + shuffle] = rdf[rdf['shuffle'] == 'none'].apply(
+                    #     calc_total_overlap, axis=1, df=rdf[shuffle_mask & split_mask]
+                    # )
+                # rdf["complete_overlap_vs_" + shuffle] = rdf.apply(calc_total_overlap, axis=1, df=rdf[shuffle_mask])
+
+            # Just temporarily, in case debugging offline is necessary
+            rdf.to_pickle(post_file)
+
+        progress_recorder.set_progress(total, total, "Generating plot")
+        # Plot performance of thresholds on correlations.
+        phase_mask = rdf['phase'] == phase
+
+        f_full_perf, a_full_perf = plot_performance_over_thresholds(
+            rdf[phase_mask & (rdf['shuffle'] == 'none')], phase, 'none'
+        )
+        f_full_perf.savefig(os.path.join(data_root, "plots", "{}_performance.png".format(plot_descriptor)))
+
+        progress_recorder.set_progress(total, total, "Finished")
+
+    return None
+
+
 def plot_all_train_vs_test(df, title="Title", fig_size=(8, 8), ymin=None, ymax=None):
     """ Plot everything from initial distributions, through training curves, to training outcomes.
         Then the results of using discovered genes in train and test sets both complete and masked.
@@ -632,7 +915,7 @@ def plot_all_train_vs_test(df, title="Title", fig_size=(8, 8), ymin=None, ymax=N
         plot_overlaps=False,
     )
 
-    def box_and_swarm(figure, placement, label, y, data, ps=True):
+    def box_and_swarm(figure, placement, label, variable, data, orientation="v", ps=True):
         """ Create an axes object with a swarm plot draw over a box plot of the same data. """
 
         shuffle_order = ['none', 'edge', 'dist', 'agno']
@@ -646,33 +929,41 @@ def plot_all_train_vs_test(df, title="Title", fig_size=(8, 8), ymin=None, ymax=N
         ]
 
         ax = figure.add_axes(placement, label=label)
-        sns.boxplot(data=data, x='shuffle', y=y, order=shuffle_order, palette=shuffle_color_boxes, ax=ax)
-        sns.swarmplot(data=data, x='shuffle', y=y, order=shuffle_order, palette=shuffle_color_points, ax=ax)
-        ax.set_ylabel(None)
-        ax.set_xlabel(label)
-        ax.set_ylim(ax_curve.get_ylim())
+        if orientation == "v":
+            sns.boxplot(data=data, x='shuffle', y=variable, order=shuffle_order, palette=shuffle_color_boxes, ax=ax)
+            sns.swarmplot(data=data, x='shuffle', y=variable, order=shuffle_order, palette=shuffle_color_points, ax=ax)
+            ax.set_ylabel(None)
+            ax.set_xlabel(label)
+            ax.set_ylim(ax_curve.get_ylim())
+        else:
+            sns.boxplot(data=data, x=variable, y='shuffle', order=shuffle_order, palette=shuffle_color_boxes, ax=ax)
+            sns.swarmplot(data=data, x=variable, y='shuffle', order=shuffle_order, palette=shuffle_color_points, ax=ax)
+            ax.set_xlabel(None)
+            ax.set_ylabel(label)
+            ax.set_xlim(ax_curve.get_xlim())
 
-        """ Calculate overlaps and p-values for each column in the above plots, and annotate accordingly. """
-        if ps:
+
+        """ Calculate p-values for each column in the above plots, and annotate accordingly. """
+        if ps & (orientation == "v"):
             gap = 0.06
-            actual_results = data[data['shuffle'] == 'none'][y].values
+            actual_results = data[data['shuffle'] == 'none'][variable].values
             try:
-                global_max_y = max(data[y].values)
+                global_max_y = max(data[variable].values)
             except ValueError:
                 global_max_y = highest_possible_score
             for i, col in enumerate(annot_columns):
                 shuffle_results = data[data['shuffle'] == col['shuffle']]
                 try:
                     # max_y = max(data[data['phase'] == 'train'][y].values)
-                    local_max_y = max(shuffle_results[y].values)
+                    local_max_y = max(shuffle_results[variable].values)
                 except ValueError:
                     local_max_y = highest_possible_score
                 try:
-                    y_pval = max(max(shuffle_results[y].values), max(actual_results)) + gap
+                    y_pval = max(max(shuffle_results[variable].values), max(actual_results)) + gap
                 except ValueError:
                     y_pval = highest_possible_score + gap
                 try:
-                    t, p = ttest_ind(actual_results, shuffle_results[y].values)
+                    t, p = ttest_ind(actual_results, shuffle_results[variable].values)
                     # print("    plotting, full p = {}".format(p))
                     p_annotation = p_string(p, use_asterisks=False)
                 except TypeError:
@@ -685,20 +976,43 @@ def plot_all_train_vs_test(df, title="Title", fig_size=(8, 8), ymin=None, ymax=N
                     ax.vlines(0.0, y_pval, y_pline, colors='gray', linewidth=1)
                     ax.vlines(col['xo'], local_max_y + gap, y_pline, colors='gray', linewidth=1)
                     ax.text(gap + (i * 0.01), y_pline + 0.01, p_annotation, ha='left', va='bottom')
+        elif orientation == "h":
+            for i, col in enumerate(annot_columns):
+                shuffle_results = data[data['shuffle'] == col['shuffle']]
+                try:
+                    local_min_x = min(shuffle_results[variable].values)
+                except ValueError:
+                    local_min_x = 0
+                try:
+                    local_mean = np.mean(shuffle_results[variable].values)
+                    local_n = int(np.mean(shuffle_results['n'].values))
+                except ValueError:
+                    local_mean = 0
+                    local_n = 0
+
+                s = "mean {:,.0f} (top {:,.0f})".format(local_mean, local_n - local_mean)
+                ax.text(local_min_x - 500, i, s, ha='right', va='center')
 
         return ax
 
     margin = 0.04
-    row_height = 0.40
+    row_height = 0.34
+    peak_box_height = 0.12
 
     """ Top Row """
 
-    box_width = 0.14
+    box_width = 0.20
     x_left = margin
-    y_base = 1.0 - (2 * margin) - row_height
     fig.text(x_left, 1.0 - (2 * margin) + 0.01, "A) Training on altered training half", ha='left', va='bottom', fontsize=12)
+    """ Horizontal peak plot """
+    y_base = 1.0 - margin - peak_box_height - margin
+    curve_x = x_left + box_width + margin
+    curve_width = 1.0 - (4 * margin) - (2 * box_width)
+    ax_peaks = box_and_swarm(fig, [curve_x, y_base, curve_width, peak_box_height], 'Peaks', 'peak', df, orientation="h")
+    ax_peaks.set_xticklabels([])
     """ Rising training curve plot """
-    ax_curve.set_position([x_left + box_width + margin, y_base, 1.0 - (5 * margin) - (3 * box_width), row_height])
+    y_base = margin + row_height + margin + margin
+    ax_curve.set_position([curve_x, y_base, curve_width, row_height])
     ax_curve.set_label('rise')
     ax_curve.set_xlabel('Training')
     # The top of the plot must be at least 0.25 higher than the highest value to make room for p-values.
@@ -709,24 +1023,25 @@ def plot_all_train_vs_test(df, title="Title", fig_size=(8, 8), ymin=None, ymax=N
     ax_pre.yaxis.tick_right()
     ax_pre.set_yticklabels([])
     ax_pre.set_ylabel('Mantel Correlation')
-    ax_post = box_and_swarm(fig, [1.0 - (2 * (margin + box_width)), y_base, box_width, row_height], 'Peak Mantel', 'top_score', df)
+    ax_post = box_and_swarm(fig, [1.0 - box_width - margin, y_base, box_width, row_height], 'Peak Mantel', 'top_score', df)
 
     """ Train box and swarm overlap plots """
-    x_left = 1.0 - margin - box_width
-    fig.text(x_left, 1.0 - (2 * margin) + 0.01, "B) Overlapping genes", ha='left', va='bottom', fontsize=12)
-    ax_train_overlap = box_and_swarm(fig, [x_left, y_base, box_width, row_height], 'Gene overlap', 'train_overlap', df)
-    ax_train_overlap.set_ylabel('Gene agreement')
-    # TODO: Set y-axis to percentages to distinguish that we've changed measures, here.
+    # x_left = 1.0 - margin - box_width
+    # fig.text(x_left, 1.0 - (2 * margin) + 0.01, "B) Overlapping genes", ha='left', va='bottom', fontsize=12)
+    # ax_train_overlap = box_and_swarm(fig, [x_left, y_base, box_width, row_height], 'Gene overlap', 'train_overlap', df)
+    # ax_train_overlap.set_ylabel('Gene agreement')
+    # axis_values = ax_train_overlap.get_yticks()
+    # ax_train_overlap.set_yticklabels(['{:0.0%}'.format(x) for x in axis_values])
 
     """ Bottom Row """
 
     box_width = 0.20
     x_left = margin
-    y_base = x_left  # + 0.40 height makes the top at 0.45
-    fig.text(x_left, margin + row_height + 0.01, "C) Testing in unshuffled halves", ha='left', va='bottom', fontsize=12)
+    y_base = margin  # + 0.35 height makes the top at 0.40
+    fig.text(x_left, margin + row_height + 0.01, "B) Testing in unshuffled halves", ha='left', va='bottom', fontsize=12)
     """ Train box and swarm plots """
     ax_train_complete = box_and_swarm(
-        fig, [x_left + (0 * (margin + box_width)), y_base, box_width, row_height], 'Train complete', 'train_score', df
+        fig, [x_left + (0 * (margin + box_width)), y_base, box_width, row_height], 'Train unmasked', 'train_score', df
     )
     ax_train_complete.yaxis.tick_right()
     ax_train_complete.set_yticklabels([])
@@ -737,7 +1052,7 @@ def plot_all_train_vs_test(df, title="Title", fig_size=(8, 8), ymin=None, ymax=N
 
     """ Test box and swarm plots """
     ax_test_complete = box_and_swarm(
-        fig, [x_left + (2 * (margin + box_width)), y_base, box_width, row_height], 'Test complete', 'test_score', df
+        fig, [x_left + (2 * (margin + box_width)), y_base, box_width, row_height], 'Test unmasked', 'test_score', df
     )
     ax_test_complete.yaxis.tick_right()
     ax_test_complete.set_yticklabels([])
@@ -749,236 +1064,56 @@ def plot_all_train_vs_test(df, title="Title", fig_size=(8, 8), ymin=None, ymax=N
 
     fig.text(0.50, 0.99, title, ha='center', va='top', fontsize=14)
 
-    return fig, (ax_pre, ax_curve, ax_post,
+    return fig, (ax_peaks, ax_pre, ax_curve, ax_post,
                  ax_train_complete, ax_train_masked, ax_test_complete, ax_test_masked,
-                 ax_train_overlap,
+                 # ax_train_overlap,
                  )
 
 
-def interpret_descriptor(plot_descriptor):
-    """ Parse the plot descriptor into parts """
-    comp = comp_from_signature(plot_descriptor[:4])
-    parby = "glasser" if plot_descriptor[3].lower() == "g" else "wellid"
-    splby = "glasser" if plot_descriptor[4].lower() == "g" else "wellid"
-    mask = 'none' if plot_descriptor[5:7] == "00" else plot_descriptor[5:7]
-    algo = 'once' if plot_descriptor[7] == "o" else "smrt"
-    phase = 'train'
-    opposite_phase = 'test'
-
-    relevant_results_queryset = PushResult.objects.filter(
-        samp="glasser", prob="fornito", algo=algo, comp=comp, parby=parby, splby=splby, mask=mask,
-        batch__startswith=phase,
-    )
-
-    return comp, parby, splby, mask, algo, phase, opposite_phase, relevant_results_queryset
-
-
-@shared_task(bind=True)
-def build_plot(self, plot_descriptor, data_root="/data", threshold=0.01):
-    """ Traverse the output and populate the database with completed results.
-
-    :param self: Allows interacting with celery
-    :param plot_descriptor: Abbreviated string describing plot's underlying data
-    :param data_root: default /data, base path to all of the results
-    :param threshold: At which point in the ranking is a gene deemed relevant?
-    """
-
-    progress_recorder = ProgressRecorder(self)
-
-    comp, parby, splby, mask, algo, phase, opposite_phase, results = interpret_descriptor(plot_descriptor)
-
-    n = len(results)
-    progress_recorder.set_progress(0, n + 100, "Finding results")
-
-    print("Found {:,} results ({} {} {} {} {} {} {})".format(
-        n, "glasser", "fornito", algo, comp, parby, splby, mask,
-    ))
-
-    if len(results) > 0:
-        relevant_results = []
-
-        """ Calculate (or load) stats for individual tsv files. """
-        for i, path in enumerate(results.values('tsv_path')):
-            if os.path.isfile(path['tsv_path']):
-                relevant_results.append(
-                    dict_from_result(path['tsv_path'], base_path=data_root, probe_sig_threshold=threshold)
-                )
-                progress_recorder.set_progress(i + 1, n + 100, "Processing {:,}/{:,} results".format(i, n))
-            else:
-                print("ERR: DOES NOT EXIST: {}".format(path['tsv_path']))
-        rdf = pd.DataFrame(relevant_results)
-
-        """ Calculate grouped stats, overlap between each tsv file and its shuffle-based 'peers'. """
-        for shuffle in list(set(rdf['shuffle'])):
-            shuffle_mask = rdf['shuffle'] == shuffle
-            # We can only do this in training data, unless we want to double the workload above for test, too.
-            rdf.loc[shuffle_mask, 'train_overlap'] = algorithms.pct_similarity_list(list(rdf.loc[shuffle_mask, 'path']))
-
-        rdf.to_pickle(os.path.join(data_root, "plots", "pickled_dataframe_for_{}.df".format(plot_descriptor.lower())))
-
-        progress_recorder.set_progress(n, n + 100, "Generating plot")
-        f_train_test, axes = plot_all_train_vs_test(
-            rdf, title="{}s, split by {}, {}-masked, {}-ranked, by {}".format(parby, splby, mask, algo, comp),
-            fig_size=(12, 12), ymin=-0.15, ymax=0.90
-        )
-        # data_path should get into the PYGEST_DATA area, which is symbolically linked to /static, so just one write.
-        f_train_test.savefig(os.path.join(data_root, "plots", "train_test_{}.png".format(plot_descriptor.lower())))
-
-        progress_recorder.set_progress(n + 20, n + 100, "Building probe to gene map")
-        sym_id_map = create_symbol_to_id_map()
-        id_sym_map = create_id_to_symbol_map()
-
-        """ Write out relevant gene lists as html. """
-        progress_recorder.set_progress(n + 50, n + 100, "Ranking genes")
-        relevant_tsvs = list(describe_three_relevant_overlaps(rdf, phase, threshold)['path'])
-        survivors = pervasive_probes(relevant_tsvs, threshold)
-        all_ranked = ranked_probes(relevant_tsvs, threshold)
-        all_ranked['rank'] = range(1, len(all_ranked.index) + 1, 1)
-        with open(os.path.join(data_root, "plots", "train_test_{}.html".format(plot_descriptor.lower())), "wt") as f:
-            f.write("<p><span class=\"heavy\">Mantel correlations in independent test data.</span> ")
-            f.write("Gene lists from training on real data result in higher correlations in real, independent \n")
-            f.write("test data than gene lists from shuffled data.\n</p>")
-            f.write("  <ol>\n")
-            for shf in ['edge', 'dist', 'agno']:
-                t, p = ttest_ind(
-                    # 'test_score' is in the test set, could do 'train_score', too
-                    rdf[rdf['shuffle'] == 'none']['test_score'].values,
-                    rdf[rdf['shuffle'] == shf]['test_score'].values,
-                )
-                f.write("    <li>{}: t = {:0.2f}, p = {:0.10f}</li>\n".format(shf, t, p))
-            f.write("  </ol>\n")
-
-            """ Next, for the description file, report top genes. """
-            progress_recorder.set_progress(n + 70, n + 100, "Summarizing genes")
-            line = "Top genes from {}, {}-ranked by-{}, mask={}".format(phase, algo, splby, mask)
-            f.write("<p>" + line + "\n  <ol>\n")
-            # print(line)
-            for p in (list(all_ranked.index[0:20]) + [x for x in survivors['probe_id'] if
-                                                      x not in all_ranked.index[0:20]]):
-                asterisk = " *" if p in list(survivors['probe_id']) else ""
-                gene_id = all_ranked.loc[p, 'entrez_id']
-                gene_id_string = "<a href=\"https://www.ncbi.nlm.nih.gov/gene/{g}\" target=\"_blank\">{g}</a>".format(
-                    g=gene_id
-                )
-                if gene_id in id_sym_map:
-                    gene_symbol = id_sym_map[gene_id]
-                elif gene_id in sym_id_map:
-                    gene_symbol = sym_id_map[gene_id]
-                else:
-                    gene_symbol = "not_found"
-                gene_symbol_string = "<a href=\"https://www.ncbi.nlm.nih.gov/gene/?term={g}\" target=\"_blank\">{g}</a>".format(
-                    g=gene_symbol
-                )
-                item_string = "probe {} -> entrez {} -> gene {}, mean rank {:0.1f}{}".format(
-                    p, gene_id_string, gene_symbol_string, all_ranked.loc[p, 'mean'] + 1.0, asterisk
-                )
-                f.write("    <li value=\"{}\">{}</li>\n".format(all_ranked.loc[p, 'rank'], item_string))
-                # print("{}. {}".format(all_ranked.loc[p, 'rank'], item_string))
-            f.write("  </ol>\n</p>\n")
-            f.write("<div id=\"notes_below\">")
-            f.write("    <p>Asterisks indicate probes that survived to the top 1% in all 16 splits.</p>")
-            f.write("</div>")
-
-        """ Write out ranked gene list as text. 
-        with open(os.path.join(data_path, "plots", "genes-from-{}_top1pct.txt".format(plot_descriptor.lower())), "wt") as f:
-            for p in list(all_ranked.index):
-                if p in id_sym_map.keys():
-                    f.write(id_sym_map[p])
-                else:
-                    f.write("( " + str(p) + " )")
-        """
-
-        progress_recorder.set_progress(n + 100, n + 100, "Finished")
-
-    else:
-        with open(os.path.join(data_root, "plots", "train_test_{}.html".format(plot_descriptor.lower())), "wt") as f:
-            f.write("<p>No results for {}</p>\n".format(plot_descriptor.lower()))
-        progress_recorder.set_progress(n + 100, n + 100, "No results")
-
-
-def plot_scores_over_thresholds(relevant_results, phase, shuffle):
-    """ Generate a plot for viewing different metrics dependent on the threshold applied to the top probes. """
+def plot_performance_over_thresholds(relevant_results, phase, shuffle):
+    """ Generate a figure with three axes for Mantels, T scores, and Overlaps by threshold. """
 
     plot_data = relevant_results[(relevant_results['phase'] == phase) & (relevant_results['shuffle'] == shuffle)]
 
-    fig, ax = plt.subplots(figsize=(12, 8))
+    fig, ax_mantel_scores = plt.subplots(figsize=(10, 12))
+    margin = 0.04
+    ht = 0.28
 
-    sns.lineplot(x="threshold", y="top_score", data=plot_data, color="gray", ax=ax, label="peak")
-    sns.lineplot(x="threshold", y="train_score", data=plot_data, color="green", ax=ax, label="train")
-    sns.lineplot(x="threshold", y="test_score", data=plot_data, color="red", ax=ax, label="test")
-    sns.lineplot(x="threshold", y="test_overlap", data=plot_data, color="orchid", ax=ax, label="overlap")
+    ax_mantel_scores.set_position([margin, 1.0 - margin - ht, 1.0 - (2 * margin), ht])
+    sns.lineplot(x="threshold", y="top_score", data=plot_data, color="gray", ax=ax_mantel_scores, label="peak")
+    sns.lineplot(x="threshold", y="train_score", data=plot_data, color="green", ax=ax_mantel_scores, label="train")
+    sns.lineplot(x="threshold", y="test_score", data=plot_data, color="red", ax=ax_mantel_scores, label="test")
+    sns.lineplot(x="threshold", y="train_vs_test_overlap", data=plot_data, color="orchid", ax=ax_mantel_scores, label="t-t overlap")
 
     rect = patches.Rectangle((158, -0.3), 5.0, 1.0, facecolor='gray', fill=True, alpha=0.25)
-    ax.add_patch(rect)
+    ax_mantel_scores.add_patch(rect)
 
-    ax.legend(labels=['peak', 'train', 'test', 'overlap'])
+    ax_mantel_scores.legend(labels=['peak', 'train', 'test', 'overlap'])
     plt.suptitle("Scores by top probe threshold in '{}, {}-shuffled' data".format(phase, shuffle))
-    ax.set_ylabel('Mantel correlation')
-    return fig, ax
+    ax_mantel_scores.set_ylabel('Mantel correlation')
+
+    ax_mantel_ts = fig.add_axes([margin, (2 * margin) + ht, 1.0 - (2 * margin), ht], "Mantel T Scores")
+    sns.lineplot(x="threshold", y="t_mantel_agno", data=plot_data, color="green", ax=ax_mantel_ts, label="agno")
+    sns.lineplot(x="threshold", y="t_mantel_dist", data=plot_data, color="red", ax=ax_mantel_ts, label="dist")
+    sns.lineplot(x="threshold", y="t_mantel_edge", data=plot_data, color="orchid", ax=ax_mantel_ts, label="edge")
+
+    v_rect = patches.Rectangle((158, -100), 5.0, 200.0, facecolor='gray', fill=True, alpha=0.25)
+    ax_mantel_ts.add_patch(v_rect)
+    h_rect = patches.Rectangle((0, -2), 1024.0, 2.0, facecolor='gray', fill=True, alpha=0.25)
+    ax_mantel_ts.add_patch(h_rect)
+
+    ax_mantel_ts.legend(labels=['agno', 'dist', 'edge', ])
+    plt.suptitle("T Scores by Mantel in train Mantels vs {}-shuffled Mantels".format(phase, shuffle))
+    ax_mantel_ts.set_ylabel('T score')
+
+    ax_overlaps = fig.add_axes([margin, margin, 1.0 - (2 * margin), ht], "Real vs Shuffle Overlap Percentages")
+    sns.lineplot(x="threshold", y="overlap_vs_agno", data=plot_data, color="green", ax=ax_overlaps, label="agno")
+    sns.lineplot(x="threshold", y="overlap_vs_dist", data=plot_data, color="red", ax=ax_overlaps, label="dist")
+    sns.lineplot(x="threshold", y="overlap_vs_edge", data=plot_data, color="orchid", ax=ax_overlaps, label="edge")
+
+    v_rect = patches.Rectangle((158, 0.0), 5.0, 1.0, facecolor='gray', fill=True, alpha=0.25)
+    ax_overlaps.add_patch(v_rect)
+
+    return fig, (ax_mantel_scores, ax_mantel_scores, ax_mantel_ts)
 
 
-@shared_task(bind=True)
-def assess_performance(self, plot_descriptor, data_root="/data"):
-    """ Calculate metrics at different thresholds for relevant genes and plot them.
-
-    :param self: Allows interacting with celery
-    :param plot_descriptor: Abbreviated string describing plot's underlying data
-    :param data_root: default /data, base path to all of the results
-    """
-
-    # It's tough to pass a list of thresholds via url, so it's hard-coded here.
-    thresholds = [4, 8, 12, 16, 20, 24, 32, 64, 128, 157, 160, 256, 320, 512, 1024]
-    progress_recorder = ProgressRecorder(self)
-
-    comp, parby, splby, mask, algo, phase, opposite_phase, results = interpret_descriptor(plot_descriptor)
-
-    n = len(results)
-    total = n * len(thresholds) + 10
-    progress_recorder.set_progress(0, total, "Finding results")
-    print("Found {:,} results ({} {} {} {} {} {} {})".format(n, "glasser", "fornito", algo, comp, parby, splby, mask))
-
-    if len(results) > 0:
-        relevant_results = []
-
-        """ Calculate (or load) stats for individual tsv files. """
-        for i, path in enumerate(results.values('tsv_path')):
-            if os.path.isfile(path['tsv_path']):
-                for j, threshold in enumerate(thresholds):
-                    relevant_results.append(
-                        dict_from_result(path['tsv_path'], base_path=data_root, probe_sig_threshold=threshold)
-                    )
-                    progress_recorder.set_progress(
-                        i * len(thresholds) + j, total, "Processing {:,}/{:,} results".format(i, n)
-                    )
-            else:
-                print("ERR: DOES NOT EXIST: {}".format(path['tsv_path']))
-        rdf = pd.DataFrame(relevant_results)
-
-        # Just temporarily, in case debugging offline is necessary
-        rdf.to_pickle(os.path.join(data_root, "plots", "rdf.df"))
-
-        """ Calculate grouped stats, overlap between each tsv file and its shuffle-based 'peers'. """
-        progress_recorder.set_progress(n * len(thresholds), total, "Generating overlap lists")
-        shuffles = list(set(rdf['shuffle']))
-        # for k, shuffle in enumerate(shuffles):
-        #     shuffle_mask = rdf['shuffle'] == shuffle
-        #     # We can only do this in training data, unless we want to double the workload above for test, too.
-        #     # Generate a list of lists for each file's single 'train_overlap' cell in our dataframe.
-        #     rdf.loc[shuffle_mask, 'train_overlap'] = [
-        #         algorithms.pct_similarity_list(list(rdf.loc[shuffle_mask, 'path']), top=t) for t in thresholds
-        #     ]
-        #     progress_recorder.set_progress(n * len(thresholds) + (k * 2), total, "overlap list {}/{}".format(
-        #         k, len(shuffles)
-        #     ))
-
-        progress_recorder.set_progress(n * len(thresholds) + (len(shuffles) * 2), total, "Generating plot")
-        # Plot performance of thresholds on correlations.
-        phase_mask = rdf['phase'] == phase
-        f_perf, a_perf = plot_scores_over_thresholds(
-            rdf[phase_mask & (rdf['shuffle'] == 'none')], phase, 'none'
-        )
-        f_perf.savefig(os.path.join(data_root, "plots", "performance_{}.png".format(plot_descriptor)))
-
-        progress_recorder.set_progress(total, total, "Finished")
-
-    return None
