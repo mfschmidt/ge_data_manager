@@ -75,6 +75,27 @@ function stopCeleryProcessPolling() {
     location.reload();
 }
 
+function shouldBailOnBuilding(image_element, select_element) {
+    // If a pane is busy, ignore new build requests.
+
+    if( image_element.innerHTML.includes(select_element.innerText)) {
+        // The desired image is already built and loaded. Nothing to do here.
+        console.log("  doing nothing with " + select_element.innerText + "; it's already built and loaded.");
+        return true;
+    } else if( image_element.innerHTML.includes("fa-spinner")) {
+        // Already working on it; ignore further requests.
+        // But with async, many requests may be made for the same thing before this is triggered.
+        console.log("  " + select_element.id + " is already building a plot. Wait until it's done!");
+        return true;
+    } else if (image_element.innerHTML.includes("img src")) {
+        // Immediately set the image blank, just to give feedback we registered the click.
+        // But don't mess with active spinners (which do not contain "img src" substring)
+        console.log("  priming the " + select_element.id.toUpperCase()[0] + " image spot for " + select_element.innerText + " with empty.");
+        loadPlot(image_element, "/static/gedata/empty.png");
+    }
+    return false;
+}
+
 function buildPlot(image_id, select_id) {
     // Calculate the image id string from forms, then use it to load plot images
     let select_element = document.getElementById(select_id);
@@ -82,21 +103,7 @@ function buildPlot(image_id, select_id) {
     console.log("in buildPlot, select_id = " + select_id + "; containing '" + select_element.innerText + "'.");
     let image_element = document.getElementById(image_id);
 
-    // This function is called a lot just to refresh and update, as well as after changed form fields.
-    // If the desired plot is already loaded, we should just ignore the change and quit. No harm done.
-    if( image_element.innerHTML.includes(select_element.innerText)) {
-        // The desired image is already built and loaded. Nothing to do here.
-        console.log("  doing nothing with " + select_element.innerText + "; it's already built and loaded.");
-        return;
-    } else if (image_element.innerHTML.includes("img src")) {
-        // Immediately set the image blank, just to give feedback we registered the click.
-        // But don't mess with active spinners (which do not contain "img src" substring)
-        console.log("  priming the " + select_id.toUpperCase()[0] + " image spot for " + select_element.innerText + " with empty.");
-        loadPlot(image_element, "/static/gedata/empty.png");
-    } else if( image_element.innerHTML.includes("fa-spinner")) {
-        // Already working on it; ignore further requests.
-        // But with async, many requests may be made for the same thing before this is triggered.
-        console.log("  " + select_id + " is already building a plot. Wait until it's done!");
+    if(shouldBailOnBuilding(image_element, select_element)) {
         return;
     }
 
@@ -150,21 +157,7 @@ function assessPerformance(image_id, select_id) {
     console.log("in assessPerformance, select_id = " + select_id + "; containing '" + select_element.innerText + "'.");
     let image_element = document.getElementById(image_id);
 
-    // This function is called a lot just to refresh and update, as well as after changed form fields.
-    // If the desired plot is already loaded, we should just ignore the change and quit. No harm done.
-    if( image_element.innerHTML.includes(select_element.innerText)) {
-        // The desired image is already built and loaded. Nothing to do here.
-        console.log("  doing nothing with " + select_element.innerText + "; it's already built and loaded.");
-        return;
-    } else if (image_element.innerHTML.includes("img src")) {
-        // Immediately set the image blank, just to give feedback we registered the click.
-        // But don't mess with active spinners (which do not contain "img src" substring)
-        console.log("  priming the " + select_id.toUpperCase()[0] + " image spot for " + select_element.innerText + " with empty.");
-        loadPlot(image_element, "/static/gedata/empty.png");
-    } else if( image_element.innerHTML.includes("fa-spinner")) {
-        // Already working on it; ignore further requests.
-        // But with async, many requests may be made for the same thing before this is triggered.
-        console.log("  " + select_id + " is already building a plot. Wait until it's done!");
+    if(shouldBailOnBuilding(image_element, select_element)) {
         return;
     }
 
