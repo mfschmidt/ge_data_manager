@@ -6,7 +6,7 @@ from django.views import generic
 
 from ge_data_manager.celery import celery_id_from_name, celery_plots_in_progress
 
-from .tasks import clear_jobs, collect_jobs, build_plot, assess_performance, interpret_descriptor
+from .tasks import clear_jobs, collect_jobs, assess_mantel, assess_overlap, assess_performance, interpret_descriptor
 from .models import PushResult, ResultSummary
 
 
@@ -83,24 +83,35 @@ def rest_refresh(request, job_name):
                 celery_result = collect_jobs.delay("/data", rebuild=False)
             jobs_id = celery_result.task_id
             print("     new id for '{}' is '{}'.".format(job_name, jobs_id))
-    elif "traintest" in job_name:
+    elif "mantel" in job_name.split('_')[1]:
         if job_name in plots_in_progress:
             print("DUPE: {} requested, but is already being worked on.".format(job_name))
         else:
-            print("NEW: rest_refresh got job '{}', no id returned. Building new plot.".format(job_name))
+            print("NEW: rest_refresh got job '{}', no id returned. New Mantel assessment.".format(job_name))
             for plot in plots_in_progress:
                 print("     already building {}".format(plot))
-            celery_result = build_plot.delay(job_name[:8].lower(), data_root="/data")
+            celery_result = assess_mantel.delay(job_name.split('_')[0].lower(), data_root="/data")
             jobs_id = celery_result.task_id
             print("     new id for '{}' is '{}'.".format(job_name, jobs_id))
-    elif "performance" in job_name:
+    elif "performance" in job_name.split('_')[1]:
         if job_name in plots_in_progress:
             print("DUPE: {} requested, but is already being worked on.".format(job_name))
         else:
             print("NEW: rest_refresh got job '{}', no id returned. New performance assessment.".format(job_name))
             for plot in plots_in_progress:
                 print("     already building {}".format(plot))
-            celery_result = assess_performance.delay(job_name[:8].lower(), data_root="/data")
+            celery_result = assess_performance.delay(job_name.split('_')[0].lower(), data_root="/data")
+            jobs_id = celery_result.task_id
+            print("     new id for '{}' is '{}'.".format(job_name, jobs_id))
+    elif "overlap" in job_name.split('_')[1]:
+        if job_name in plots_in_progress:
+            print("DUPE: {} requested, but is already being worked on.".format(job_name))
+        else:
+            print(
+                "NEW: rest_refresh got job '{}', no id returned. New overlap assessment.".format(job_name))
+            for plot in plots_in_progress:
+                print("     already building {}".format(plot))
+            celery_result = assess_overlap.delay(job_name.split('_')[0].lower(), data_root="/data")
             jobs_id = celery_result.task_id
             print("     new id for '{}' is '{}'.".format(job_name, jobs_id))
     else:
