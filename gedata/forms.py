@@ -6,6 +6,14 @@ from os import path
 from .models import PushResult, ResultSummary
 
 
+""" Common selection options """
+parcels = [('w', 'wellid'), ('g', 'Glasser'), ]
+comps = [('nki', 'NKI'), ('hcp', 'HCP'), ]
+masks = [('00', 'none'), ('16', '16'), ('32', '32'), ('64', '64'), ]
+algos = [('s', 'smrt'), ('o', 'once'), ]
+thresholds = [('peak', 'peak'), ('0079', 'top 0.5%'), ('0157', 'top 1%'), ]
+
+
 def unique_tuples(k, enumerated=False):
     """ Return a list of tuples, containing all values matching the k key, useful for select box widgets """
 
@@ -230,22 +238,20 @@ def compare_results(request):
 
 
 class ComparisonForm(forms.Form):
-    parcels = [ ('w', 'wellid'), ('g', 'Glasser'), ]
-    comps = [ ('nki', 'NKI'), ('hcp', 'HCP'), ]
-    masks = [ ('00', 'none'), ('16', '16'), ('32', '32'), ('64', '64'), ]
-    algos = [ ('s', 'smrt'), ('o', 'once'), ]
 
     left_parcel = forms.ChoiceField(label="parcel", widget=forms.Select, choices=parcels, initial="w")
     left_split = forms.ChoiceField(label="split by", widget=forms.Select, choices=parcels, initial="w")
     left_comp = forms.ChoiceField(label="connectivity", widget=forms.Select, choices=comps, initial="nki")
     left_train_mask = forms.ChoiceField(label="train mask", widget=forms.Select, choices=masks, initial="00")
     left_algo = forms.ChoiceField(label="algorithm", widget=forms.Select, choices=algos, initial="s")
+    left_threshold = forms.ChoiceField(label="threshold", widget=forms.Select, choices=thresholds, initial="peak")
 
     right_parcel = forms.ChoiceField(label="parcel", widget=forms.Select, choices=parcels, initial="w")
     right_split = forms.ChoiceField(label="split by", widget=forms.Select, choices=parcels, initial="w")
     right_comp = forms.ChoiceField(label="connectivity", widget=forms.Select, choices=comps, initial="nki")
     right_train_mask = forms.ChoiceField(label="train mask", widget=forms.Select, choices=masks, initial="00")
     right_algo = forms.ChoiceField(label="algorithm", widget=forms.Select, choices=algos, initial="s")
+    right_threshold = forms.ChoiceField(label="threshold", widget=forms.Select, choices=thresholds, initial="peak")
 
 
 def comparison_results(request):
@@ -278,27 +284,24 @@ def comparison_results(request):
     })
 
 
-class PerformanceForm(forms.Form):
-    parcels = [ ('w', 'wellid'), ('g', 'Glasser'), ]
-    comps = [ ('nki', 'NKI'), ('hcp', 'HCP'), ]
-    masks = [ ('00', 'none'), ('16', '16'), ('32', '32'), ('64', '64'), ]
-    algos = [ ('s', 'smrt'), ('o', 'once'), ]
+class ResultsetForm(forms.Form):
 
     parcel = forms.ChoiceField(label="parcel", widget=forms.Select, choices=parcels, initial="w")
     split = forms.ChoiceField(label="split by", widget=forms.Select, choices=parcels, initial="w")
     comp = forms.ChoiceField(label="connectivity", widget=forms.Select, choices=comps, initial="nki")
     train_mask = forms.ChoiceField(label="train mask", widget=forms.Select, choices=masks, initial="00")
     algo = forms.ChoiceField(label="algorithm", widget=forms.Select, choices=algos, initial="s")
+    threshold = forms.ChoiceField(label="threshold", widget=forms.Select, choices=thresholds, initial="peak")
 
 
-def performance(request):
+def resultset(request, metric):
     """ Render the ComparisonForm """
 
     submitted = False
     image = {'url': '/static/gedata/empty.png', 'description': 'nonexistent'}
 
     if request.method == 'POST':
-        form = ComparisonForm(request.POST)
+        form = ResultsetForm(request.POST)
         if form.is_valid():
             image = image_dict_from_selections(form.cleaned_data, 'performance')
             print("We calculated the image name, {}, in python. I didn't think we'd ever POST form data.".format(
@@ -306,14 +309,14 @@ def performance(request):
             ))
     else:
         # Create a blank form
-        form = PerformanceForm()
+        form = ResultsetForm()
         if 'submitted' in request.GET:
             submitted = True
 
-    return render(request, 'gedata/performance.html', {
+    return render(request, 'gedata/resultset.html', {
         'form': form,
         'submitted': submitted,
         'image': image,
-        # 'latest_result_summary': ResultSummary.objects.latest('summary_date'),
+        'metric': metric,
     })
 
