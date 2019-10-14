@@ -10,9 +10,9 @@ urlpatterns = [
     path('REST/inventory/<str:signature>', views.rest_inventory, name='inventory'),
     path('results/', views.ResultsView.as_view(), name='results'),
     path('result/<int:pk>', views.ResultView.as_view(), name='result'),
-    path('filter/', forms.filter_results, name='filter'),
+    path('set/<str:metric>', forms.resultset, name='resultset'),
     path('comparison/', forms.comparison_results, name='comparison'),
-    path('performance/', forms.performance, name='performance'),
+    path('filter/', forms.filter_results, name='filter'),
 ]
 
 """
