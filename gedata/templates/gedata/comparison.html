@@ -22,6 +22,7 @@
                         <td><div>{{ form.left_comp.label_tag }}</div></td>
                         <td><div>{{ form.left_train_mask.label_tag }}</div></td>
                         <td><div>{{ form.left_algo.label_tag }}</div></td>
+                        <td><div>{{ form.left_threshold.label_tag }}</div></td>
                     </tr>
                     <tr>
                         <td><div>{{ form.left_parcel }}<br />{{ form.left_parcel.errors }}</div></td>
@@ -29,6 +30,7 @@
                         <td><div>{{ form.left_comp }}<br />{{ form.left_comp.errors }}</div></td>
                         <td><div>{{ form.left_train_mask }}<br />{{ form.left_train_mask.errors }}</div></td>
                         <td><div>{{ form.left_algo }}<br />{{ form.left_algo.errors }}</div></td>
+                        <td><div>{{ form.left_threshold }}<br />{{ form.left_algo.errors }}</div></td>
                     </tr>
                 </table>
             </div>
@@ -40,6 +42,7 @@
                         <td><div>{{ form.right_comp.label_tag }}</div></td>
                         <td><div>{{ form.right_train_mask.label_tag }}</div></td>
                         <td><div>{{ form.right_algo.label_tag }}</div></td>
+                        <td><div>{{ form.right_threshold.label_tag }}</div></td>
                     </tr>
                     <tr>
                         <td><div>{{ form.right_parcel }}<br />{{ form.right_parcel.errors }}</div></td>
@@ -47,13 +50,14 @@
                         <td><div>{{ form.right_comp }}<br />{{ form.right_comp.errors }}</div></td>
                         <td><div>{{ form.right_train_mask }}<br />{{ form.right_train_mask.errors }}</div></td>
                         <td><div>{{ form.right_algo }}<br />{{ form.right_algo.errors }}</div></td>
+                        <td><div>{{ form.right_threshold }}<br />{{ form.right_algo.errors }}</div></td>
                     </tr>
                 </table>
             </div>
             <div style="text-align: center;">
                 <!-- Do not allow actual submission, everything we do is javascript, ajax, and celery. Reloading the page may start things over. -->
                 <span id="left_set_string" style="display: none;">empty</span>
-                <input type="button" value="Compare" onclick="buildPlot('left_image', 'left_set_string'); buildPlot('right_image', 'right_set_string');">
+                <input type="button" value="Compare" onclick="assessMetric('left_image', 'left_set_string', 'mantel'); assessMetric('right_image', 'right_set_string', 'mantel');">
                 <span id="right_set_string" style="display: none;">empty</span>
             </div>
         </form>

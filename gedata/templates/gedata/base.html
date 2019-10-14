@@ -35,13 +35,19 @@
                 <a class="nav-link" href="{% url 'gedata:index' %}">Home <span class="sr-only"></span></a>
             </li>
             <li class="nav-item">
+                <a class="nav-link" href="{% url 'gedata:resultset' metric='mantel' %}">Mantels</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'gedata:resultset' metric='overlap' %}">Overlaps</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'gedata:resultset' metric='performance' %}">Performance</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'gedata:comparison' %}">Comparison</a>
+            </li>
+            <li class="nav-item">
                 <a class="nav-link" href="{% url 'gedata:filter' %}">Filter</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="{% url 'gedata:comparison' %}">Compare</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="{% url 'gedata:performance' %}">Performance</a>
             </li>
             </ul>
         </div>

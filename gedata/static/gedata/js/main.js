@@ -93,11 +93,11 @@ function shouldBailOnBuilding(image_element, select_element) {
     return false;
 }
 
-function buildPlot(image_id, select_id) {
+function assessMetric(image_id, select_id, metric) {
     // Calculate the image id string from forms, then use it to load plot images
     let select_element = document.getElementById(select_id);
-    select_element.innerText = image_id_from_selections(select_id.toUpperCase()[0]);  // "L" or "R"
-    console.log("in buildPlot, select_id = " + select_id + "; containing '" + select_element.innerText + "'.");
+    select_element.innerText = image_id_from_selections(select_id);  // select_id should be 'center_set_string'
+    console.log("assessing " + metric + ", select_id = " + select_id + "; containing '" + select_element.innerText + "'.");
     let image_element = document.getElementById(image_id);
 
     if(shouldBailOnBuilding(image_element, select_element)) {
@@ -105,7 +105,7 @@ function buildPlot(image_id, select_id) {
     }
 
     console.log("Checking for " + select_element.innerText + " image for " + image_id + ".");
-    let img_file = select_element.innerText.toLowerCase() + "_traintest" + ".png";
+    let img_file = select_element.innerText.toLowerCase() + "_" + metric + ".png";
     let img_url = "/static/gedata/plots/" + img_file;
 
     // The first ajax request determines whether our desired plot already exists or not.
@@ -118,7 +118,6 @@ function buildPlot(image_id, select_id) {
             }
             if (png_http.status === 404) {
                 console.log(select_element.innerText + " does not exist. Building it from scratch.");
-                // let refreshUrl = "{% url 'gedata:refresh' job_name=12345 %}".replace(/12345/, img_file);
                 let refreshUrl = "/gedata/REST/refresh/" + img_file;
 
                 // The second ajax request initiates image creation and starts the spinner.
@@ -139,61 +138,7 @@ function buildPlot(image_id, select_id) {
                 };
                 request.open("GET", refreshUrl, true);
                 request.send();
-                console.log("Beginning to build plot for " + select_element.innerText + " at " + image_id);
-            }
-        }
-    };
-    png_http.open('HEAD', img_url, true);
-    png_http.send();
-}
-
-function assessPerformance(image_id, select_id) {
-    // Calculate the image id string from forms, then use it to load plot images
-    let select_element = document.getElementById(select_id);
-    select_element.innerText = image_id_from_selections(select_id.toLowerCase());  // "performance"
-    console.log("in assessPerformance, select_id = " + select_id + "; containing '" + select_element.innerText + "'.");
-    let image_element = document.getElementById(image_id);
-
-    if(shouldBailOnBuilding(image_element, select_element)) {
-        return;
-    }
-
-    console.log("Checking for " + select_element.innerText + " image for " + image_id + ".");
-    let img_file = select_element.innerText.toLowerCase() + "_performance" + ".png";
-    let img_url = "/static/gedata/plots/" + img_file;
-
-    // The first ajax request determines whether our desired plot already exists or not.
-    let png_http = new XMLHttpRequest();
-    png_http.onreadystatechange = function () {
-        if (png_http.readyState === 4) {
-            if (png_http.status === 200) {
-                console.log(select_element.innerText + " exists, loading it rather than rebuilding.");
-                loadPlot(image_element, img_url);
-            }
-            if (png_http.status === 404) {
-                console.log(select_element.innerText + " does not exist. Building it from scratch.");
-                // let refreshUrl = "{% url 'gedata:refresh' job_name=12345 %}".replace(/12345/, img_file);
-                let refreshUrl = "/gedata/REST/refresh/" + img_file;
-
-                // The second ajax request initiates image creation and starts the spinner.
-                let request = new XMLHttpRequest();
-                request.onreadystatechange = function () {
-                    if (request.readyState === 4 && request.status === 200) {
-                        let responseJsonObj = JSON.parse(this.responseText);
-                        if (responseJsonObj.task_id !== "None") {
-                            console.log("Got id: " + responseJsonObj.task_id);
-                            let progressUrl = "/celery-progress/" + responseJsonObj.task_id + "/";
-                            CelerySpinner.initSpinner(progressUrl, {
-                                onSuccess: loadPlot,
-                                spinnerId: image_id,
-                                dataForLater: img_url
-                            });
-                        }
-                    }
-                };
-                request.open("GET", refreshUrl, true);
-                request.send();
-                console.log("Beginning to assess performance for " + select_element.innerText + " at " + image_id);
+                console.log("Beginning to build " + metric + " plot for " + select_element.innerText + " at " + image_id);
             }
         }
     };
@@ -268,6 +213,7 @@ function image_id_from_selections(side) {
             summary_string += document.getElementById('id_left_split').value.toLowerCase()[0];
             summary_string += document.getElementById('id_left_train_mask').value;
             summary_string += document.getElementById('id_left_algo').value;
+            summary_string += document.getElementById('id_left_threshold').value;
         }
     } else if (side === "R") {
         if( document.title === "Compare result sets" ) {
@@ -279,15 +225,17 @@ function image_id_from_selections(side) {
             summary_string += document.getElementById('id_right_split').value.toLowerCase()[0];
             summary_string += document.getElementById('id_right_train_mask').value;
             summary_string += document.getElementById('id_right_algo').value;
+            summary_string += document.getElementById('id_right_threshold').value;
         }
     } else if (side === "center_set_string") {
-        if( document.title === "Result set performance" ) {
+        // if( document.title === "Result set performance" ) {
             summary_string += document.getElementById('id_comp').value.toLowerCase();
             summary_string += document.getElementById('id_parcel').value.toLowerCase()[0];
             summary_string += document.getElementById('id_split').value.toLowerCase()[0];
             summary_string += document.getElementById('id_train_mask').value;
             summary_string += document.getElementById('id_algo').value;
-        }
+            summary_string += document.getElementById('id_threshold').value;
+        // }
     }
     console.log("    calculated " + side + " summary_string of '" + summary_string + "'");
     return summary_string;
@@ -320,23 +268,23 @@ function initUi() {
     latestUpdateState("latest_result_summary");
 
     // For the compare.html and comparison.html views:
-    //buildPlot('left_image', 'left_set_string');
-    //buildPlot('right_image', 'right_set_string');
+    //assessMetric('left_image', 'left_set_string', 'mantel');
+    //assessMetric('right_image', 'right_set_string', 'mantel');
     if( document.title === "Result set comparisons" ) {
         console.log( "    adding event listeners to form elements.")
-        //document.getElementById("id_left_comp").addEventListener('change', buildPlot('left_image', 'left_set_string'));
-        //document.getElementById("id_left_parcel").addEventListener('change', buildPlot('left_image', 'left_set_string'));
-        //document.getElementById("id_left_split").addEventListener('change', buildPlot('left_image', 'left_set_string'));
-        //document.getElementById("id_left_train_mask").addEventListener('change', buildPlot('left_image', 'left_set_string'));
-        //document.getElementById("id_left_algo").addEventListener('change', buildPlot('left_image', 'left_set_string'));
-        //document.getElementById("id_right_comp").addEventListener('change', buildPlot('right_image', 'right_set_string'));
-        //document.getElementById("id_right_parcel").addEventListener('change', buildPlot('right_image', 'right_set_string'));
-        //document.getElementById("id_right_split").addEventListener('change', buildPlot('right_image', 'right_set_string'));
-        //document.getElementById("id_right_train_mask").addEventListener('change', buildPlot('right_image', 'right_set_string'));
-        //document.getElementById("id_right_algo").addEventListener('change', buildPlot('right_image', 'right_set_string'));
+        //document.getElementById("id_left_comp").addEventListener('change', assessMetric('left_image', 'left_set_string', 'mantel'));
+        //document.getElementById("id_left_parcel").addEventListener('change', assessMetric('left_image', 'left_set_string', 'mantel'));
+        //document.getElementById("id_left_split").addEventListener('change', assessMetric('left_image', 'left_set_string', 'mantel'));
+        //document.getElementById("id_left_train_mask").addEventListener('change', assessMetric('left_image', 'left_set_string', 'mantel'));
+        //document.getElementById("id_left_algo").addEventListener('change', assessMetric('left_image', 'left_set_string', 'mantel'));
+        //document.getElementById("id_right_comp").addEventListener('change', assessMetric('right_image', 'right_set_string', 'mantel'));
+        //document.getElementById("id_right_parcel").addEventListener('change', assessMetric('right_image', 'right_set_string', 'mantel'));
+        //document.getElementById("id_right_split").addEventListener('change', assessMetric('right_image', 'right_set_string', 'mantel'));
+        //document.getElementById("id_right_train_mask").addEventListener('change', assessMetric('right_image', 'right_set_string', 'mantel'));
+        //document.getElementById("id_right_algo").addEventListener('change', assessMetric('right_image', 'right_set_string', 'mantel'));
     } else if ( document.title === "Compare result sets" ) {
-        document.getElementById("id_left_set").addEventListener('change', buildPlot('left_image', 'id_left_set'));
-        document.getElementById("id_right_set").addEventListener('change', buildPlot('right_image', 'id_right_set'));
+        document.getElementById("id_left_set").addEventListener('change', assessMetric('left_image', 'id_left_set', 'mantel'));
+        document.getElementById("id_right_set").addEventListener('change', assessMetric('right_image', 'id_right_set', 'mantel'));
     }
 
     // This is supposed to manage highlighting the active menu item, but doesn't work. One day I'll debug it.

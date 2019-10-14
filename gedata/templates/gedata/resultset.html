@@ -2,7 +2,7 @@
 
 {% load humanize %}
 
-{% block title %}Result set performance{% endblock %}
+{% block title %}Result set {{ metric }}{% endblock %}
 
 {% block content %}
 
@@ -22,6 +22,7 @@
                         <td><div>{{ form.comp.label_tag }}</div></td>
                         <td><div>{{ form.train_mask.label_tag }}</div></td>
                         <td><div>{{ form.algo.label_tag }}</div></td>
+                        <td><div>{{ form.threshold.label_tag }}</div></td>
                     </tr>
                     <tr>
                         <td><div>{{ form.parcel }}<br />{{ form.parcel.errors }}</div></td>
@@ -29,13 +30,14 @@
                         <td><div>{{ form.comp }}<br />{{ form.comp.errors }}</div></td>
                         <td><div>{{ form.train_mask }}<br />{{ form.train_mask.errors }}</div></td>
                         <td><div>{{ form.algo }}<br />{{ form.algo.errors }}</div></td>
+                        <td><div>{{ form.threshold }}<br />{{ form.threshold.errors }}</div></td>
                     </tr>
                 </table>
             </div>
             <div style="text-align: center;">
                 <!-- Do not allow actual submission, everything we do is javascript, ajax, and celery. Reloading the page may start things over. -->
                 <span id="center_set_string" style="display: none;">empty</span>
-                <input type="button" value="Go" onclick="assessPerformance('image', 'center_set_string');">
+                <input type="button" value="Go" onclick="assessMetric('image', 'center_set_string', '{{ metric }}');">
             </div>
         </form>
 
