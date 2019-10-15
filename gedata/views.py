@@ -1,5 +1,7 @@
 from __future__ import absolute_import, unicode_literals
 
+import os
+
 from django.http import HttpResponse
 from django.shortcuts import render
 from django.views import generic
@@ -7,7 +9,9 @@ from django.views import generic
 from ge_data_manager.celery import celery_id_from_name, celery_plots_in_progress
 
 from .tasks import clear_jobs, collect_jobs, assess_mantel, assess_overlap, assess_performance, interpret_descriptor
+from .tasks import comp_from_signature
 from .models import PushResult, ResultSummary
+from .forms import thresholds
 
 
 def index(request):
@@ -42,6 +46,77 @@ class ResultsView(generic.ListView):
         context['n_results'] = PushResult.objects.count()
         context['m_results'] = ResultSummary.objects.latest('summary_date').num_results
         context['latest_result_summary'] = ResultSummary.objects.latest('summary_date')
+        return context
+
+    def get_queryset(self):
+        return PushResult.objects.filter(shuffle='derivatives')
+
+class InventoryView(generic.ListView):
+    model = PushResult
+    template_name = 'gedata/inventory.html'
+
+    def get_context_data(self, **kwargs):
+        base_str_n = '<p>{n_none:,} ({n_agno:,}+{n_dist:,}+{n_edge:,}) '
+
+        def span_str(r_id, metric, icon, threshold=""):
+            if metric == "performance":
+                img_file = '{rid}_{metric}.png'.format(rid=r_id, metric=metric)
+            else:
+                img_file = '{rid}{threshold}_{metric}.{ext}'.format(
+                    rid=r_id, threshold=threshold, metric=metric, ext="html" if metric == "genes" else "png"
+                )
+
+            img_url = '/static/gedata/plots/{img_file}'.format(img_file=img_file)
+            if os.path.isfile('/data/plots/{img_file}'.format(img_file=img_file)):
+                anchor = '<a href="{url}" target="+_blank"><i class="fas {icon}"></i></a>'.format(
+                    url=img_url, icon=icon
+                )
+            else:
+                anchor = '<i class="fal {icon}"></i>'.format(
+                    icon=icon
+                )
+            return '<span id="{rid}{metric}">{anchor}</span>'.format(
+                rid=rid, metric=metric,anchor=anchor
+            )
+
+        initial_queryset = PushResult.objects.filter(
+            samp="glasser", prob="fornito", algo='smrt', batch__startswith='train',
+        )
+
+        context = super(InventoryView, self).get_context_data(**kwargs)
+        context['masks'] = ["00", "16", "32", "64"]
+        for p in ['w', 'g']:
+            for s in ['w', 'g']:
+                for c in ['hcp', 'nki']:
+                    psc_id = "{}{}{}{}".format(c, p, s, 's')
+                    context[psc_id] = {}
+                    for m in ['00', '16', '32', '64']:
+                        final_queryset = initial_queryset.filter(
+                            comp=comp_from_signature(c + p),
+                            parby="glasser" if p == "g" else "wellid",
+                            splby="glasser" if s == "g" else "wellid",
+                            mask='none' if m == "00" else m,
+                        )
+                        rid = "{}{}{}{}{}".format(c, p, s, m, 's')
+                        span_strings = "<br />".join([" ".join([
+                            span_str(rid, "mantel", "fa-box-up", threshold[0]),
+                            span_str(rid, "overlap", "fa-object-group", threshold[0]),
+                            span_str(rid, "genes", "fa-dna", threshold[0]),
+                            "@", threshold[1],
+                        ]) for threshold in thresholds])
+                        context[rid] = " ".join([
+                            base_str_n.format(
+                                n_none=len(final_queryset.filter(shuffle="derivatives")),
+                                n_agno=len(final_queryset.filter(shuffle="shuffles")),
+                                n_dist=len(final_queryset.filter(shuffle="distshuffles")),
+                                n_edge=len(final_queryset.filter(shuffle="edgeshuffles")),
+                            ),
+                            span_str(rid, "performance", "fa-chart-line"),
+                            "<br />",
+                            span_strings,
+                        ])
+                        # Duplicate the data so it can be looked up two different ways.
+                        context[psc_id][m] = context[rid]
         return context
 
     def get_queryset(self):
@@ -125,6 +200,10 @@ def rest_latest(request):
 
     r = ResultSummary.empty() if ResultSummary.objects.count() == 0 else ResultSummary.objects.latest('summary_date')
     return HttpResponse(r.to_json())
+
+
+def inventory(request):
+    """ Render inventory """
 
 """
 def summarize_bids(request, bids_key, bids_val):

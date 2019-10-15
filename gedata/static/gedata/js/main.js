@@ -289,10 +289,23 @@ function initUi() {
 
     // This is supposed to manage highlighting the active menu item, but doesn't work. One day I'll debug it.
 
-    $(".nav-item .nav-link").on("click", function(){
-        $(".nav-item").find(".active").removeClass("active");
-        $(this).addClass("active");
-    });
+    let navItems = document.getElementsByClassName("nav-item");
+    for( i = 0; i < navItems.length; i++ ) {
+        navItems[i].addEventListener('click', function(){
+            navChildren = document.getElementsByClassName("nav-item active");
+            for( j = 0; j < navChildren.length; j++ ) {
+                navChildren[j].classList.remove("active");
+                console.log("Removing active from " + navChildren[j].id)
+            }
+            this.classList.add("active");
+            console.log("Adding active to " + navChildren[j].id)
+
+        });
+    }
+    // $(".nav-item .nav-link").on("click", function(){
+    //     $(".nav-item").find(".active").removeClass("active");
+    //     $(this).addClass("active");
+    // });
 
     console.log("  completed initing GE Data Manager UI (in main.js)");
 }
@@ -309,7 +322,7 @@ function inventory_td_contents(jsonObject) {
 
     // Fill in the train_test_ span.
     let ttString = "";
-    let ttUrl = "/static/gedata/plots/" + jsonObject.signature + "_traintest" + ".png";
+    let ttUrl = "/static/gedata/plots/" + jsonObject.signature + "_mantel" + ".png";
     let ttRequest = new XMLHttpRequest();
     ttRequest.onreadystatechange = function() {
         if(ttRequest.readyState === 4) {
@@ -345,7 +358,7 @@ function inventory_td_contents(jsonObject) {
 
     // Fill in the gene_list_ span.
     let dnaString = "";
-    let dnaUrl = "/static/gedata/plots/" + jsonObject.signature + "_traintest" + ".html";
+    let dnaUrl = "/static/gedata/plots/" + jsonObject.signature + "_genes" + ".html";
     let dnaRequest = new XMLHttpRequest();
     dnaRequest.onreadystatechange = function() {
         if(dnaRequest.readyState === 4) {

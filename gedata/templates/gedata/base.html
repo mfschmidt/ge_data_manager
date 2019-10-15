@@ -32,22 +32,25 @@
         <div class="collapse navbar-collapse" id="navbarCollapse">
             <ul class="navbar-nav mr-auto">
             <li class="nav-item active">
-                <a class="nav-link" href="{% url 'gedata:index' %}">Home <span class="sr-only"></span></a>
+                <a id="nav_home" class="nav-link" href="{% url 'gedata:index' %}">Home <span class="sr-only"></span></a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" href="{% url 'gedata:resultset' metric='mantel' %}">Mantels</a>
+                <a id="nav_inventory" class="nav-link" href="{% url 'gedata:inventory' %}">Inventory</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" href="{% url 'gedata:resultset' metric='overlap' %}">Overlaps</a>
+                <a id="nav_mantels" class="nav-link" href="{% url 'gedata:resultset' metric='mantel' %}">Mantels</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" href="{% url 'gedata:resultset' metric='performance' %}">Performance</a>
+                <a id="nav_overlaps" class="nav-link" href="{% url 'gedata:resultset' metric='overlap' %}">Overlaps</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" href="{% url 'gedata:comparison' %}">Comparison</a>
+                <a id="nav_performance" class="nav-link" href="{% url 'gedata:resultset' metric='performance' %}">Performance</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" href="{% url 'gedata:filter' %}">Filter</a>
+                <a id="nav_comparison" class="nav-link" href="{% url 'gedata:comparison' %}">Comparison</a>
+            </li>
+            <li class="nav-item">
+                <a id="nav_filter" class="nav-link" href="{% url 'gedata:filter' %}">Filter</a>
             </li>
             </ul>
         </div>
