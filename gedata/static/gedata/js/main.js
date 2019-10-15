@@ -154,11 +154,14 @@ function loadPlot(image_element, image_url) {
                               "</a>";
 
     // Also update gene ranking information, if available.
-    if( image_url.includes("traintest") ) {
+    if( image_url.includes("mantel") ) {
         if (image_url.endsWith('empty.png')) {
             document.getElementById(image_element.id.replace('image', 'go')).innerHTML = "";
         } else {
-            append_probes_from_file(image_element.id.replace('image', 'go'), image_url.replace('png', 'html'));
+            append_probes_from_file(
+                image_element.id.replace('image', 'go'),
+                image_url.replace('mantel', 'gene').replace('png', 'html')
+            );
             document.getElementById(image_element.id.replace('image', 'caption')).innerHTML = caption(2);
         }
     }
