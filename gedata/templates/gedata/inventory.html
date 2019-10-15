@@ -2,14 +2,87 @@
 
 {% block content %}
 
-    {% if results_list %}
-        <ul>
-        {% for result in results_list %}
-            <li><a href="{% url 'gedata:single_result' result.id %}">{{ result }}</a></li>
-        {% endfor %}
-        </ul>
-    {% else %}
-        <p>No results are available.</p>
-    {% endif %}
+    <table id="inventory_table">
+        <!-- Table Header -->
+        <tr>
+            <th>parcel</th>
+            <th>split</th>
+            <th>comp</th>
+            <th colspan="4">mask</th>
+        </tr>
+        <tr>
+            <th colspan="3"></th>
+            <th>none</th>
+            <th>&lt; 16mm</th>
+            <th>&lt; 32mm</th>
+            <th>&lt; 64mm</th>
+        </tr>
+        <!-- Table Body -->
+        <tr>
+            <th rowspan="4">wellid</th>
+            <th rowspan="2">wellid</th>
+            <th>hcp</th>
+            <td id="hcpww00s" class="data_cell">{{ hcpww00s |safe }}</td>
+            <td id="hcpww16s" class="data_cell">{{ hcpww16s |safe }}</td>
+            <td id="hcpww32s" class="data_cell">{{ hcpww32s |safe }}</td>
+            <td id="hcpww64s" class="data_cell">{{ hcpww64s |safe }}</td>
+        </tr>
+        <tr>
+            <th>nki</th>
+            <td id="nkiww00s" class="data_cell">{{ nkiww00s |safe }}</td>
+            <td id="nkiww16s" class="data_cell">{{ nkiww16s |safe }}</td>
+            <td id="nkiww32s" class="data_cell">{{ nkiww32s |safe }}</td>
+            <td id="nkiww64s" class="data_cell">{{ nkiww64s |safe }}</td>
+        </tr>
+        <tr>
+            <th rowspan="2">glasser</th>
+            <th>hcp</th>
+            <td id="hcpwg00s" class="data_cell">{{ hcpwg00s |safe }}</td>
+            <td id="hcpwg16s" class="data_cell">{{ hcpwg16s |safe }}</td>
+            <td id="hcpwg32s" class="data_cell">{{ hcpwg32s |safe }}</td>
+            <td id="hcpwg64s" class="data_cell">{{ hcpwg64s |safe }}</td>
+        </tr>
+        <tr>
+            <th>nki</th>
+            <td id="nkiwg00s" class="data_cell">{{ nkiwg00s |safe }}</td>
+            <td id="nkiwg16s" class="data_cell">{{ nkiwg16s |safe }}</td>
+            <td id="nkiwg32s" class="data_cell">{{ nkiwg32s |safe }}</td>
+            <td id="nkiwg64s" class="data_cell">{{ nkiwg64s |safe }}</td>
+        </tr>
+        <tr>
+            <th rowspan="4">glasser</th>
+            <th rowspan="2">wellid</th>
+            <th>hcp</th>
+            <td id="hcpgw00s" class="data_cell">{{ hcpgw00s |safe }}</td>
+            <td id="hcpgw16s" class="data_cell">{{ hcpgw16s |safe }}</td>
+            <td id="hcpgw32s" class="data_cell">{{ hcpgw32s |safe }}</td>
+            <td id="hcpgw64s" class="data_cell">{{ hcpgw64s |safe }}</td>
+        </tr>
+        <tr>
+            <th>nki</th>
+            <td id="nkigw00s" class="data_cell">{{ nkigw00s |safe }}</td>
+            <td id="nkigw16s" class="data_cell">{{ nkigw16s |safe }}</td>
+            <td id="nkigw32s" class="data_cell">{{ nkigw32s |safe }}</td>
+            <td id="nkigw64s" class="data_cell">{{ nkigw64s |safe }}</td>
+        </tr>
+        <tr>
+            <th rowspan="2">glasser</th>
+            <th>hcp</th>
+            <td id="hcpgg00s" class="data_cell">{{ hcpgg00s |safe }}</td>
+            <td id="hcpgg16s" class="data_cell">{{ hcpgg16s |safe }}</td>
+            <td id="hcpgg32s" class="data_cell">{{ hcpgg32s |safe }}</td>
+            <td id="hcpgg64s" class="data_cell">{{ hcpgg64s |safe }}</td>
+        </tr>
+        <tr>
+            <th>nki</th>
+            <td id="nkigg00s" class="data_cell">{{ nkigg00s |safe }}</td>
+            <td id="nkigg16s" class="data_cell">{{ nkigg16s |safe }}</td>
+            <td id="nkigg32s" class="data_cell">{{ nkigg32s |safe }}</td>
+            <td id="nkigg64s" class="data_cell">{{ nkigg64s |safe }}</td>
+        </tr>
+    </table>
+    <!-- The button has been replaced by just calculating it all in the django view
+    <button id="inventory_table_refresh_button" class="btn footer_button" onclick="fillInventoryTable();"><i class="fas fa-sync"></i> fill table</button>
+    -->
 
 {% endblock %}

@@ -710,7 +710,7 @@ def assess_mantel(self, plot_descriptor, data_root="/data"):
         all_ranked = ranked_probes(relevant_tsvs, threshold)
         all_ranked['rank'] = range(1, len(all_ranked.index) + 1, 1)
 
-        with open(os.path.join(data_root, "plots", "{}_mantel.html".format(plot_descriptor.lower())), "wt") as f:
+        with open(os.path.join(data_root, "plots", "{}_gene.html".format(plot_descriptor.lower())), "wt") as f:
             f.write("<p><span class=\"heavy\">Mantel correlations in independent test data.</span> ")
             f.write("Correlations in real, independent data are higher if using gene lists discovered by training \n")
             f.write("on real data than gene lists discovered by training on shuffled data.\n</p>")
@@ -760,7 +760,7 @@ def assess_mantel(self, plot_descriptor, data_root="/data"):
         progress_recorder.set_progress(n + 100, n + 100, "Finished")
 
     else:
-        with open(os.path.join(data_root, "plots", "{}_mantel.html".format(plot_descriptor.lower())), "wt") as f:
+        with open(os.path.join(data_root, "plots", "{}_gene.html".format(plot_descriptor.lower())), "wt") as f:
             f.write("<p>No results for {}</p>\n".format(plot_descriptor.lower()))
         progress_recorder.set_progress(n + 100, n + 100, "No results")
 
