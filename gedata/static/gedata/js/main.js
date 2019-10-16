@@ -22,6 +22,19 @@ function caption(figure) {
             '(< 16mm) removed (right-most pane).' +
             '</p>';
     } else if( figure === 3 ) {
+        return '<p><span class="heavy">Similarity of top gene lists.</span><br />' +
+            '<span class="heavy">A)</span> Among results that were processed identically, except for random seeds ' +
+            'used to sample split halves or shuffle permutations, similarity of results suggests that the gene ' +
+            'lists are relevant. The same genes would only rise to the top in different samples if they carry a ' +
+            'signal through the noise.<br />' +
+            '<span class="heavy">B)</span> Similarity of genes discovered in real data vs those discovered in ' +
+            'shuffled data indicate that the genes may be relevant to a confounding variable, like distance, ' +
+            'rather than demonstrating a relationship between the gene and connectivity, per se. ' +
+            '<span class="heavy">C)</span> Similarity between results from a training half and its completely ' +
+            'independent test half is a strong demonstration that the genes in these lists contribute to the ' +
+            'Mantel correlation independent of particular wellids. ' +
+            '</p>';
+    } else if( figure === 4 ) {
         return '<p><span class="heavy">Assess algorithm performance at different thresholds.</span><br />' +
             '<span class="heavy">Peak)</span> The highest Mantel correlation achieved during training, with the ' +
             'specified training data, masked, shuffled, or otherwise manipulated.<br />' +
@@ -159,15 +172,30 @@ function loadPlot(image_element, image_url) {
             document.getElementById(image_element.id.replace('image', 'go')).innerHTML = "";
         } else {
             append_probes_from_file(
-                image_element.id.replace('image', 'go'),
-                image_url.replace('mantel', 'gene').replace('png', 'html')
+                image_element.id.replace('image', 'genes'),
+                image_url.replace('mantel', 'genes').replace('png', 'html')
             );
             document.getElementById(image_element.id.replace('image', 'caption')).innerHTML = caption(2);
+            append_probes_from_file(
+                image_element.id.replace('image', 'descriptor'),
+                image_url.replace('png', 'html')
+            );
+        }
+    }
+    if( image_url.includes("overlap") ) {
+        if (image_url.endsWith('empty.png')) {
+            document.getElementById(image_element.id.replace('image', 'go')).innerHTML = "";
+        } else {
+            document.getElementById(image_element.id.replace('image', 'caption')).innerHTML = caption(3);
+            append_probes_from_file(
+                image_element.id.replace('image', 'descriptor'),
+                image_url.replace('png', 'html')
+            );
         }
     }
     if( image_url.includes("performance") ) {
         if (!image_url.endsWith('empty.png')) {
-            document.getElementById(image_element.id.replace('image', 'caption')).innerHTML = caption(3);
+            document.getElementById(image_element.id.replace('image', 'caption')).innerHTML = caption(4);
         }
     }
 }
@@ -199,14 +227,14 @@ function load_file(method, url) {
 async function append_probes_from_file(elementID, text_url) {
     console.log(text_url);
     let result = await load_file("GET", text_url);
-    document.getElementById(elementID).innerHTML += result;
+    document.getElementById(elementID).innerHTML = result;
 }
 
 function image_id_from_selections(side) {
     // For "L" and "R" side for either the "Compare result sets" or "Result set comparisons" page, return the url
     // to the appropriate image, based on form selections.
     let summary_string = "";
-    if (side === "L") {
+    if (side === "left_set_string") {
         if( document.title === "Compare result sets" ) {
             let select_element = document.getElementById('id_left_set');
             summary_string = select_element.options[select_element.selectedIndex].value;
@@ -218,7 +246,7 @@ function image_id_from_selections(side) {
             summary_string += document.getElementById('id_left_algo').value;
             summary_string += document.getElementById('id_left_threshold').value;
         }
-    } else if (side === "R") {
+    } else if (side === "right_set_string") {
         if( document.title === "Compare result sets" ) {
             let select_element = document.getElementById('id_right_set');
             summary_string = select_element.options[select_element.selectedIndex].value;
