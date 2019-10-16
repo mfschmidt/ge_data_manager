@@ -730,18 +730,18 @@ def assess_performance(self, plot_descriptor, data_root="/data"):
 
     # Determine an end-point, correlating to 100%
     # There are two sections: first, results * thresholds; second, overlaps, which will just have to normalize to 50/50
-    n = len(rdict['results'])
-    total = rdict['n'] * len(thresholds) * 2  # The *2 allows for later overlaps to constitute 50% of the reported percentage
+    n = len(rdict['qs'])
+    total = n * len(thresholds) * 2  # The *2 allows for later overlaps to constitute 50% of the reported percentage
     progress_recorder.set_progress(2, 100, "Finding results")
     print("Found {:,} results ({} {} {} {} {} {} {})".format(
         n, "glasser", "fornito", rdict['algo'], rdict['comp'], rdict['parby'], rdict['splby'], rdict['mask']
     ))
 
-    if len(rdict['results']) > 0:
+    if len(rdict['qs']) > 0:
         relevant_results = []
 
         """ Calculate (or load) stats for individual tsv files. """
-        for i, path in enumerate(rdict['results'].values('tsv_path')):
+        for i, path in enumerate(rdict['qs'].values('tsv_path')):
             if os.path.isfile(path['tsv_path']):
                 for j, threshold in enumerate(thresholds):
                     relevant_results.append(
