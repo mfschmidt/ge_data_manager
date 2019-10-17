@@ -667,24 +667,36 @@ def assess_overlap(self, plot_descriptor, data_root="/data"):
         progress_recorder.set_progress(80, 100, "Within-shuffle overlap")
         rdf['split'] = rdf['path'].apply(extract_seed, args=("batch-train",))
         rdf['seed'] = rdf['path'].apply(extract_seed, args=("_seed-",))
+
+        """ Calculate similarity within split-halves and within shuffle-seeds. """
         for shuffle in list(set(rdf['shuffle'])):
             shuffle_mask = rdf['shuffle'] == shuffle
             # We can only do this in training data, unless we want to double the workload above for test, too.
-            rdf.loc[shuffle_mask, 'train_overlap'] = algorithms.pct_similarity_list(list(rdf.loc[shuffle_mask, 'path']))
+            rdf.loc[shuffle_mask, 'train_overlap'] = algorithms.pct_similarity_list(
+                list(rdf.loc[shuffle_mask, 'path']), top=rdict['threshold']
+            )
 
             # For each shuffled result, compare it against same-shuffled results from the same split
             for split in list(set(rdf['split'])):
                 split_mask = rdf['split'] == split
                 rdf.loc[shuffle_mask & split_mask, 'overlap_by_split'] = algorithms.pct_similarity_list(
-                    list(rdf.loc[shuffle_mask & split_mask, 'path'])
+                    list(rdf.loc[shuffle_mask & split_mask, 'path']), top=rdict['threshold']
                 )
 
             # For each shuffled result, compare it against same-shuffled results from the same shuffle seed
             for seed in list(set(rdf['seed'])):
                 seed_mask = rdf['seed'] == seed
                 rdf.loc[shuffle_mask & seed_mask, 'overlap_by_seed'] = algorithms.pct_similarity_list(
-                    list(rdf.loc[shuffle_mask & seed_mask, 'path'])
+                    list(rdf.loc[shuffle_mask & seed_mask, 'path']), top=rdict['threshold']
                 )
+
+            """ For each result in actual split-half train data, compare it to its shuffles. """
+            rdf['real_tsv_from_shuffle'] = rdf['path'].apply(
+                lambda x: x.replace("edgeshuffles", "derivatives").replace(
+                    "distshuffles", "derivatives").replace("shuffles", "derivatives")[: -15] + ".tsv")
+            rdf.loc[shuffle_mask, 'real_v_shuffle_overlap'] = rdf.loc[shuffle_mask, :].apply(
+                lambda x: algorithms.pct_similarity([x.path, x.real_tsv_from_shuffle], top=rdict['threshold']), axis=1)
+
     rdf.to_pickle(post_file)
 
     progress_recorder.set_progress(90, 100, "Generating plot")
@@ -803,7 +815,8 @@ def assess_performance(self, plot_descriptor, data_root="/data"):
         f_full_perf, a_full_perf = plot_performance_over_thresholds(
             rdf[phase_mask & (rdf['shuffle'] == 'none')], rdict['phase'], 'none'
         )
-        f_full_perf.savefig(os.path.join(data_root, "plots", "{}_performance.png".format(plot_descriptor[: -4])))
+        # f_full_perf.savefig(os.path.join(data_root, "plots", "{}_performance.png".format(plot_descriptor[: -4])))
+        f_full_perf.savefig(os.path.join(data_root, "plots", "{}_performance.png".format(plot_descriptor)))
 
         progress_recorder.set_progress(100, 100, "Finished")
 

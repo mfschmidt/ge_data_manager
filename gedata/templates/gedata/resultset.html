@@ -22,7 +22,9 @@
                         <td><div>{{ form.comp.label_tag }}</div></td>
                         <td><div>{{ form.train_mask.label_tag }}</div></td>
                         <td><div>{{ form.algo.label_tag }}</div></td>
-                        <td><div>{{ form.threshold.label_tag }}</div></td>
+                        {% if metric != "performance" %}
+                            <td><div>{{ form.threshold.label_tag }}</div></td>
+                        {% endif %}
                     </tr>
                     <tr>
                         <td><div>{{ form.parcel }}<br />{{ form.parcel.errors }}</div></td>
@@ -30,7 +32,9 @@
                         <td><div>{{ form.comp }}<br />{{ form.comp.errors }}</div></td>
                         <td><div>{{ form.train_mask }}<br />{{ form.train_mask.errors }}</div></td>
                         <td><div>{{ form.algo }}<br />{{ form.algo.errors }}</div></td>
-                        <td><div>{{ form.threshold }}<br />{{ form.threshold.errors }}</div></td>
+                        {% if metric != "performance" %}
+                            <td><div>{{ form.threshold }}<br />{{ form.threshold.errors }}</div></td>
+                        {% endif %}
                     </tr>
                 </table>
             </div>
