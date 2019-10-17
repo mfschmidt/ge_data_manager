@@ -301,7 +301,7 @@ def plot_overlap(df, title="Title", fig_size=(8, 8), ymin=None, ymax=None):
     fig.text(x_left + (3 * (margin + box_width)), 1.0 - (2 * margin) + 0.01, "B) train vs shuffles", ha='left', va='bottom', fontsize=12)
     ax_train_shuffle = box_and_swarm(
         fig, [x_left + (3 * (margin + box_width)), bottom, box_width, box_height],
-        'train vs shuffles', 'overlap_by_seed', df[df['shuffle'] != 'none'], orientation="v", ps=False, lim=ax_internal_all.get_ylim(),
+        'train vs shuffles', 'real_v_shuffle_overlap', df[df['shuffle'] != 'none'], orientation="v", ps=False, lim=ax_internal_all.get_ylim(),
     )
 
     """ Train box and swarm plots """

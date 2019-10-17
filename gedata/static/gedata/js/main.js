@@ -119,6 +119,8 @@ function assessMetric(image_id, select_id, metric) {
 
     console.log("Checking for " + select_element.innerText + " image for " + image_id + ".");
     let img_file = select_element.innerText.toLowerCase() + "_" + metric + ".png";
+    // if( metric === "performance") { img_file = select_element.innerText.substring(0, 8).toLowerCase(); }
+
     let img_url = "/static/gedata/plots/" + img_file;
 
     // The first ajax request determines whether our desired plot already exists or not.
@@ -226,8 +228,7 @@ function load_file(method, url) {
 
 async function append_probes_from_file(elementID, text_url) {
     console.log(text_url);
-    let result = await load_file("GET", text_url);
-    document.getElementById(elementID).innerHTML = result;
+    document.getElementById(elementID).innerHTML = await load_file("GET", text_url);
 }
 
 function image_id_from_selections(side) {
@@ -244,7 +245,11 @@ function image_id_from_selections(side) {
             summary_string += document.getElementById('id_left_split').value.toLowerCase()[0];
             summary_string += document.getElementById('id_left_train_mask').value;
             summary_string += document.getElementById('id_left_algo').value;
-            summary_string += document.getElementById('id_left_threshold').value;
+            let thresh_value = document.getElementById('id_left_threshold');
+            if( thresh_value ) {
+                // This part is neither available nor used in performance plotting.
+                summary_string += thresh_value.value;
+            }
         }
     } else if (side === "right_set_string") {
         if( document.title === "Compare result sets" ) {
@@ -256,17 +261,23 @@ function image_id_from_selections(side) {
             summary_string += document.getElementById('id_right_split').value.toLowerCase()[0];
             summary_string += document.getElementById('id_right_train_mask').value;
             summary_string += document.getElementById('id_right_algo').value;
-            summary_string += document.getElementById('id_right_threshold').value;
+            let thresh_value = document.getElementById('id_right_threshold');
+            if( thresh_value ) {
+                // This part is neither available nor used in performance plotting.
+                summary_string += thresh_value.value;
+            }
         }
     } else if (side === "center_set_string") {
-        // if( document.title === "Result set performance" ) {
-            summary_string += document.getElementById('id_comp').value.toLowerCase();
-            summary_string += document.getElementById('id_parcel').value.toLowerCase()[0];
-            summary_string += document.getElementById('id_split').value.toLowerCase()[0];
-            summary_string += document.getElementById('id_train_mask').value;
-            summary_string += document.getElementById('id_algo').value;
-            summary_string += document.getElementById('id_threshold').value;
-        // }
+        summary_string += document.getElementById('id_comp').value.toLowerCase();
+        summary_string += document.getElementById('id_parcel').value.toLowerCase()[0];
+        summary_string += document.getElementById('id_split').value.toLowerCase()[0];
+        summary_string += document.getElementById('id_train_mask').value;
+        summary_string += document.getElementById('id_algo').value;
+        let thresh_value = document.getElementById('id_threshold');
+        if( thresh_value ) {
+            // This part is neither available nor used in performance plotting.
+            summary_string += thresh_value.value;
+        }
     }
     console.log("    calculated " + side + " summary_string of '" + summary_string + "'");
     return summary_string;
