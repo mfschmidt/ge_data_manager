@@ -126,7 +126,7 @@ def collect_jobs(self, data_path="/data", rebuild=False):
         if os.path.isdir(d):
             for root, dirs, files in os.walk(d, topdown=True):
                 for f in files:
-                    if f[(-4):] == "json":
+                    if (f[-7:-6] == "v") and (f[(-4):] == "json"):
                         if rebuild or (tz_aware_file_mtime(os.path.join(root, f)) > last_result_datetime):
                             result = {
                                 'data_dir': data_path,
