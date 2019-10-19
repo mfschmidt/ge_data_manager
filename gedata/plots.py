@@ -17,12 +17,21 @@ def mean_and_sd(numbers):
     )
 
 
-def box_and_swarm(figure, placement, label, variable, data, high_score=1.0, orientation="v", lim=None, ps=True):
+def box_and_swarm(figure, placement, label, variable, data, high_score=1.0, orientation="v", lim=None, ps=True, cols=4):
     """ Create an axes object with a swarm plot draw over a box plot of the same data. """
 
     shuffle_order = ['none', 'edge', 'dist', 'agno']
     shuffle_color_boxes = sns.color_palette(['gray', 'orchid', 'red', 'green'])
     shuffle_color_points = sns.color_palette(['black', 'orchid', 'red', 'green'])
+    if cols == 3:
+        shuffle_order = shuffle_order[1:]
+        shuffle_color_boxes = shuffle_color_boxes[1:]
+        shuffle_color_points = shuffle_color_points[1:]
+    elif cols == 1:
+        shuffle_order = shuffle_order[0:1]
+        shuffle_color_boxes = shuffle_color_boxes[0:1]
+        shuffle_color_points = shuffle_color_points[0:1]
+
     annot_columns = [
         {'shuffle': 'none', 'xo': 0.0, 'xp': 0.0},
         {'shuffle': 'edge', 'xo': 1.0, 'xp': 0.5},
@@ -273,7 +282,7 @@ def plot_overlap(df, title="Title", fig_size=(8, 8), ymin=None, ymax=None):
     margin = 0.04
     box_height = 0.84
     # Four and a half axes get 1.0 - (6 * margin) = 0.76  &  0.76 / 4.5 = 0.17
-    box_width = 0.17
+    box_width = 0.20
     x_left = margin
     bottom = margin * 2
 
@@ -282,64 +291,65 @@ def plot_overlap(df, title="Title", fig_size=(8, 8), ymin=None, ymax=None):
 
     """ Internal overlap plots """
     fig.text(x_left, 1.0 - (2 * margin) + 0.01, "A) Overlap within splits and shuffles", ha='left', va='bottom', fontsize=12)
-    ax_internal_all = box_and_swarm(
+    ax_internal_shuffle = box_and_swarm(
         fig, [x_left + (0 * (margin + box_width)), bottom, box_width, box_height],
-        'overall', 'train_overlap', df, orientation="v", ps=False,
+        'by shuffle', 'overlap_by_seed', df, orientation="v", ps=False, cols=4,
     )
     if (ymin is not None) and (ymax is not None):
-        ax_internal_all.set_ylim(bottom=ymin, top=ymax)
+        ax_internal_shuffle.set_ylim(bottom=ymin, top=ymax)
     ax_internal_split = box_and_swarm(
         fig, [x_left + (1 * (margin + box_width)), bottom, box_width, box_height],
-        'by split', 'overlap_by_split', df[df['shuffle'] != 'none'], orientation="v", ps=False, lim=ax_internal_all.get_ylim(),
-    )
-    ax_internal_shuffle = box_and_swarm(
-        fig, [x_left + (2 * (margin + box_width)), bottom, box_width, box_height],
-        'by shuffle', 'overlap_by_seed', df, orientation="v", ps=False, lim=ax_internal_all.get_ylim(),
+        'by split', 'overlap_by_split', df[df['shuffle'] != 'none'], orientation="v", ps=False, cols=3,
+        lim=ax_internal_shuffle.get_ylim()
     )
 
     """ Overlap between training split and shuffled splits """
-    fig.text(x_left + (3 * (margin + box_width)), 1.0 - (2 * margin) + 0.01, "B) train vs shuffles", ha='left', va='bottom', fontsize=12)
+    fig.text(x_left + (2 * (margin + box_width)), 1.0 - (2 * margin) + 0.01, "B) train vs shuffles",
+             ha='left', va='bottom', fontsize=12)
     ax_train_shuffle = box_and_swarm(
-        fig, [x_left + (3 * (margin + box_width)), bottom, box_width, box_height],
-        'train vs shuffles', 'real_v_shuffle_overlap', df[df['shuffle'] != 'none'], orientation="v", ps=False, lim=ax_internal_all.get_ylim(),
+        fig, [x_left + (2 * (margin + box_width)), bottom, box_width, box_height],
+        'train vs shuffles', 'real_v_shuffle_overlap', df[df['shuffle'] != 'none'], orientation="v", ps=False, cols=3,
+        lim=ax_internal_shuffle.get_ylim(),
     )
 
     """ Train box and swarm plots """
-    fig.text(x_left + (4 * (margin + box_width)), 1.0 - (2 * margin) + 0.01, "C) train vs test", ha='left', va='bottom', fontsize=12)
-    ax_train_test = fig.add_axes([x_left + (4 * (margin + box_width)), bottom, box_width / 2, box_height], label='train v test')
-    sns.boxplot(
-        data=df[df['shuffle'] == 'none'], x='shuffle', y='train_vs_test_overlap',
-        order=['none', ], palette=sns.color_palette(['gray', ]),
-        ax=ax_train_test)
-    sns.swarmplot(
-        data=df[df['shuffle'] == 'none'], x='shuffle', y='train_vs_test_overlap',
-        order=['none', ], palette=sns.color_palette(['black', ]),
-        ax=ax_train_test)
-    ax_train_test.set_ylim(ax_internal_all.get_ylim())
+    fig.text(x_left + (3 * (margin + box_width)), 1.0 - (2 * margin) + 0.01, "C) train vs test",
+             ha='left', va='bottom', fontsize=12)
+    ax_train_test = box_and_swarm(
+        fig, [x_left + (3 * (margin + box_width)), bottom, box_width / 2, box_height],
+        'train vs test', 'train_vs_test_overlap', df, orientation="v", ps=False, cols=1,
+        lim=ax_internal_shuffle.get_ylim()
+    )
 
-    return fig, (ax_internal_all, ax_internal_split, ax_internal_shuffle, ax_train_shuffle, ax_train_test)
+    return fig, (ax_internal_split, ax_internal_shuffle, ax_train_shuffle, ax_train_test)
 
 
 def describe_overlap(df, title="Title"):
     """ Generate textual descriptions to go along with the plot generated. """
 
     d = ["<p><span class=\"heavy\">{}</span></p>".format(title),
-         "<p><span class=\"heavy\">Internal altogether:</span></p><p>"]
+         "<p><span class=\"heavy\">Internal altogether (not plotted):</span></p><p>"]
     for shuffle in ['none', 'edge', 'dist', 'agno', ]:
         d.append("Overlap within {}-shuffled: {}.".format(
             shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['train_overlap'])
-        ))
-    d.append("</p>")
-    d.append("<p><span class=\"heavy\">Internal by split:</span></p><p>")
-    for shuffle in ['none', 'edge', 'dist', 'agno', ]:
-        d.append("Overlap within {}-shuffled, by split: {}.".format(
-            shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['overlap_by_split'])
         ))
     d.append("</p>")
     d.append("<p><span class=\"heavy\">Internal by shuffle:</span></p><p>")
     for shuffle in ['none', 'edge', 'dist', 'agno', ]:
         d.append("Overlap within {}-shuffled, by seed: {}.".format(
             shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['overlap_by_seed'])
+        ))
+    d.append("</p>")
+    d.append("<p><span class=\"heavy\">Internal by split:</span></p><p>")
+    for shuffle in ['edge', 'dist', 'agno', ]:
+        d.append("Overlap within {}-shuffled, by split: {}.".format(
+            shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['overlap_by_split'])
+        ))
+    d.append("</p>")
+    d.append("<p><span class=\"heavy\">Real vs shuffled similarity:</span></p><p>")
+    for shuffle in ['edge', 'dist', 'agno', ]:
+        d.append("Overlap between un-shuffled and {}-shuffled: {}.".format(
+            shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['real_v_shuffle_overlap'])
         ))
     d.append("</p>")
     d.append("<p><span class=\"heavy\">Train vs test:</span></p>")
