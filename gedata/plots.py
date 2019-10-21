@@ -361,8 +361,11 @@ def describe_overlap(df, title="Title"):
 def plot_performance_over_thresholds(relevant_results):
     """ Generate a figure with three axes for Mantels, T scores, and Overlaps by threshold. """
 
-    plot_data = relevant_results
+    plot_data = relevant_results[relevant_results['threshold'] != 'peak']
     plot_data['threshold'] = plot_data['threshold'].apply(int)
+
+    peak_data = relevant_results[relevant_results['threshold'] == 'peak']
+    peak_data['threshold'] = peak_data['n'] - peak_data['peak']
 
     fig, ax_mantel_scores = plt.subplots(figsize=(10, 12))
     margin = 0.04
@@ -372,7 +375,9 @@ def plot_performance_over_thresholds(relevant_results):
     ax_mantel_scores.set_position([margin, 1.0 - margin - ht, 1.0 - (2 * margin), ht])
     sns.lineplot(x="threshold", y="best", data=plot_data, color="gray", ax=ax_mantel_scores, label="peak")
     sns.lineplot(x="threshold", y="train_score", data=plot_data, color="green", ax=ax_mantel_scores, label="train")
+    sns.scatterplot(x="threshold", y="train_score", data=peak_data, color="green", ax=ax_mantel_scores)
     sns.lineplot(x="threshold", y="test_score", data=plot_data, color="red", ax=ax_mantel_scores, label="test")
+    sns.scatterplot(x="threshold", y="test_score", data=peak_data, color="red", ax=ax_mantel_scores)
 
     rect = patches.Rectangle((158, -0.3), 5.0, 1.0, facecolor='gray', fill=True, alpha=0.25)
     ax_mantel_scores.add_patch(rect)
@@ -384,12 +389,16 @@ def plot_performance_over_thresholds(relevant_results):
     """ Middle panel is Overlap calculations. """
     ax_overlaps = fig.add_axes([margin, (2 * margin) + ht, 1.0 - (2 * margin), ht], "Real vs Shuffle Overlap Percentages")
     sns.lineplot(x="threshold", y="train_vs_test_overlap", data=plot_data, color="gray", ax=ax_overlaps, label="t-t overlap")
+    sns.scatterplot(x="threshold", y="train_vs_test_overlap", data=peak_data, color="black", ax=ax_overlaps)
     sns.lineplot(x="threshold", y="overlap_vs_agno", data=plot_data, color="green", ax=ax_overlaps, label="agno")
+    sns.scatterplot(x="threshold", y="overlap_vs_agno", data=peak_data, color="green", ax=ax_overlaps)
     sns.lineplot(x="threshold", y="overlap_vs_dist", data=plot_data, color="red", ax=ax_overlaps, label="dist")
+    sns.scatterplot(x="threshold", y="overlap_vs_dist", data=peak_data, color="red", ax=ax_overlaps)
     sns.lineplot(x="threshold", y="overlap_vs_edge", data=plot_data, color="orchid", ax=ax_overlaps, label="edge")
-    sns.scatterplot(x="threshold", y="train_vs_test_overlap", data=plot_data, color="blue", ax=ax_overlaps)
+    sns.scatterplot(x="threshold", y="overlap_vs_edge", data=peak_data, color="orchid", ax=ax_overlaps)
     v_rect = patches.Rectangle((158, 0.0), 5.0, 1.0, facecolor='gray', fill=True, alpha=0.25)
     ax_overlaps.add_patch(v_rect)
+
 
     """ Bottom panel is t-scores. """
     ax_mantel_ts = fig.add_axes([margin, margin, 1.0 - (2 * margin), ht], "Mantel T Scores")
