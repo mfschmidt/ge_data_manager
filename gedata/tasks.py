@@ -533,7 +533,10 @@ def calc_real_v_shuffle_overlaps(row, df):
     if row.shuffle == 'none':
         overlaps = []
         for shuffled_tsv in df[(df['threshold'] == row.threshold)]['path']:
-            overlaps.append(algorithms.pct_similarity([row.path, shuffled_tsv], top=row.threshold))
+            top_threshold = row.threshold
+            if top_threshold == "peak" or top_threshold == 0:
+                top_threshold = None
+            overlaps.append(algorithms.pct_similarity([row.path, shuffled_tsv], top=top_threshold))
         return np.mean(overlaps)
     else:
         return 0.0
@@ -734,7 +737,7 @@ def assess_performance(self, plot_descriptor, data_root="/data"):
     """
 
     # It's tough to pass a list of thresholds via url, so it's hard-coded here.
-    thresholds = [4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 28, 32, 48, 64, 80,
+    thresholds = [0, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 28, 32, 48, 64, 80,
                   96, 128, 157, 160, 192, 224, 256, 298, 320, 352, 384, 416, 448, 480, 512, ]
     progress_recorder = ProgressRecorder(self)
 
@@ -750,32 +753,36 @@ def assess_performance(self, plot_descriptor, data_root="/data"):
     ))
 
     if len(rdict['qs']) > 0:
-        relevant_results = []
-
-        """ Calculate (or load) stats for individual tsv files. """
-        for i, path in enumerate(rdict['qs'].values('tsv_path')):
-            if os.path.isfile(path['tsv_path']):
-                for j, threshold in enumerate(thresholds):
-                    relevant_results.append(
-                        results_as_dict(path['tsv_path'], base_path=data_root, probe_sig_threshold=threshold)
-                    )
-                    progress_recorder.set_progress(
-                        2 + ((i * len(thresholds) + j) / total) * 88, 100, "Processing {:,}/{:,} results".format(i, n)
-                    )
-            else:
-                print("ERR: DOES NOT EXIST: {}".format(path['tsv_path']))
-        rdf = pd.DataFrame(relevant_results)
-
-        # Just temporarily, in case debugging offline is necessary
-        os.makedirs(os.path.join(data_root, "plots", "cache"), exist_ok=True)
-        rdf.to_pickle(os.path.join(data_root, "plots", "cache", "{}_ap_pre.df".format(plot_descriptor.lower())))
         post_file = os.path.join(data_root, "plots", "cache", "{}_ap_post.df".format(plot_descriptor.lower()))
-
-        """ Calculate grouped stats, overlap between each tsv file and its shuffle-based 'peers'. """
         if os.path.isfile(post_file):
             with open(post_file, "rb") as f:
                 rdf = pickle.load(f)
         else:
+
+            relevant_results = []
+
+            """ Calculate (or load) stats for individual tsv files. """
+            for i, path in enumerate(rdict['qs'].values('tsv_path')):
+                if os.path.isfile(path['tsv_path']):
+                    for j, threshold in enumerate(thresholds):
+                        relevant_results.append(
+                            results_as_dict(
+                                path['tsv_path'], base_path=data_root,
+                                probe_sig_threshold=None if threshold == 0 else threshold
+                            )
+                        )
+                        progress_recorder.set_progress(
+                            2 + ((i * len(thresholds) + j) / total) * 88, 100, "Processing {:,}/{:,} results".format(i, n)
+                        )
+                else:
+                    print("ERR: DOES NOT EXIST: {}".format(path['tsv_path']))
+            rdf = pd.DataFrame(relevant_results)
+
+            # Just temporarily, in case debugging offline is necessary
+            os.makedirs(os.path.join(data_root, "plots", "cache"), exist_ok=True)
+            rdf.to_pickle(os.path.join(data_root, "plots", "cache", "{}_ap_pre.df".format(plot_descriptor.lower())))
+
+            """ Calculate grouped stats, overlap between each tsv file and its shuffle-based 'peers'. """
             progress_recorder.set_progress(90, 100, "Generating overlap lists")
             rdf['split'] = rdf['path'].apply(extract_seed, args=("batch-train", ))
             splits = list(set(rdf['split']))
@@ -813,7 +820,7 @@ def assess_performance(self, plot_descriptor, data_root="/data"):
         phase_mask = rdf['phase'] == rdict['phase']
 
         f_full_perf, a_full_perf = plot_performance_over_thresholds(
-            rdf[phase_mask & (rdf['shuffle'] == 'none')], rdict['phase'], 'none'
+            rdf[(rdf['phase'] == rdict['phase']) & (rdf['shuffle'] == 'none')],
         )
         # f_full_perf.savefig(os.path.join(data_root, "plots", "{}_performance.png".format(plot_descriptor[: -4])))
         f_full_perf.savefig(os.path.join(data_root, "plots", "{}_performance.png".format(plot_descriptor)))

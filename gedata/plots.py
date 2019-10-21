@@ -358,29 +358,41 @@ def describe_overlap(df, title="Title"):
     return "\n".join(d)
 
 
-def plot_performance_over_thresholds(relevant_results, phase, shuffle):
+def plot_performance_over_thresholds(relevant_results):
     """ Generate a figure with three axes for Mantels, T scores, and Overlaps by threshold. """
 
-    plot_data = relevant_results[(relevant_results['phase'] == phase) & (relevant_results['shuffle'] == shuffle)]
+    plot_data = relevant_results
+    plot_data['threshold'] = plot_data['threshold'].apply(int)
 
     fig, ax_mantel_scores = plt.subplots(figsize=(10, 12))
     margin = 0.04
     ht = 0.28
 
+    """ Top panel is Mantel correlations. """
     ax_mantel_scores.set_position([margin, 1.0 - margin - ht, 1.0 - (2 * margin), ht])
     sns.lineplot(x="threshold", y="best", data=plot_data, color="gray", ax=ax_mantel_scores, label="peak")
     sns.lineplot(x="threshold", y="train_score", data=plot_data, color="green", ax=ax_mantel_scores, label="train")
     sns.lineplot(x="threshold", y="test_score", data=plot_data, color="red", ax=ax_mantel_scores, label="test")
-    sns.lineplot(x="threshold", y="train_vs_test_overlap", data=plot_data, color="orchid", ax=ax_mantel_scores, label="t-t overlap")
 
     rect = patches.Rectangle((158, -0.3), 5.0, 1.0, facecolor='gray', fill=True, alpha=0.25)
     ax_mantel_scores.add_patch(rect)
 
-    ax_mantel_scores.legend(labels=['peak', 'train', 'test', 'overlap'])
-    plt.suptitle("Scores by top probe threshold in '{}, {}-shuffled' data".format(phase, shuffle))
+    ax_mantel_scores.legend(labels=['peak', 'train', 'test'])
+    plt.suptitle("Scores by top probe threshold")
     ax_mantel_scores.set_ylabel('Mantel correlation')
 
-    ax_mantel_ts = fig.add_axes([margin, (2 * margin) + ht, 1.0 - (2 * margin), ht], "Mantel T Scores")
+    """ Middle panel is Overlap calculations. """
+    ax_overlaps = fig.add_axes([margin, (2 * margin) + ht, 1.0 - (2 * margin), ht], "Real vs Shuffle Overlap Percentages")
+    sns.lineplot(x="threshold", y="train_vs_test_overlap", data=plot_data, color="gray", ax=ax_overlaps, label="t-t overlap")
+    sns.lineplot(x="threshold", y="overlap_vs_agno", data=plot_data, color="green", ax=ax_overlaps, label="agno")
+    sns.lineplot(x="threshold", y="overlap_vs_dist", data=plot_data, color="red", ax=ax_overlaps, label="dist")
+    sns.lineplot(x="threshold", y="overlap_vs_edge", data=plot_data, color="orchid", ax=ax_overlaps, label="edge")
+    sns.scatterplot(x="threshold", y="train_vs_test_overlap", data=plot_data, color="blue", ax=ax_overlaps)
+    v_rect = patches.Rectangle((158, 0.0), 5.0, 1.0, facecolor='gray', fill=True, alpha=0.25)
+    ax_overlaps.add_patch(v_rect)
+
+    """ Bottom panel is t-scores. """
+    ax_mantel_ts = fig.add_axes([margin, margin, 1.0 - (2 * margin), ht], "Mantel T Scores")
     sns.lineplot(x="threshold", y="t_mantel_agno", data=plot_data, color="green", ax=ax_mantel_ts, label="agno")
     sns.lineplot(x="threshold", y="t_mantel_dist", data=plot_data, color="red", ax=ax_mantel_ts, label="dist")
     sns.lineplot(x="threshold", y="t_mantel_edge", data=plot_data, color="orchid", ax=ax_mantel_ts, label="edge")
@@ -391,16 +403,7 @@ def plot_performance_over_thresholds(relevant_results, phase, shuffle):
     ax_mantel_ts.add_patch(h_rect)
 
     ax_mantel_ts.legend(labels=['agno', 'dist', 'edge', ])
-    plt.suptitle("T Scores by Mantel in train Mantels vs {}-shuffled Mantels".format(phase, shuffle))
     ax_mantel_ts.set_ylabel('T score')
-
-    ax_overlaps = fig.add_axes([margin, margin, 1.0 - (2 * margin), ht], "Real vs Shuffle Overlap Percentages")
-    sns.lineplot(x="threshold", y="overlap_vs_agno", data=plot_data, color="green", ax=ax_overlaps, label="agno")
-    sns.lineplot(x="threshold", y="overlap_vs_dist", data=plot_data, color="red", ax=ax_overlaps, label="dist")
-    sns.lineplot(x="threshold", y="overlap_vs_edge", data=plot_data, color="orchid", ax=ax_overlaps, label="edge")
-
-    v_rect = patches.Rectangle((158, 0.0), 5.0, 1.0, facecolor='gray', fill=True, alpha=0.25)
-    ax_overlaps.add_patch(v_rect)
 
     return fig, (ax_mantel_scores, ax_mantel_scores, ax_mantel_ts)
 
