@@ -180,6 +180,15 @@ table#inventory_table td {
 table#inventory_table td.data_cell {
     border: 1px solid black;
 }
+.osdc_active {
+    background-color: #f0fff0;
+}
+.osdc_complete {
+    background-color: #ffffff;
+}
+.osdc_neglected {
+    background-color: #fff0f0;
+}
 
 /* Comparison and Performance menus */
 table.menu_table {
