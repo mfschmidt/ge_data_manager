@@ -640,7 +640,8 @@ def assess_mantel(self, plot_descriptor, data_root="/data"):
     progress_recorder.set_progress(86, 100, "Building probe to gene map")
 
     """ Write out relevant gene lists as html. """
-    description = describe_genes(rdf, rdict, progress_recorder)
+    df_ranked, description = describe_genes(rdf, rdict, progress_recorder)
+    df_ranked.to_csv(os.path.join(data_root, "plots", "{}_ranked.csv".format(plot_descriptor.lower())))
     with open(os.path.join(data_root, "plots", "{}_genes.html".format(plot_descriptor.lower())), 'w') as f:
         f.write(description)
 
@@ -705,11 +706,12 @@ def assess_overlap(self, plot_descriptor, data_root="/data"):
     progress_recorder.set_progress(90, 100, "Generating plot")
     print("Plotting overlaps with {} threshold(s).".format(len(set(rdf['threshold']))))
     f_overlap, axes = plot_overlap(
-        rdf, title="Overlaps: {}s, split by {}, {}-masked, {}-ranked, by {}, top-{}".format(
+        rdf,
+        title="Overlaps: {}s, split by {}, {}-masked, {}-ranked, by {}, top-{}".format(
             rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], plot_descriptor[:3].upper(),
             'peak' if rdict['threshold'] is None else rdict['threshold']
         ),
-        fig_size=(12, 7), ymin=0.0, ymax=1.0,
+        fig_size=(12, 7), y_min=0.0, y_max=1.0,
     )
     f_overlap.savefig(os.path.join(data_root, "plots", "{}_overlap.png".format(plot_descriptor.lower())))
 
@@ -797,17 +799,17 @@ def assess_performance(self, plot_descriptor, data_root="/data"):
                         "overlap list {}:{}/{}:{}".format(k, len(shuffles), l, len(splits))
                     )
                     split_mask = rdf['split'] == split
-                    # We can only do this in training data, unless we want to double the workload above for test, too.
+                    # We can only do this in training data, unless we want to double the prior workload for test, too.
                     # Generate a list of lists for each file's single 'train_overlap' cell in our dataframe.
                     # At this point, rdf is typically a (num thresholds *) 784-row dataframe of each result.tsv path and its scores.
                     # We apply these functions to only the 'none'-shuffled rows, but pass them the shuffled rows for comparison
                     rdf["t_mantel_" + shuffle] = rdf[rdf['shuffle'] == 'none'].apply(
                         calc_ttests, axis=1, df=rdf[shuffle_mask & split_mask]
                     )
-                    rdf["overlap_vs_" + shuffle] = rdf[rdf['shuffle'] == 'none'].apply(
+                    rdf["overlap_real_vs_" + shuffle] = rdf[rdf['shuffle'] == 'none'].apply(
                         calc_real_v_shuffle_overlaps, axis=1, df=rdf[shuffle_mask & split_mask]
                     )
-                    # rdf["complete_overlap_vs_" + shuffle] = rdf[rdf['shuffle'] == 'none'].apply(
+                    # rdf["tau_real_vs_" + shuffle] = rdf[rdf['shuffle'] == 'none'].apply(
                     #     calc_total_overlap, axis=1, df=rdf[shuffle_mask & split_mask]
                     # )
                 # rdf["complete_overlap_vs_" + shuffle] = rdf.apply(calc_total_overlap, axis=1, df=rdf[shuffle_mask])
@@ -817,7 +819,6 @@ def assess_performance(self, plot_descriptor, data_root="/data"):
 
         progress_recorder.set_progress(95, 100, "Generating plot")
         # Plot performance of thresholds on correlations.
-        phase_mask = rdf['phase'] == rdict['phase']
 
         f_full_perf, a_full_perf = plot_performance_over_thresholds(
             rdf[(rdf['phase'] == rdict['phase']) & (rdf['shuffle'] == 'none')],
