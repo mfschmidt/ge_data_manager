@@ -58,17 +58,18 @@ class InventoryView(generic.ListView):
     def get_context_data(self, **kwargs):
         base_str_n = '<p>{n_none:,} ({n_agno:,}+{n_dist:,}+{n_edge:,}) '
 
-        def span_str(r_id, metric, icon, threshold=""):
+        def span_str(r_id, metric, ext, icon, threshold=""):
+            """ Return the html <span ...><a href=...><i ...></i></a></span> for a particular item. """
             if metric == "performance":
-                img_file = '{rid}_{metric}.png'.format(rid=r_id, metric=metric)
+                img_file = '{rid}_{metric}.{ext}'.format(rid=r_id, metric=metric, ext=ext)
             else:
                 img_file = '{rid}{threshold}_{metric}.{ext}'.format(
-                    rid=r_id, threshold=threshold, metric=metric, ext="html" if metric == "genes" else "png"
+                    rid=r_id, threshold=threshold, metric=metric, ext=ext,
                 )
 
             img_url = '/static/gedata/plots/{img_file}'.format(img_file=img_file)
             if os.path.isfile('/data/plots/{img_file}'.format(img_file=img_file)):
-                anchor = '<a href="{url}" target="+_blank"><i class="fas {icon}"></i></a>'.format(
+                anchor = '<a href="{url}" target="_blank"><i class="fas {icon}"></i></a>'.format(
                     url=img_url, icon=icon
                 )
             else:
@@ -76,7 +77,7 @@ class InventoryView(generic.ListView):
                     icon=icon
                 )
             return '<span id="{rid}{metric}">{anchor}</span>'.format(
-                rid=rid, metric=metric,anchor=anchor
+                rid=rid, metric=metric, anchor=anchor
             )
 
         initial_queryset = PushResult.objects.filter(
@@ -99,9 +100,10 @@ class InventoryView(generic.ListView):
                         )
                         rid = "{}{}{}{}{}".format(c, p, s, m, 's')
                         span_strings = "<br />".join([" ".join([
-                            span_str(rid, "mantel", "fa-box-up", threshold[0]),
-                            span_str(rid, "overlap", "fa-object-group", threshold[0]),
-                            span_str(rid, "genes", "fa-dna", threshold[0]),
+                            span_str(rid, "mantel", "png", "fa-box-up", threshold[0]),
+                            span_str(rid, "overlap", "png", "fa-object-group", threshold[0]),
+                            span_str(rid, "genes", "html", "fa-dna", threshold[0]),
+                            span_str(rid, "ranked", "csv", "fa-list-ol", threshold[0]),
                             "@", threshold[1],
                         ]) for threshold in thresholds])
                         context[rid] = " ".join([
@@ -111,7 +113,7 @@ class InventoryView(generic.ListView):
                                 n_dist=len(final_queryset.filter(shuffle="distshuffles")),
                                 n_edge=len(final_queryset.filter(shuffle="edgeshuffles")),
                             ),
-                            span_str(rid, "performance", "fa-chart-line"),
+                            span_str(rid, "performance", "png", "fa-chart-line"),
                             "<br />",
                             span_strings,
                         ])
