@@ -265,7 +265,7 @@ def describe_mantel(df, title="Title"):
     return "\n".join(d)
 
 
-def plot_overlap(df, title="Title", fig_size=(8, 8), ymin=None, ymax=None):
+def plot_overlap(df, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
     """ Plot everything from initial distributions, through training curves, to training outcomes.
         Then the results of using discovered genes in train and test sets both complete and masked.
         Then even report overlap internal to each cluster of differing gene lists.
@@ -273,8 +273,8 @@ def plot_overlap(df, title="Title", fig_size=(8, 8), ymin=None, ymax=None):
         :param pandas.DataFrame df:
         :param str title: The title to put on the top of the whole plot
         :param fig_size: A tuple of inches across x inches high
-        :param ymin: Hard code the bottom of the y-axis
-        :param ymax: Hard code the top of the y-axis
+        :param y_min: Hard code the bottom of the y-axis
+        :param y_max: Hard code the top of the y-axis
     """
 
     fig = plt.figure(figsize=fig_size)
@@ -290,38 +290,16 @@ def plot_overlap(df, title="Title", fig_size=(8, 8), ymin=None, ymax=None):
     fig.text(0.50, 0.99, title, ha='center', va='top', fontsize=14)
 
     """ Internal overlap plots """
-    fig.text(x_left, 1.0 - (2 * margin) + 0.01, "A) Overlap within splits and shuffles", ha='left', va='bottom', fontsize=12)
-    ax_internal_shuffle = box_and_swarm(
-        fig, [x_left + (0 * (margin + box_width)), bottom, box_width, box_height],
-        'by shuffle', 'overlap_by_seed', df, orientation="v", ps=False, cols=4,
+    fig.text(x_left, 1.0 - (2 * margin) + 0.01, "Overlap between actual training data and shuffles", ha='left', va='bottom', fontsize=12)
+    df.loc[df['shuffle'] == 'none', 'real_v_shuffle_overlap'] = df.loc[df['shuffle'] == 'none', 'overlap_by_seed']
+    ax = box_and_swarm(
+        fig, [x_left, bottom, box_width, box_height],
+        'train vs shuffles', 'real_v_shuffle_overlap', df, orientation="v", ps=True
     )
-    if (ymin is not None) and (ymax is not None):
-        ax_internal_shuffle.set_ylim(bottom=ymin, top=ymax)
-    ax_internal_split = box_and_swarm(
-        fig, [x_left + (1 * (margin + box_width)), bottom, box_width, box_height],
-        'by split', 'overlap_by_split', df[df['shuffle'] != 'none'], orientation="v", ps=False, cols=3,
-        lim=ax_internal_shuffle.get_ylim()
-    )
+    if (y_min is not None) and (y_max is not None):
+        ax.set_ylim(bottom=y_min, top=y_max)
 
-    """ Overlap between training split and shuffled splits """
-    fig.text(x_left + (2 * (margin + box_width)), 1.0 - (2 * margin) + 0.01, "B) train vs shuffles",
-             ha='left', va='bottom', fontsize=12)
-    ax_train_shuffle = box_and_swarm(
-        fig, [x_left + (2 * (margin + box_width)), bottom, box_width, box_height],
-        'train vs shuffles', 'real_v_shuffle_overlap', df[df['shuffle'] != 'none'], orientation="v", ps=False, cols=3,
-        lim=ax_internal_shuffle.get_ylim(),
-    )
-
-    """ Train box and swarm plots """
-    fig.text(x_left + (3 * (margin + box_width)), 1.0 - (2 * margin) + 0.01, "C) train vs test",
-             ha='left', va='bottom', fontsize=12)
-    ax_train_test = box_and_swarm(
-        fig, [x_left + (3 * (margin + box_width)), bottom, box_width / 2, box_height],
-        'train vs test', 'train_vs_test_overlap', df, orientation="v", ps=False, cols=1,
-        lim=ax_internal_shuffle.get_ylim()
-    )
-
-    return fig, (ax_internal_split, ax_internal_shuffle, ax_train_shuffle, ax_train_test)
+    return fig, (ax, )
 
 
 def describe_overlap(df, title="Title"):
@@ -390,15 +368,14 @@ def plot_performance_over_thresholds(relevant_results):
     ax_overlaps = fig.add_axes([margin, (2 * margin) + ht, 1.0 - (2 * margin), ht], "Real vs Shuffle Overlap Percentages")
     sns.lineplot(x="threshold", y="train_vs_test_overlap", data=plot_data, color="gray", ax=ax_overlaps, label="t-t overlap")
     sns.scatterplot(x="threshold", y="train_vs_test_overlap", data=peak_data, color="black", ax=ax_overlaps)
-    sns.lineplot(x="threshold", y="overlap_vs_agno", data=plot_data, color="green", ax=ax_overlaps, label="agno")
-    sns.scatterplot(x="threshold", y="overlap_vs_agno", data=peak_data, color="green", ax=ax_overlaps)
-    sns.lineplot(x="threshold", y="overlap_vs_dist", data=plot_data, color="red", ax=ax_overlaps, label="dist")
-    sns.scatterplot(x="threshold", y="overlap_vs_dist", data=peak_data, color="red", ax=ax_overlaps)
-    sns.lineplot(x="threshold", y="overlap_vs_edge", data=plot_data, color="orchid", ax=ax_overlaps, label="edge")
-    sns.scatterplot(x="threshold", y="overlap_vs_edge", data=peak_data, color="orchid", ax=ax_overlaps)
+    sns.lineplot(x="threshold", y="overlap_real_vs_agno", data=plot_data, color="green", ax=ax_overlaps, label="agno")
+    sns.scatterplot(x="threshold", y="overlap_real_vs_agno", data=peak_data, color="green", ax=ax_overlaps)
+    sns.lineplot(x="threshold", y="overlap_real_vs_dist", data=plot_data, color="red", ax=ax_overlaps, label="dist")
+    sns.scatterplot(x="threshold", y="overlap_real_vs_dist", data=peak_data, color="red", ax=ax_overlaps)
+    sns.lineplot(x="threshold", y="overlap_real_vs_edge", data=plot_data, color="orchid", ax=ax_overlaps, label="edge")
+    sns.scatterplot(x="threshold", y="overlap_real_vs_edge", data=peak_data, color="orchid", ax=ax_overlaps)
     v_rect = patches.Rectangle((158, 0.0), 5.0, 1.0, facecolor='gray', fill=True, alpha=0.25)
     ax_overlaps.add_patch(v_rect)
-
 
     """ Bottom panel is t-scores. """
     ax_mantel_ts = fig.add_axes([margin, margin, 1.0 - (2 * margin), ht], "Mantel T Scores")

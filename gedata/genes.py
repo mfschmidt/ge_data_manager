@@ -124,9 +124,9 @@ def describe_genes(rdf, rdict, progress_recorder):
 
     """ Next, for the description file, report top genes. """
     progress_recorder.set_progress(95, 100, "Summarizing genes")
-    line1 = "Top {} genes from {}, {}-ranked by-{}, mask={}".format(
+    line1 = "Top {} genes from {} {}, {}-ranked by-{}, mask={}".format(
         '"peak"' if rdict['threshold'] is None else rdict['threshold'],
-        rdict['phase'], rdict['algo'], rdict['splby'], rdict['mask']
+        len(relevant_tsvs), rdict['phase'], rdict['algo'], rdict['splby'], rdict['mask']
     )
     line2 = "This is a ranking of ALL probes, so the selected threshold does not change it."
     output.append("<p>" + line1 + " " + line2 + "</p>\n  <ol>")
@@ -157,6 +157,6 @@ def describe_genes(rdf, rdict, progress_recorder):
     output.append("    <p>Asterisks indicate probes making the top {} in all 16 splits.</p>".format(rdict['threshold']))
     output.append("</div>")
 
-    return "\n".join(output)
+    return all_ranked[["rank", "entrez_id", ]].set_index("rank"), "\n".join(output)
 
 
