@@ -168,16 +168,16 @@ table.footer_summary td {
 }
 
 /* Inventory table */
-table#inventory_table th {
+table.inventory_table th {
     background-color: lightgray;
     text-align: center;
 }
-table#inventory_table td {
+table.inventory_table td {
     width: auto;
     padding: 4px;
     margin: 4px;
 }
-table#inventory_table td.data_cell {
+table.inventory_table td.data_cell {
     border: 1px solid black;
 }
 .osdc_active {

@@ -2,7 +2,7 @@
 
 {% block content %}
 
-    <table id="inventory_table">
+    <table class="inventory_table">
         <!-- Table Header -->
         <tr>
             <th>parcel</th>
@@ -84,6 +84,39 @@
     <p>Cells with <span class="osdc_complete">white backgrounds</span> are complete.</p>
     <p><span class="osdc_active">Pale green</span> backgrounds indicate sets currently active on OSDC.</p>
     <p><span class="osdc_neglected">Pale red</span> backgrounds indicate neglected sets.</p>
+
+    <table class="inventory_table">
+        <!-- Table Header -->
+        <tr>
+            <th>parcel</th>
+            <th>split</th>
+            <th>comp</th>
+            <th colspan="2">mask</th>
+        </tr>
+        <tr>
+            <th colspan="3"></th>
+            <th>none</th>
+            <th>&lt; 16mm</th>
+        </tr>
+        <!-- Table Body -->
+        <tr>
+            <th rowspan="3">glasser</th>
+            <th rowspan="3">glasser</th>
+            <th>fear-neutral</th>
+            <td id="fn_gg00s" class="data_cell osdc_complete">{{ fn_gg00s |safe }}</td>
+            <td id="fn_gg16s" class="data_cell osdc_complete">{{ fn_gg16s |safe }}</td>
+        </tr>
+        <tr>
+            <th>fear</th>
+            <td id="f__gg00s" class="data_cell osdc_complete">{{ f__gg00s |safe }}</td>
+            <td id="f__gg16s" class="data_cell osdc_complete">{{ f__gg16s |safe }}</td>
+        </tr>
+        <tr>
+            <th>neutral</th>
+            <td id="n__gg00s" class="data_cell osdc_complete">{{ n__gg00s |safe }}</td>
+            <td id="n__gg16s" class="data_cell osdc_complete">{{ n__gg16s |safe }}</td>
+        </tr>
+    </table>
     <!-- The button has been replaced by just calculating it all in the django view
     <button id="inventory_table_refresh_button" class="btn footer_button" onclick="fillInventoryTable();"><i class="fas fa-sync"></i> fill table</button>
     -->
