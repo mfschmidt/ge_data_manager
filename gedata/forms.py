@@ -8,7 +8,7 @@ from .models import PushResult, ResultSummary
 
 """ Common selection options """
 parcels = [('w', 'wellid'), ('g', 'Glasser'), ]
-comps = [('nki', 'NKI'), ('hcp', 'HCP'), ]
+comps = [('nki', 'NKI'), ('hcp', 'HCP'), ('f__', 'Fear'), ('n__', 'Neutral'), ('fn_', 'Fear - neutral'), ]
 masks = [('00', 'none'), ('16', '16'), ('32', '32'), ('64', '64'), ]
 algos = [('s', 'smrt'), ('o', 'once'), ]
 thresholds = [('peak', 'peak'), ('0079', 'top 0.5%'), ('0157', 'top 1%'), ]
@@ -158,6 +158,12 @@ def image_dict_from_selection(selection):
             image_dict['comp'] = "indiglasserconnsim"
         elif selection[3].lower() == "w":
             image_dict['comp'] = "indiconnsim"
+    elif selection[:3].lower() == "f__":
+        image_dict['comp'] = "fearglassersim"
+    elif selection[:3].lower() == "n__":
+        image_dict['comp'] = "neutralglassersim"
+    elif selection[:3].lower() == "fn_":
+        image_dict['comp'] = "fearneutralglassersim"
 
     image_dict['description'] = "parby-{}_splby-{} ~ {} mask-{} {}".format(
         "glasser" if selection[3].lower() == "g" else "wellid",

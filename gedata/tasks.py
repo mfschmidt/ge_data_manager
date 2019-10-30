@@ -229,10 +229,22 @@ def comp_from_signature(signature, filename=False):
         'hcpw': 'hcpniftismoothgrandmeansim',
         'nkig': 'indiglasserconnsim',
         'nkiw': 'indiconnsim',
+        'f__g': 'fearglassersim',
+        'f__w': 'fearsim',
+        'n__g': 'neutralglassersim',
+        'n__w': 'neutralsim',
+        'fn_g': 'fearneutralglassersim',
+        'fn_w': 'fearneutralsim',
         'glasserconnectivitysim': 'glasser-connectivity_sim.df',
         'hcpniftismoothgrandmeansim': 'hcp_niftismooth_grandmean_sim.df',
         'indiglasserconnsim': 'indi-glasser-conn_sim.df',
         'indiconnsim': 'indi-connectivity_sim.df',
+        'fearglassersim': 'fear_glasser_sim.df',
+        'fearsim': 'fear_sim.df',
+        'neutralglassersim': 'neutral_glasser_sim.df',
+        'neutralsim': 'neutral_sim.df',
+        'fearneutralglassersim': 'fear-neutral_glasser_sim.df',
+        'fearneutralsim': 'fear-neutral_sim.df',
     }
     if filename:
         return comp_map[comp_map[signature.lower()]]
@@ -615,6 +627,7 @@ def assess_mantel(self, plot_descriptor, data_root="/data"):
     progress_recorder = ProgressRecorder(self)
 
     rdict, rdf = collect_results(plot_descriptor, progress_recorder, progress_from=0, progress_to=80, data_root=data_root)
+    print("{} records for Mantel assessment.".format(len(rdf)))
 
     progress_recorder.set_progress(80, 100, "Generating plot")
     f_train_test, axes = plot_all_train_vs_test(
