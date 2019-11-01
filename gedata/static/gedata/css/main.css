@@ -180,6 +180,9 @@ table.inventory_table td {
 table.inventory_table td.data_cell {
     border: 1px solid black;
 }
+table.inventory_table td.osdc_primary {
+    border: 3px solid black;
+}
 .osdc_active {
     background-color: #f0fff0;
 }
