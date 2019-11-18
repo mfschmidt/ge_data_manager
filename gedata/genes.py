@@ -157,6 +157,6 @@ def describe_genes(rdf, rdict, progress_recorder):
     output.append("    <p>Asterisks indicate probes making the top {} in all 16 splits.</p>".format(rdict['threshold']))
     output.append("</div>")
 
-    return all_ranked[["rank", "entrez_id", ]].set_index("rank"), "\n".join(output)
+    return all_ranked.set_index("rank"), "\n".join(output)
 
 
