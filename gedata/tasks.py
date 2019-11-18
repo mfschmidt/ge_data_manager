@@ -314,7 +314,7 @@ def one_mask(df, mask_type, sample_type, data_dir="/data"):
                 mask_df.shape[0], mask_df.shape[1]
             ))
             print("  M    with {:,} True, {:,} False, {:,} NaNs in triangle.".format(
-                mask_trues, mask_falses, np.count_nonzero(np.isnan(mask_vector))
+                mask_trues, mask_falses, np.count_nonzero(mask_vector.isnan())
             ))
 
             shaped_mask_df = mask_df.reindex(index=df.columns, columns=df.columns)
@@ -376,8 +376,8 @@ def test_score(tsv_file, base_path='/data', own_expr=False, mask='none', probe_s
     expr_file = os.path.join(base_path,
                              "splits", "sub-all_hem-A_samp-glasser_prob-fornito",
                              "batch-{}".format(batch),
-                             "parcelby-{}_splitby-{}.df".format(bids_val('parby', tsv_file),
-                                                                bids_val('splby', tsv_file))
+                             "parcelby-{}_splitby-{}.df".format(
+                                 bids_val('parby', tsv_file), bids_val('splby', tsv_file))
                              )
     # If comp_from_signature is given a comp BIDS string, it will return the filename of the comp file.
     comp_file = os.path.join(base_path, "conn", comp_from_signature(bids_val('comp', tsv_file)))
@@ -653,8 +653,10 @@ def assess_mantel(self, plot_descriptor, data_root="/data"):
     progress_recorder.set_progress(86, 100, "Building probe to gene map")
 
     """ Write out relevant gene lists as html. """
-    df_ranked, description = describe_genes(rdf, rdict, progress_recorder)
-    df_ranked.to_csv(os.path.join(data_root, "plots", "{}_ranked.csv".format(plot_descriptor.lower())))
+    df_ranked_full, description = describe_genes(rdf, rdict, progress_recorder)
+    df_ranked_full.to_csv(os.path.join(data_root, "plots", "{}_ranked_full.csv".format(plot_descriptor.lower())))
+    df_ranked_final = df_ranked_full[['rank', 'entrez_id', ]]
+    df_ranked_final.to_csv(os.path.join(data_root, "plots", "{}_ranked.csv".format(plot_descriptor.lower())))
     with open(os.path.join(data_root, "plots", "{}_genes.html".format(plot_descriptor.lower())), 'w') as f:
         f.write(description)
 
