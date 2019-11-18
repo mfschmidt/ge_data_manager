@@ -655,7 +655,7 @@ def assess_mantel(self, plot_descriptor, data_root="/data"):
     """ Write out relevant gene lists as html. """
     df_ranked_full, description = describe_genes(rdf, rdict, progress_recorder)
     df_ranked_full.to_csv(os.path.join(data_root, "plots", "{}_ranked_full.csv".format(plot_descriptor.lower())))
-    df_ranked_final = df_ranked_full[['rank', 'entrez_id', ]]
+    df_ranked_final = df_ranked_full[['entrez_id', ]]
     df_ranked_final.to_csv(os.path.join(data_root, "plots", "{}_ranked.csv".format(plot_descriptor.lower())))
     with open(os.path.join(data_root, "plots", "{}_genes.html".format(plot_descriptor.lower())), 'w') as f:
         f.write(description)
