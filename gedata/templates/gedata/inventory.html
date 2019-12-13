@@ -2,6 +2,35 @@
 
 {% block content %}
 
+<h2>SRS-normalized</h2>
+    <table class="inventory_table">
+        <!-- Table Header -->
+        <tr>
+            <th>parcel</th>
+            <th>split</th>
+            <th>comp</th>
+            <th colspan="4">mask</th>
+        </tr>
+        <tr>
+            <th colspan="3"></th>
+            <th>none</th>
+            <th>&lt; 16mm</th>
+            <th>&lt; 32mm</th>
+            <th>&lt; 64mm</th>
+        </tr>
+        <!-- Table Body -->
+        <tr>
+            <th rowspan="1">wellid</th>
+            <th rowspan="1">wellid</th>
+            <th>hcp</th>
+            <td id="hcpww00ss" class="data_cell osdc_neglected">{{ hcpww00ss |safe }}</td>
+            <td id="hcpww16ss" class="data_cell osdc_complete osdc_primary">{{ hcpww16ss |safe }}</td>
+            <td id="hcpww32ss" class="data_cell osdc_active">{{ hcpww32ss |safe }}</td>
+            <td id="hcpww64ss" class="data_cell osdc_neglected">{{ hcpww64ss |safe }}</td>
+        </tr>
+    </table>
+
+<h2>Raw (from AHBA)</h2>
     <table class="inventory_table">
         <!-- Table Header -->
         <tr>
@@ -23,9 +52,9 @@
             <th rowspan="2">wellid</th>
             <th>hcp</th>
             <td id="hcpww00s" class="data_cell osdc_complete">{{ hcpww00s |safe }}</td>
-            <td id="hcpww16s" class="data_cell osdc_complete osdc_primary">{{ hcpww16s |safe }}</td>
-            <td id="hcpww32s" class="data_cell osdc_active">{{ hcpww32s |safe }}</td>
-            <td id="hcpww64s" class="data_cell osdc_active">{{ hcpww64s |safe }}</td>
+            <td id="hcpww16s" class="data_cell osdc_complete">{{ hcpww16s |safe }}</td>
+            <td id="hcpww32s" class="data_cell osdc_complete">{{ hcpww32s |safe }}</td>
+            <td id="hcpww64s" class="data_cell osdc_complete">{{ hcpww64s |safe }}</td>
         </tr>
         <tr>
             <th>nki</th>
@@ -85,6 +114,7 @@
     <p><span class="osdc_active">Pale green</span> backgrounds indicate sets currently active on OSDC.</p>
     <p><span class="osdc_neglected">Pale red</span> backgrounds indicate neglected sets.</p>
 
+<h2>Fear, Neutral, and Fear - Neutral connectivity (by raw expression similarity)</h2>
     <table class="inventory_table">
         <!-- Table Header -->
         <tr>

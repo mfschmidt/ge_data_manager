@@ -12,6 +12,7 @@ comps = [('nki', 'NKI'), ('hcp', 'HCP'), ('f__', 'Fear'), ('n__', 'Neutral'), ('
 masks = [('00', 'none'), ('16', '16'), ('32', '32'), ('64', '64'), ]
 algos = [('s', 'smrt'), ('o', 'once'), ]
 thresholds = [('peak', 'peak'), ('0079', 'top 0.5%'), ('0157', 'top 1%'), ]
+norms = [('s', 'srs'), ('n', 'none'), ]
 
 
 def unique_tuples(k, enumerated=False):
@@ -47,8 +48,8 @@ class FilterForm(forms.Form):
         label="split by (splby)", widget=forms.Select, choices=unique_tuples('splby'), initial='wellid')
     algo = forms.ChoiceField(
         label="algorithm (algo)", widget=forms.Select, choices=unique_tuples('algo'), initial='*')
-    # normalization = forms.ChoiceField(
-    #     label="normalization (norm)", widget=forms.Select, choices=unique_tuples('normalization'), initial='*')
+    norm = forms.ChoiceField(
+        label="normalization (norm)", widget=forms.Select, choices=unique_tuples('norm'), initial='srs')
     comp = forms.ChoiceField(
         label="comparator (comp)", widget=forms.Select, choices=unique_tuples('comp'), initial='*')
     mask = forms.ChoiceField(
@@ -76,12 +77,12 @@ def filter_results(request):
             result_expression = "sub-all_hem-A_samp-glasser_prob-fornito"
             result_split = "parby-{parby}_splby-{splby}_batch-*".format(**cd)
             result_process = "tgt-*_algo-{algo}".format(**cd)
-            result_file = "sub-all_comp-{comp}_mask-{mask}_norm-none_adj-none.tsv".format(**cd)
+            result_file = "sub-all_comp-{comp}_mask-{mask}_norm-{norm}_adj-none.tsv".format(**cd)
             comments.append("parcel by {}, split by {}, algo='{}', comp='{}', mask='{}'".format(
                 cd['parby'], cd['splby'], cd['algo'], cd['comp'], cd['mask']
             ))
             query_set = PushResult.objects.all()  # filter(shuffle='derivatives')
-            for filter_term in ['parby', 'splby', 'algo', 'comp', 'mask']:
+            for filter_term in ['parby', 'splby', 'algo', 'comp', 'mask', 'norm']:
                 if cd[filter_term] != '*':
                     query_set = query_set.filter(
                         sub='all', samp='glasser', prob='fornito', tgt='max', **{filter_term: cd[filter_term]}
@@ -132,12 +133,13 @@ class CompareForm(forms.Form):
         ('nkigw64s', 'parby-glasser_splby-wellid ~ indiglasserconnsim mask-64'),
         ('nkiwg00s', 'parby-wellid_splby-glasser ~ indiconnsim mask-none'),
         ('nkiww00s', 'parby-wellid_splby-wellid ~ indiconnsim mask-none'),
+        ('hcpww16ss', 'parby-wellid_splby-wellid ~ hcpniftismoothgrandmeansim mask-none norm-srs'),
     ]
     left_set = forms.ChoiceField(
-        label="start with", widget=forms.Select, choices=complete_sets, initial='hcpgg00sc',
+        label="start with", widget=forms.Select, choices=complete_sets, initial='hcpww16ss',
     )
     right_set = forms.ChoiceField(
-        label="compare with", widget=forms.Select, choices=complete_sets, initial='nkigg00sc',
+        label="compare with", widget=forms.Select, choices=complete_sets, initial='hcpww16s',
     )
 
 
@@ -171,6 +173,7 @@ def image_dict_from_selection(selection):
         image_dict['comp'],
         "none" if selection[5:] == "00" else selection[5:],
         "once" if selection[7] == "o" else "smart",
+        "srs" if (len(selection) > 8 and selection[8] == "s") else "none",
     )
 
     return image_dict
@@ -181,7 +184,7 @@ def image_dict_from_selections(clean_form_data, side):
 
     prefix='na'
     summary_string = "empty"
-    summary_template = "{comp}{pby}{sby}{mask}{algo}{test_with_mask}"
+    summary_template = "{comp}{pby}{sby}{mask}{mask}{algo}{norm}"
     if side.upper()[0] == "L":
         prefix = 'train_test'
         summary_string = summary_template.format(
@@ -190,6 +193,7 @@ def image_dict_from_selections(clean_form_data, side):
             sby=clean_form_data['left_split'].lower()[0],
             mask=clean_form_data['left_train_mask'],
             algo=clean_form_data['left_algo'],
+            norm=clean_form_data['left_norm'],
         )
     elif side.upper()[0] == "R":
         prefix = 'train_test'
@@ -199,6 +203,7 @@ def image_dict_from_selections(clean_form_data, side):
             sby=clean_form_data['right_split'].lower()[0],
             mask=clean_form_data['right_train_mask'],
             algo=clean_form_data['right_algo'],
+            norm=clean_form_data['right_norm'],
         )
     elif side.lower() == "performance":
         prefix='performance'
@@ -208,6 +213,7 @@ def image_dict_from_selections(clean_form_data, side):
             sby=clean_form_data['split'].lower()[0],
             mask=clean_form_data['train_mask'],
             algo=clean_form_data['algo'],
+            norm=clean_form_data['norm'],
         )
     image_dict = {
         'url': "/static/plots/{}_{}.png".format(prefix, summary_string),
@@ -250,6 +256,7 @@ class ComparisonForm(forms.Form):
     left_comp = forms.ChoiceField(label="connectivity", widget=forms.Select, choices=comps, initial="nki")
     left_train_mask = forms.ChoiceField(label="train mask", widget=forms.Select, choices=masks, initial="00")
     left_algo = forms.ChoiceField(label="algorithm", widget=forms.Select, choices=algos, initial="s")
+    left_norm = forms.ChoiceField(label="normalization", widget=forms.Select, choices=norms, initial="s")
     left_threshold = forms.ChoiceField(label="threshold", widget=forms.Select, choices=thresholds, initial="peak")
 
     right_parcel = forms.ChoiceField(label="parcel", widget=forms.Select, choices=parcels, initial="w")
@@ -257,6 +264,7 @@ class ComparisonForm(forms.Form):
     right_comp = forms.ChoiceField(label="connectivity", widget=forms.Select, choices=comps, initial="nki")
     right_train_mask = forms.ChoiceField(label="train mask", widget=forms.Select, choices=masks, initial="00")
     right_algo = forms.ChoiceField(label="algorithm", widget=forms.Select, choices=algos, initial="s")
+    right_norm = forms.ChoiceField(label="normalization", widget=forms.Select, choices=norms, initial="s")
     right_threshold = forms.ChoiceField(label="threshold", widget=forms.Select, choices=thresholds, initial="peak")
 
 
@@ -297,6 +305,7 @@ class ResultsetForm(forms.Form):
     comp = forms.ChoiceField(label="connectivity", widget=forms.Select, choices=comps, initial="nki")
     train_mask = forms.ChoiceField(label="train mask", widget=forms.Select, choices=masks, initial="00")
     algo = forms.ChoiceField(label="algorithm", widget=forms.Select, choices=algos, initial="s")
+    norm = forms.ChoiceField(label="normalization", widget=forms.Select, choices=norms, initial="s")
     threshold = forms.ChoiceField(label="threshold", widget=forms.Select, choices=thresholds, initial="peak")
 
 

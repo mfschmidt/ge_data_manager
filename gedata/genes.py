@@ -49,8 +49,8 @@ def pervasive_probes(tsvs, top):
 def ranked_probes(tsvs, top):
     """ Go through the files provided, at the threshold specified, and report probes in all files. """
 
-    print("    These results average {:0.2%} overlap.".format(
-        algorithms.pct_similarity(tsvs, map_probes_to_genes_first=False, top=top)
+    print("    These {:,} results average {:0.2%} overlap.".format(
+        len(tsvs), algorithms.pct_similarity(tsvs, map_probes_to_genes_first=False, top=top)
     ))
     all_rankings = pd.DataFrame()
     for i, tsv in enumerate(tsvs):
@@ -113,6 +113,7 @@ def describe_genes(rdf, rdict, progress_recorder):
 
     output = ["<p>Comparison of Mantel correlations between the test half (using probes discovered in the train half) vs connectivity similarity.</p>",
               "<ol>"]
+    # Calculate p with a t-test between real and shuffled.
     for shf in ['edge', 'dist', 'agno']:
         t, p = ttest_ind(
             # 'test_score' is in the test set, could do 'train_score', too
@@ -120,6 +121,12 @@ def describe_genes(rdf, rdict, progress_recorder):
             rdf[rdf['shuffle'] == shf]['test_score'].values,
         )
         output.append("  <li>discovery in real vs discovery in {}: t = {:0.2f}, p = {:0.10f}</li>".format(shf, t, p))
+
+    # Calculate p by counting rankings higher than expected.
+    for shf in ['edge', 'dist', 'agno']:
+        reals = rdf[rdf['shuffle'] == 'none']['test_score'].values
+        shuffles = rdf[rdf['shuffle'] == shf]['test_score'].values
+
     output.append("</ol>")
 
     """ Next, for the description file, report top genes. """

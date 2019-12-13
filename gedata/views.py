@@ -92,33 +92,35 @@ class InventoryView(generic.ListView):
                     psc_id = "{}{}{}{}".format(c, p, s, 's')
                     context[psc_id] = {}
                     for m in ['00', '16', '32', '64']:
-                        final_queryset = initial_queryset.filter(
-                            comp=comp_from_signature(c + p),
-                            parby="glasser" if p == "g" else "wellid",
-                            splby="glasser" if s == "g" else "wellid",
-                            mask='none' if m == "00" else m,
-                        )
-                        rid = "{}{}{}{}{}".format(c, p, s, m, 's')
-                        span_strings = "<br />".join([" ".join([
-                            span_str(rid, "mantel", "png", "fa-box-up", threshold[0]),
-                            span_str(rid, "overlap", "png", "fa-object-group", threshold[0]),
-                            span_str(rid, "genes", "html", "fa-dna", threshold[0]),
-                            span_str(rid, "ranked", "csv", "fa-list-ol", threshold[0]),
-                            "@", threshold[1],
-                        ]) for threshold in thresholds])
-                        context[rid] = " ".join([
-                            base_str_n.format(
-                                n_none=len(final_queryset.filter(shuffle="derivatives")),
-                                n_agno=len(final_queryset.filter(shuffle="shuffles")),
-                                n_dist=len(final_queryset.filter(shuffle="distshuffles")),
-                                n_edge=len(final_queryset.filter(shuffle="edgeshuffles")),
-                            ),
-                            span_str(rid, "performance", "png", "fa-chart-line"),
-                            "<br />",
-                            span_strings,
-                        ])
-                        # Duplicate the data so it can be looked up two different ways.
-                        context[psc_id][m] = context[rid]
+                        for nrm in ['s', '']:
+                            final_queryset = initial_queryset.filter(
+                                comp=comp_from_signature(c + p),
+                                parby="glasser" if p == "g" else "wellid",
+                                splby="glasser" if s == "g" else "wellid",
+                                mask='none' if m == "00" else m,
+                                norm='srs' if nrm == 's' else 'none',
+                            )
+                            rid = "{}{}{}{}{}{}".format(c, p, s, m, 's', nrm)
+                            span_strings = "<br />".join([" ".join([
+                                span_str(rid, "mantel", "png", "fa-box-up", threshold[0]),
+                                span_str(rid, "overlap", "png", "fa-object-group", threshold[0]),
+                                span_str(rid, "genes", "html", "fa-dna", threshold[0]),
+                                span_str(rid, "ranked", "csv", "fa-list-ol", threshold[0]),
+                                "@", threshold[1],
+                            ]) for threshold in thresholds])
+                            context[rid] = " ".join([
+                                base_str_n.format(
+                                    n_none=len(final_queryset.filter(shuffle="derivatives")),
+                                    n_agno=len(final_queryset.filter(shuffle="shuffles")),
+                                    n_dist=len(final_queryset.filter(shuffle="distshuffles")),
+                                    n_edge=len(final_queryset.filter(shuffle="edgeshuffles")),
+                                ),
+                                span_str(rid, "performance", "png", "fa-chart-line"),
+                                "<br />",
+                                span_strings,
+                            ])
+                            # Duplicate the data so it can be looked up two different ways.
+                            context[psc_id][m] = context[rid]
         return context
 
     def get_queryset(self):

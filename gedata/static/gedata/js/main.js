@@ -245,6 +245,7 @@ function image_id_from_selections(side) {
             summary_string += document.getElementById('id_left_split').value.toLowerCase()[0];
             summary_string += document.getElementById('id_left_train_mask').value;
             summary_string += document.getElementById('id_left_algo').value;
+            summary_string += document.getElementById('id_left_norm').value;
             let thresh_value = document.getElementById('id_left_threshold');
             if( thresh_value ) {
                 // This part is neither available nor used in performance plotting.
@@ -261,6 +262,7 @@ function image_id_from_selections(side) {
             summary_string += document.getElementById('id_right_split').value.toLowerCase()[0];
             summary_string += document.getElementById('id_right_train_mask').value;
             summary_string += document.getElementById('id_right_algo').value;
+            summary_string += document.getElementById('id_right_norm').value;
             let thresh_value = document.getElementById('id_right_threshold');
             if( thresh_value ) {
                 // This part is neither available nor used in performance plotting.
@@ -273,6 +275,7 @@ function image_id_from_selections(side) {
         summary_string += document.getElementById('id_split').value.toLowerCase()[0];
         summary_string += document.getElementById('id_train_mask').value;
         summary_string += document.getElementById('id_algo').value;
+        summary_string += document.getElementById('id_norm').value;
         let thresh_value = document.getElementById('id_threshold');
         if( thresh_value ) {
             // This part is neither available nor used in performance plotting.
@@ -419,29 +422,35 @@ function inventory_td_contents(jsonObject) {
 }
 
 function fillInventoryTable() {
-    let pby, sby, comp, mask;
+    let pby, sby, comp, mask, norm;
     let ps = ["w", "g"];
     let ss = ["w", "g"];
     let comps = ["hcp", "nki"];
     let masks = ["00", "16", "32", "64"];
+    let norms = ["", "s"];
 
     for(pby = 0; pby < ps.length; ++pby) {
         for(sby = 0; sby < ss.length; ++sby) {
             for(comp = 0; comp < comps.length; ++comp) {
                 for(mask = 0; mask < masks.length; ++mask) {
-                    let idString = comps[comp] + ps[pby] + ss[sby] + masks[mask] + "s";
-                    // The ajax request asks django to query the database for it.
-                    let request = new XMLHttpRequest();
-                    request.onreadystatechange = function () {
-                        if (request.readyState === 4 && request.status === 200) {
-                            let responseJsonObj = JSON.parse(this.responseText);
-                            if (responseJsonObj.signature === idString) {
-                                inventory_td_contents(responseJsonObj);
-                            }
+                    for(norm = 0; norm < norms.length; ++norm) {
+                        let idString = comps[comp] + ps[pby] + ss[sby] + masks[mask] + "s" + norms[norm];
+
+                        if(document.getElementById(idString)) {
+                            // The ajax request asks django to query the database for it.
+                            let request = new XMLHttpRequest();
+                            request.onreadystatechange = function () {
+                                if (request.readyState === 4 && request.status === 200) {
+                                    let responseJsonObj = JSON.parse(this.responseText);
+                                    if (responseJsonObj.signature === idString) {
+                                        inventory_td_contents(responseJsonObj);
+                                    }
+                                }
+                            };
+                            request.open("GET", "/gedata/REST/inventory/" + idString, true);
+                            request.send();
                         }
-                    };
-                    request.open("GET", "/gedata/REST/inventory/" + idString, true);
-                    request.send();
+                    }
                 }
             }
         }
