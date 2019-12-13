@@ -462,6 +462,7 @@ def results_as_dict(tsv_file, base_path, probe_sig_threshold=None, use_cache=Tru
         shuffle = 'none'
 
     mask = bids_val('mask', tsv_file)
+    norm = bids_val('norm', tsv_file)
 
     result_dict = algorithms.run_results(tsv_file, probe_sig_threshold)
     result_dict.update({
@@ -472,6 +473,7 @@ def results_as_dict(tsv_file, base_path, probe_sig_threshold=None, use_cache=Tru
         'splby': 'glasser' if 'splby-glasser' in tsv_file else 'wellid',
         'parby': 'glasser' if 'parby-glasser' in tsv_file else 'wellid',
         'mask': mask,
+        'norm': norm,
         'shuffle': shuffle,
         # Neither path nor calculation, the threshold we use for calculations
         'threshold': "peak" if probe_sig_threshold is None else "{:04}".format(probe_sig_threshold),
@@ -502,6 +504,7 @@ def interpret_descriptor(plot_descriptor):
     splby = "glasser" if plot_descriptor[4].lower() == "g" else "wellid"
     mask = 'none' if plot_descriptor[5:7] == "00" else plot_descriptor[5:7]
     algo = 'once' if plot_descriptor[7] == "o" else "smrt"
+    norm = 'srs' if ((len(plot_descriptor) > 8) and (plot_descriptor[8] == "s")) else "none"
     phase = 'train'
     opposite_phase = 'test'
 
@@ -512,7 +515,7 @@ def interpret_descriptor(plot_descriptor):
         threshold = None
 
     relevant_results_queryset = PushResult.objects.filter(
-        samp="glasser", prob="fornito", algo=algo, comp=comp, parby=parby, splby=splby, mask=mask,
+        samp="glasser", prob="fornito", algo=algo, comp=comp, parby=parby, splby=splby, mask=mask, norm=norm,
         batch__startswith=phase,
     )
 
@@ -522,6 +525,7 @@ def interpret_descriptor(plot_descriptor):
         'splby': splby,
         'mask': mask,
         'algo': algo,
+        'norm': norm,
         'phase': phase,
         'opposite_phase': opposite_phase,
         'threshold': threshold,
@@ -584,8 +588,8 @@ def collect_results(descriptor, progress_recorder, progress_from=0, progress_to=
     rdict = interpret_descriptor(descriptor)
     n = len(rdict['qs'])
     progress_recorder.set_progress(progress_from, progress_to, "Finding results")
-    print("Found {:,} results ({} {} {} {} {} {} {}) @{}".format(
-        n, "glasser", "fornito", rdict['algo'], rdict['comp'], rdict['parby'], rdict['splby'], rdict['mask'], 'peak' if rdict['threshold'] is None else rdict['threshold'],
+    print("Found {:,} results ({} {} {} {} {} {} {} {}) @{}".format(
+        n, "glasser", "fornito", rdict['algo'], rdict['comp'], rdict['parby'], rdict['splby'], rdict['mask'], rdict['norm'], 'peak' if rdict['threshold'] is None else rdict['threshold'],
     ))
 
     pre_file = os.path.join(data_root, "plots", "cache", "{}_pre.df".format(descriptor.lower()))
@@ -631,8 +635,8 @@ def assess_mantel(self, plot_descriptor, data_root="/data"):
 
     progress_recorder.set_progress(80, 100, "Generating plot")
     f_train_test, axes = plot_all_train_vs_test(
-        rdf, title="Mantels: {}s, split by {}, {}-masked, {}-ranked, by {}, top-{}".format(
-            rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], plot_descriptor[:3].upper(),
+        rdf, title="Mantels: {}s, split by {}, {}-masked, {}-ranked, {}-normed, by {}, top-{}".format(
+            rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], rdict['norm'], plot_descriptor[:3].upper(),
             'peak' if rdict['threshold'] is None else rdict['threshold']
         ),
         fig_size=(12, 12), ymin=-0.15, ymax=0.90
@@ -642,8 +646,8 @@ def assess_mantel(self, plot_descriptor, data_root="/data"):
     progress_recorder.set_progress(83, 100, "Generating text")
     description = describe_mantel(
         rdf,
-        title="Mantels: {}s, split by {}, {}-masked, {}-ranked, by {}, top-{}".format(
-            rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], plot_descriptor[:3].upper(),
+        title="Mantels: {}s, split by {}, {}-masked, {}-ranked, {}-normed, by {}, top-{}".format(
+            rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], rdict['norm'], plot_descriptor[:3].upper(),
             'peak' if rdict['threshold'] is None else rdict['threshold']
         ),
     )
