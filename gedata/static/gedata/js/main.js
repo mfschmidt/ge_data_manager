@@ -161,6 +161,76 @@ function assessMetric(image_id, select_id, metric) {
     png_http.send();
 }
 
+function removeEverything(image_id, r_id) {
+    // The first ajax request determines whether our desired plot already exists or not.
+    let request = new XMLHttpRequest();
+    let refreshUrl = "/gedata/REST/refresh/" + r_id + "peak" + "_clearmacro";
+    request.onreadystatechange = function () {
+        if (request.readyState === 4 && request.status === 200) {
+            let responseJsonObj = JSON.parse(this.responseText);
+            if (responseJsonObj.task_id !== "None") {
+                console.log("Got id: " + responseJsonObj.task_id);
+                let progressUrl = "/celery-progress/" + responseJsonObj.task_id + "/";
+                CelerySpinner.initSpinner(progressUrl, {
+                    onSuccess: console.log("removeEverything success"), // window.location.reload(),
+                    spinnerId: image_id,
+                });
+            }
+        }
+    };
+    request.open("GET", refreshUrl, true);
+    request.send();
+    console.log("Removing all cache files for " + r_id + " at " + image_id);
+}
+
+function assessEverything(image_id, select_id, r_id) {
+    // Calculate the image id string from forms, then use it to load plot images
+    let select_element = document.getElementById(select_id);
+    select_element.innerText = r_id + 'peak';
+    console.log("assessing everything, select_id = " + select_id + "; containing '" + select_element.innerText + "'.");
+    let image_element = document.getElementById(image_id);
+
+    if(shouldBailOnBuilding(image_element, select_element)) {
+        return;
+    }
+
+    console.log("Checking for " + select_element.innerText + " image for " + image_id + ".");
+    let img_file = select_element.innerText.toLowerCase() + "_mantel.png";
+
+    let img_url = "/static/gedata/plots/" + img_file;
+
+
+    // The first ajax request determines whether our desired plot already exists or not.
+    let png_http = new XMLHttpRequest();
+    png_http.onreadystatechange = function () {
+        if (png_http.readyState === 4) {
+            console.log("Building " + select_element.innerText + ".");
+            let refreshUrl = "/gedata/REST/refresh/" + r_id + 'peak' + "_everything";
+
+            // The ajax request initiates analysis and starts the spinner.
+            let request = new XMLHttpRequest();
+            request.onreadystatechange = function () {
+                if (request.readyState === 4 && request.status === 200) {
+                    let responseJsonObj = JSON.parse(this.responseText);
+                    if (responseJsonObj.task_id !== "None") {
+                        console.log("Got id: " + responseJsonObj.task_id);
+                        let progressUrl = "/celery-progress/" + responseJsonObj.task_id + "/";
+                        CelerySpinner.initSpinner(progressUrl, {
+                            onSuccess: console.log("assessEverything success"), // window.location.reload(),
+                            spinnerId: image_id,
+                        });
+                    }
+                }
+            };
+            request.open("GET", refreshUrl, true);
+            request.send();
+            console.log("Beginning to build everything for " + select_element.innerText + " at " + image_id);
+        }
+    };
+    png_http.open('HEAD', img_url, true);
+    png_http.send();
+}
+
 function loadPlot(image_element, image_url) {
     let w = Math.round(document.documentElement.clientWidth * 0.45);
     image_element.style.color = '#ffffff';
@@ -281,6 +351,8 @@ function image_id_from_selections(side) {
             // This part is neither available nor used in performance plotting.
             summary_string += thresh_value.value;
         }
+    } else if (side === "inventory_string") {
+        summary_string += document.getElementById('active_rid').value.toLowerCase();
     }
     console.log("    calculated " + side + " summary_string of '" + summary_string + "'");
     return summary_string;
@@ -296,7 +368,10 @@ function latestUpdateState(elementId) {
             response += responseJsonObj.num_actuals + " actuals, ";
             response += responseJsonObj.num_shuffles + "+";
             response += responseJsonObj.num_distshuffles + "+";
-            response += responseJsonObj.num_edgeshuffles + " permutations";
+            response += responseJsonObj.num_edgeshuffles + "+";
+            response += responseJsonObj.num_edge04shuffles + "+";
+            response += responseJsonObj.num_edge08shuffles + "+";
+            response += responseJsonObj.num_edge16shuffles + " permutations";
             response += "<br />";
             response += "last refreshed " + responseJsonObj.summary_date;
             document.getElementById(elementId).innerHTML = response;
