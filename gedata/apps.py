@@ -1,5 +1,5 @@
 from django.apps import AppConfig
 
 
-class GedataConfig(AppConfig):
+class GeDataConfig(AppConfig):
     name = 'gedata'
