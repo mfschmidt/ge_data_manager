@@ -114,7 +114,7 @@ def describe_genes(rdf, rdict, progress_recorder):
     output = ["<p>Comparison of Mantel correlations between the test half (using probes discovered in the train half) vs connectivity similarity.</p>",
               "<ol>"]
     # Calculate p with a t-test between real and shuffled.
-    for shf in ['edge', 'dist', 'agno']:
+    for shf in ['be16', 'be08', 'be04', 'edge', 'dist', 'agno']:
         t, p = ttest_ind(
             # 'test_score' is in the test set, could do 'train_score', too
             rdf[rdf['shuffle'] == 'none']['test_score'].values,
@@ -123,7 +123,7 @@ def describe_genes(rdf, rdict, progress_recorder):
         output.append("  <li>discovery in real vs discovery in {}: t = {:0.2f}, p = {:0.10f}</li>".format(shf, t, p))
 
     # Calculate p by counting rankings higher than expected.
-    for shf in ['edge', 'dist', 'agno']:
+    for shf in ['be16', 'be08', 'be04', 'edge', 'dist', 'agno']:
         reals = rdf[rdf['shuffle'] == 'none']['test_score'].values
         shuffles = rdf[rdf['shuffle'] == shf]['test_score'].values
 
