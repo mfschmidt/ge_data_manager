@@ -5,7 +5,14 @@
 {% block content %}
 {% load humanize %}
 
-<p>{{ latest_result_summary.num_actuals|intcomma }} real results ({{ latest_result_summary.num_shuffles|intcomma }} agno + {{ latest_result_summary.num_distshuffles|intcomma }} dist + {{ latest_result_summary.num_edgeshuffles|intcomma }} edge shuffles).</p>
+<p>{{ latest_result_summary.num_actuals|intcomma }} real results (
+    {{ latest_result_summary.num_shuffles|intcomma }} agno +
+    {{ latest_result_summary.num_distshuffles|intcomma }} dist +
+    {{ latest_result_summary.num_edgeshuffles|intcomma }} edge +
+    {{ latest_result_summary.num_edgeshuffles|intcomma }} be04 +
+    {{ latest_result_summary.num_edgeshuffles|intcomma }} be08 +
+    {{ latest_result_summary.num_edgeshuffles|intcomma }} be16
+    shuffles).</p>
 
 {% if pushresult_list %}
     <ul>
