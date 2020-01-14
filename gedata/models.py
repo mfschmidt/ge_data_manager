@@ -22,7 +22,7 @@ class PushResult(models.Model):
     duration = models.IntegerField()
 
     # Data preparation and execution details
-    shuffle = models.CharField(max_length = 16)  # 'derivatives': 'derivatives', 'agnostic': 'shuffles', 'distance': 'distshuffles', 'edges': 'edgeshuffles'
+    shuffle = models.CharField(max_length = 16)  # 'derivatives', 'shuffles', 'edge08shuffles', etc.
     sub = models.CharField(max_length = 32)
     hem = models.CharField(max_length = 1)
     samp = models.CharField(max_length = 16)
@@ -69,12 +69,15 @@ class ResultSummary(models.Model):
     """ After summarizing all of the result files, cache the results here to save processing. """
 
     summary_date = models.DateTimeField('date_summarized')
-    num_results = models.IntegerField()
-    num_actuals = models.IntegerField()
-    num_shuffles = models.IntegerField()
-    num_distshuffles = models.IntegerField()
-    num_edgeshuffles = models.IntegerField()
-    num_splits = models.IntegerField()
+    num_results = models.IntegerField(default=0)
+    num_actuals = models.IntegerField(default=0)
+    num_shuffles = models.IntegerField(default=0)
+    num_distshuffles = models.IntegerField(default=0)
+    num_edgeshuffles = models.IntegerField(default=0)
+    num_edge04shuffles = models.IntegerField(default=0)
+    num_edge08shuffles = models.IntegerField(default=0)
+    num_edge16shuffles = models.IntegerField(default=0)
+    num_splits = models.IntegerField(default=0)
 
     # @classmethod decorator allows this method to be called on the class, without an instance
     @classmethod
@@ -86,6 +89,9 @@ class ResultSummary(models.Model):
             num_shuffles = 0,
             num_distshuffles = 0,
             num_edgeshuffles = 0,
+            num_edge04shuffles = 0,
+            num_edge08shuffles = 0,
+            num_edge16shuffles = 0,
             num_splits = 0,
         )
 
@@ -97,6 +103,9 @@ class ResultSummary(models.Model):
         json += "    \"{}\":\"{:,}\",\n".format("num_shuffles", self.num_shuffles)
         json += "    \"{}\":\"{:,}\",\n".format("num_distshuffles", self.num_distshuffles)
         json += "    \"{}\":\"{:,}\",\n".format("num_edgeshuffles", self.num_edgeshuffles)
+        json += "    \"{}\":\"{:,}\",\n".format("num_edge04shuffles", self.num_edge04shuffles)
+        json += "    \"{}\":\"{:,}\",\n".format("num_edge08shuffles", self.num_edge08shuffles)
+        json += "    \"{}\":\"{:,}\",\n".format("num_edge16shuffles", self.num_edge16shuffles)
         json += "    \"{}\":\"{:,}\"\n".format("num_splits", self.num_splits)
         json += "}"
         return json
