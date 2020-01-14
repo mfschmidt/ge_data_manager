@@ -33,7 +33,7 @@ ALLOWED_HOSTS = ['*']
 # Application definition
 
 INSTALLED_APPS = [
-    "gedata.apps.GedataConfig",
+    "gedata.apps.GeDataConfig",
     "celery_progress",
     "django_celery_results",
     'django.contrib.admin',

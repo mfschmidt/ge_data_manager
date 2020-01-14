@@ -24,6 +24,7 @@ import pygest as ge
 
 from .models import PushResult, ResultSummary
 from .plots import plot_all_train_vs_test, plot_performance_over_thresholds, plot_overlap
+from .plots import plot_fig_2, plot_fig_3, plot_fig_4
 from .plots import describe_overlap, describe_mantel
 from .genes import describe_genes
 
@@ -72,6 +73,7 @@ def json_contents(json_file):
 
 
 def seconds_elapsed(elapsed):
+    """ Convert a string from the json file, like "5 days, 2:45:32.987", into integer seconds. """
     parts = elapsed.split(":")
     if len(parts) != 3:
         return 0
@@ -93,6 +95,21 @@ def tz_aware_file_mtime(path):
     return pytz.timezone("America/New_York").localize(
         datetime.fromtimestamp(os.path.getmtime(path))
     )
+
+
+def derivative_path(shuffle_path):
+    """ from a given path to a shuffled result, return the path to the real result it corresponds with. """
+    if "derivatives" in shuffle_path:
+        return shuffle_path
+
+    new_path = shuffle_path
+    shuffles = [
+        "edgeshuffles", "distshuffles", "edge04shuffles", "edge08shuffles", "edge16shuffles", "shuffles",
+    ]
+    # "shuffles" MUST be last in this list, or it will match prior shuffle types and partially replace them.
+    for s_to_replace in shuffles:
+        new_path = new_path.replace(s_to_replace, "derivatives")
+    return new_path[: -15] + ".tsv"
 
 
 @shared_task
@@ -121,7 +138,11 @@ def collect_jobs(self, data_path="/data", rebuild=False):
     n = 0
 
     # Get a list of files to parse.
-    for shuffle in ['derivatives', 'shuffles', 'edgeshuffles', 'distshuffles', ]:
+    shuffles = [
+        'derivatives', 'shuffles', 'distshuffles', 'edgeshuffles',
+        'edge04shuffles', 'edge08shuffles', 'edge16shuffles',
+    ]
+    for shuffle in shuffles:
         d = os.path.join(data_path, shuffle)
         if os.path.isdir(d):
             for root, dirs, files in os.walk(d, topdown=True):
@@ -205,6 +226,9 @@ def collect_jobs(self, data_path="/data", rebuild=False):
             num_shuffles=PushResult.objects.filter(shuffle='shuffles').count(),
             num_distshuffles=PushResult.objects.filter(shuffle='distshuffles').count(),
             num_edgeshuffles=PushResult.objects.filter(shuffle='edgeshuffles').count(),
+            num_edge04shuffles=PushResult.objects.filter(shuffle='edge04shuffles').count(),
+            num_edge08shuffles=PushResult.objects.filter(shuffle='edge08shuffles').count(),
+            num_edge16shuffles=PushResult.objects.filter(shuffle='edge16shuffles').count(),
             num_splits=0,
         )
         s.save()
@@ -213,8 +237,11 @@ def collect_jobs(self, data_path="/data", rebuild=False):
 shuffle_dir_map = {
     'none': 'derivatives',
     'edge': 'edgeshuffles',
+    'be04': 'edge04shuffles',
+    'be08': 'edge08shuffles',
+    'be16': 'edge16shuffles',
     'dist': 'distshuffles',
-    'agno': 'shuffles'
+    'agno': 'shuffles',
 }
 
 
@@ -438,13 +465,26 @@ def train_vs_test_overlap(tsv_file, probe_significance_threshold=None):
     )
 
 
+def extract_seed(path, key):
+    """ Scrape the 5-character seed from the path and return it as an integer.
+
+    :param path: path to the tsv file containing results
+    :param key: substring preceding the seed, "batch-train" for splits, seed-" for shuffles
+    """
+    try:
+        i = path.find(key) + len(key)
+        return int(path[i:i + 5])
+    except ValueError:
+        return 0
+
+
 def results_as_dict(tsv_file, base_path, probe_sig_threshold=None, use_cache=True):
     """ Return a key-value description of a single result.
         This is the workhorse of all of these plots. All calculations from these runs come from this function.
     """
 
     # These calculations can be expensive when run a lot. Load a cached copy if possible.
-    analyzed_path = tsv_file.replace(".tsv", ".top-{}.v2.json".format(
+    analyzed_path = tsv_file.replace(".tsv", ".top-{}.v3.json".format(
         "peak" if probe_sig_threshold is None else "{:04}".format(probe_sig_threshold)
     ))
     if use_cache and os.path.isfile(analyzed_path):
@@ -458,6 +498,12 @@ def results_as_dict(tsv_file, base_path, probe_sig_threshold=None, use_cache=Tru
         shuffle = 'dist'
     elif "/edgeshuffles/" in tsv_file:
         shuffle = 'edge'
+    elif "/edge04shuffles/" in tsv_file:
+        shuffle = 'be04'
+    elif "/edge08shuffles/" in tsv_file:
+        shuffle = 'be08'
+    elif "/edge16shuffles/" in tsv_file:
+        shuffle = 'be16'
     else:
         shuffle = 'none'
 
@@ -489,6 +535,9 @@ def results_as_dict(tsv_file, base_path, probe_sig_threshold=None, use_cache=Tru
         'masked_test_score': test_score(
             tsv_file, base_path, own_expr=False, mask=mask, probe_significance_threshold=probe_sig_threshold),
         'train_vs_test_overlap': train_vs_test_overlap(tsv_file, probe_significance_threshold=probe_sig_threshold),
+        'split': extract_seed(tsv_file, "batch-train"),
+        'seed': extract_seed(tsv_file, "_seed-"),
+        'real_tsv_from_shuffle': derivative_path(tsv_file),
     })
 
     # Cache results to prevent repeated recalculation of the same thing.
@@ -529,7 +578,7 @@ def interpret_descriptor(plot_descriptor):
         'phase': phase,
         'opposite_phase': opposite_phase,
         'threshold': threshold,
-        'qs': relevant_results_queryset,
+        'query_set': relevant_results_queryset,
     }
 
 
@@ -569,38 +618,27 @@ def calc_total_overlap(row, df):
         return 0.0
 
 
-def extract_seed(path, key):
-    """ Scrape the 5-character seed from the path and return it as an integer.
-
-    :param path: path to the tsv file containing results
-    :param key: substring preceding the seed, "batch-train" for splits, seed-" for shuffles
-    """
-    try:
-        i = path.find(key) + len(key)
-        return int(path[i:i + 5])
-    except ValueError:
-        return 0
-
-
-def collect_results(descriptor, progress_recorder, progress_from=0, progress_to=100, data_root="/data", use_cache=True):
+def collect_results(descriptor, progress_recorder, progress_from=0, progress_to=99, data_root="/data", use_cache=True):
     """ Determine the list of results necessary, and build or load a dataframe around them. """
 
     rdict = interpret_descriptor(descriptor)
-    n = len(rdict['qs'])
-    progress_recorder.set_progress(progress_from, progress_to, "Finding results")
+    n = len(rdict['query_set'])
+    progress_recorder.set_progress(progress_from, progress_to, "Step 1/3<br />Finding results")
     print("Found {:,} results ({} {} {} {} {} {} {} {}) @{}".format(
-        n, "glasser", "fornito", rdict['algo'], rdict['comp'], rdict['parby'], rdict['splby'], rdict['mask'], rdict['norm'], 'peak' if rdict['threshold'] is None else rdict['threshold'],
+        n, "glasser", "fornito",
+        rdict['algo'], rdict['comp'], rdict['parby'], rdict['splby'], rdict['mask'], rdict['norm'],
+        'peak' if rdict['threshold'] is None else rdict['threshold'],
     ))
 
-    pre_file = os.path.join(data_root, "plots", "cache", "{}_pre.df".format(descriptor.lower()))
-    if use_cache and os.path.isfile(pre_file):
+    cache_file = os.path.join(data_root, "plots", "cache", "{}_summary_a.df".format(descriptor.lower()))
+    if use_cache and os.path.isfile(cache_file):
         """ Load results from a cached file, if possible"""
-        with open(pre_file, "rb") as f:
+        with open(cache_file, "rb") as f:
             df = pickle.load(f)
     else:
         """ Calculate results for individual tsv files. """
         relevant_results = []
-        for i, path in enumerate(rdict['qs'].values('tsv_path')):
+        for i, path in enumerate(rdict['query_set'].values('tsv_path')):
             if os.path.isfile(path['tsv_path']):
                 relevant_results.append(
                     results_as_dict(path['tsv_path'], base_path=data_root, probe_sig_threshold=rdict['threshold'])
@@ -608,15 +646,252 @@ def collect_results(descriptor, progress_recorder, progress_from=0, progress_to=
             else:
                 print("ERR: DOES NOT EXIST: {}".format(path['tsv_path']))
             complete_portion = ((i + 1) / n) * (progress_to - progress_from)
-            progress_recorder.set_progress(progress_from + complete_portion, 100, "Processing {:,}/{:,} results".format(i, n))
+            progress_recorder.set_progress(
+                progress_from + complete_portion, 100, "Step 1/3<br />Processing {:,}/{:,} results".format(i, n)
+            )
 
         df = pd.DataFrame(relevant_results)
 
         os.makedirs(os.path.join(data_root, "plots", "cache"), exist_ok=True)
-        df.to_pickle(pre_file)
+        df.to_pickle(cache_file)
 
-    progress_recorder.set_progress(progress_to, 100, "Processed {:,} results".format(n))
+    progress_recorder.set_progress(progress_to - 1, 100, "Step 1/3<br />Processed {:,} results".format(n))
     return rdict, df
+
+
+@shared_task(bind=True)
+def clear_macro_caches(self, descriptor, progress_from=0, progress_to=100, data_root="/data"):
+    """ Remove the summary caches in /data/plots/cache/*.df """
+
+    p_delta = progress_to - progress_from
+    progress_recorder = ProgressRecorder(self)
+    progress_recorder.set_progress(progress_from, progress_to, "Clearing existing plots")
+    files_removed = 0
+
+    print("Removing plots from {} and cache files from {}.".format(
+        os.path.join(data_root, "plots"), os.path.join(data_root, "plots", "cache"),
+    ))
+
+    for f in os.listdir(os.path.join(data_root, "plots")):
+        path = os.path.join(data_root, "plots", f)
+        if os.path.isfile(path) and descriptor in f:
+            print("deleting {}".format(f))
+            os.remove(path)
+            files_removed += 1
+        else:
+            print("skipping {} ({})".format(f, descriptor))
+
+    progress_recorder.set_progress(progress_from + (p_delta / 2), progress_to, "Clearing summary caches")
+
+    for f in os.listdir(os.path.join(data_root, "plots", "cache")):
+        path = os.path.join(data_root, "plots", "cache", f)
+        if os.path.isfile(path) and descriptor in f:
+            print("deleting {}".format(f))
+            os.remove(path)
+            files_removed += 1
+        else:
+            print("skipping {} ({})".format(f, descriptor))
+
+    progress_recorder.set_progress(progress_to, progress_to, "Cleared {} files".format(files_removed))
+
+
+@shared_task(bind=True)
+def clear_micro_caches(self, descriptor, progress_from=0, progress_to=100, data_root="/data"):
+    """ Determine the list of results necessary, and build or load a dataframe around them. """
+
+    progress_recorder = ProgressRecorder(self)
+    progress_recorder.set_progress(progress_from, progress_to, "Clearing individual result caches")
+    rdict = interpret_descriptor(descriptor)
+    n = len(rdict['query_set'])
+    print("Found {:,} results ({} {} {} {} {} {} {} {}) @{}".format(
+        n, "glasser", "fornito",
+        rdict['algo'], rdict['comp'], rdict['parby'], rdict['splby'], rdict['mask'], rdict['norm'],
+        'peak' if rdict['threshold'] is None else rdict['threshold'],
+    ))
+
+    """ Delete calculated results for individual tsv files. """
+    n_removed = 0
+    for i, path in enumerate(rdict['query_set'].values('tsv_path')):
+        analyzed_path = path['tsv_path'].replace(".tsv", ".top-{}.v3.json".format(
+            "peak" if rdict['threshold'] is None else "{:04}".format(rdict['threshold'])
+        ))
+        if os.path.isfile(analyzed_path):
+            os.remove(analyzed_path)
+            n_removed += 1
+        complete_portion = ((i + 1) / n) * (progress_to - progress_from)
+        progress_recorder.set_progress(
+            progress_from + complete_portion, 100, "Deleting {:,}/{:,} results, removed {:,} caches.".format(
+                i, n, n_removed
+            )
+        )
+
+    progress_recorder.set_progress(progress_to, 100, "Removed {:,} cached meta-results".format(n_removed))
+    return rdict
+
+
+@shared_task(bind=True)
+def assess_everything(self, plot_descriptor, data_root="/data"):
+    """ Wrap both assess_mantel and assess_overlap into a single function.
+
+    :param self: interact with celery via decorator
+    :param plot_descriptor: Abbreviated string, like 'hcpww16ss' describing underlying data
+    :param data_root: default root path to find all results
+    """
+
+    progress_recorder = ProgressRecorder(self)
+
+    # Find all result files
+    #    Caches a json file for each result, and a summary dataframe, greatly speeding the process on subsequent runs.
+    rdict, rdf = collect_results(
+        plot_descriptor, progress_recorder, progress_from=0, progress_to=100, data_root=data_root
+    )
+
+    print("{} records for full analysis.".format(len(rdf)))
+
+    """ Calculate grouped stats, overlap within each group of tsv files. """
+    progress_recorder.set_progress(0, 100, "Step 2/2<br />Within-shuffle overlap")
+    post_file = os.path.join(data_root, "plots", "cache", "{}_summary_b.df".format(plot_descriptor.lower()))
+    if os.path.isfile(post_file):
+        with open(post_file, 'rb') as f:
+            rdf = pickle.load(f)
+    else:
+        """ Calculate similarity within split-halves and within shuffle-seeds. """
+        n = len(set(rdf['shuffle']))
+        for i, shuffle in enumerate(list(set(rdf['shuffle']))):
+            """ This explores the idea of viewing similarity between same-split-seed runs and same-shuffle-seed runs
+                vs all shuffled runs of the type. All three of these are "internal" or "intra-list" overlap.
+            """
+            print("Calculating percent overlaps for {}-shuffles".format(shuffle))
+            progress_recorder.set_progress((100.0 * i / n), 100, "Step 2/2<br />{}-shuffle overlaps".format(shuffle))
+
+            shuffle_mask = rdf['shuffle'] == shuffle
+            # We can only do this in training data, unless we want to double the workload above for test, too.
+            rdf.loc[shuffle_mask, 'train_overlap'] = algorithms.pct_similarity_list(
+                list(rdf.loc[shuffle_mask, 'path']), top=rdict['threshold']
+            )
+
+            # For each shuffled result, compare it against same-shuffled results from the same split
+            for split in list(set(rdf['split'])):
+                split_mask = rdf['split'] == split
+                rdf.loc[shuffle_mask & split_mask, 'overlap_by_split'] = algorithms.pct_similarity_list(
+                    list(rdf.loc[shuffle_mask & split_mask, 'path']), top=rdict['threshold']
+                )
+
+            # For each shuffled result, compare it against same-shuffled results from the same shuffle seed
+            for seed in list(set(rdf['seed'])):
+                seed_mask = rdf['seed'] == seed
+                rdf.loc[shuffle_mask & seed_mask, 'overlap_by_seed'] = algorithms.pct_similarity_list(
+                    list(rdf.loc[shuffle_mask & seed_mask, 'path']), top=rdict['threshold']
+                )
+
+            """ For each result in actual split-half train data, compare it to its shuffles. """
+            rdf.loc[shuffle_mask, 'real_v_shuffle_overlap'] = rdf.loc[shuffle_mask, :].apply(
+                lambda x: algorithms.pct_similarity([x.path, x.real_tsv_from_shuffle], top=rdict['threshold']), axis=1)
+
+    progress_recorder.set_progress(99, 100, "Step 2/2<br />Overlaps calculated")
+    print("Pickling {}".format(post_file))
+    rdf.to_pickle(post_file)
+
+    i = 0  # i is the index into how many plots to build
+    n = 6
+    """
+    progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3. Plotting. big old plot")
+    f_train_test, axes = plot_all_train_vs_test(
+        rdf, title="Mantels: {}s, split by {}, {}-masked, {}-ranked, {}-normed, by {}, top-{}".format(
+            rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], rdict['norm'], plot_descriptor[:3].upper(),
+            'peak' if rdict['threshold'] is None else rdict['threshold']
+        ),
+        fig_size=(12, 12), ymin=-0.15, ymax=0.90
+    )
+    f_train_test.savefig(os.path.join(data_root, "plots", "{}_mantel.png".format(plot_descriptor.lower())))
+    i += 1
+    """
+
+    progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3. Plotting. figure 2")
+    f_2, axes = plot_fig_2(
+        rdf, title="Mantels: {}s, split by {}, {}-masked, {}-ranked, {}-normed, by {}, top-{}".format(
+            rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], rdict['norm'], plot_descriptor[:3].upper(),
+            'peak' if rdict['threshold'] is None else rdict['threshold']
+        ),
+        fig_size=(10, 6), ymin=-0.15, ymax=0.90
+    )
+    f_2.savefig(os.path.join(data_root, "plots", "{}_fig_2.png".format(plot_descriptor.lower())))
+    i += 1
+
+    progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3. Plotting. figure 3")
+    f_3, axes = plot_fig_3(
+        rdf, title="Mantels: {}s, split by {}, {}-masked, {}-ranked, {}-normed, by {}, top-{}".format(
+            rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], rdict['norm'], plot_descriptor[:3].upper(),
+            'peak' if rdict['threshold'] is None else rdict['threshold']
+        ),
+        fig_size=(8, 6), ymin=-0.1, ymax=0.8
+    )
+    f_3.savefig(os.path.join(data_root, "plots", "{}_fig_3.png".format(plot_descriptor.lower())))
+    i += 1
+
+    progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3. Plotting. result text")
+    mantel_description = describe_mantel(
+        rdf, descriptor=plot_descriptor.lower(),
+        title="Mantels: {}s, split by {}, {}-masked, {}-ranked, {}-normed, by {}, top-{}".format(
+            rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], rdict['norm'], plot_descriptor[:3].upper(),
+            'peak' if rdict['threshold'] is None else rdict['threshold']
+        ),
+    )
+    i += 1
+
+    progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3<br />Plotting gene lists")
+
+    """ Write out relevant gene lists as html. """
+    df_ranked_full, description = describe_genes(rdf, rdict, progress_recorder)
+    df_ranked_full.to_csv(os.path.join(data_root, "plots", "{}_ranked_full.csv".format(plot_descriptor.lower())))
+    df_ranked_final = df_ranked_full[['entrez_id', ]]
+    df_ranked_final.to_csv(os.path.join(data_root, "plots", "{}_ranked.csv".format(plot_descriptor.lower())))
+    with open(os.path.join(data_root, "plots", "{}_genes.html".format(plot_descriptor.lower())), 'w') as f:
+        f.write(description)
+    i += 1
+
+    """
+    progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3<br />Plotting overlaps")
+    print("Plotting overlaps with {} threshold(s).".format(len(set(rdf['threshold']))))
+    f_overlap, axes = plot_overlap(
+        rdf,
+        title="Overlaps: {}s, split by {}, {}-masked, {}-ranked, by {}, top-{}".format(
+            rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], plot_descriptor[:3].upper(),
+            'peak' if rdict['threshold'] is None else rdict['threshold']
+        ),
+        fig_size=(12, 7), y_min=0.0, y_max=1.0,
+    )
+    f_overlap.savefig(os.path.join(data_root, "plots", "{}_overlap.png".format(plot_descriptor.lower())))
+    i += 1
+    """
+
+    progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3<br />Plotting figure 4")
+    f_4, axes = plot_fig_4(
+        rdf, title="Overlaps: {}s, split by {}, {}-masked, {}-ranked, {}-normed, by {}, top-{}".format(
+            rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], rdict['norm'], plot_descriptor[:3].upper(),
+            'peak' if rdict['threshold'] is None else rdict['threshold']
+        ), y_min=0.0, y_max=1.0,
+        fig_size=(8, 6),
+    )
+    f_4.savefig(os.path.join(data_root, "plots", "{}_fig_4.png".format(plot_descriptor.lower())))
+    i += 1
+
+    progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3<br />generating overlap description")
+    overlap_description = describe_overlap(
+        rdf, descriptor=plot_descriptor.lower(),
+        title="Overlaps: {}s, split by {}, {}-masked, {}-ranked, by {}, top-{}".format(
+            rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], plot_descriptor[:3].upper(),
+            'peak' if rdict['threshold'] is None else rdict['threshold']
+        ),
+    )
+    with open(os.path.join(data_root, "plots", "{}_report.html".format(plot_descriptor.lower())), 'w') as f:
+        f.write("<h1>Mantel Correlations</h1>\n")
+        f.write(mantel_description)
+        f.write("<h1>Overlap Descriptions</h1>\n")
+        f.write(overlap_description)
+    i += 1
+
+    progress_recorder.set_progress(99, 100, "Step 3/3. Plotting finished")
 
 
 @shared_task(bind=True)
@@ -630,10 +905,10 @@ def assess_mantel(self, plot_descriptor, data_root="/data"):
 
     progress_recorder = ProgressRecorder(self)
 
-    rdict, rdf = collect_results(plot_descriptor, progress_recorder, progress_from=0, progress_to=80, data_root=data_root)
+    rdict, rdf = collect_results(plot_descriptor, progress_recorder, progress_from=0, progress_to=74, data_root=data_root)
     print("{} records for Mantel assessment.".format(len(rdf)))
 
-    progress_recorder.set_progress(80, 100, "Generating plot")
+    progress_recorder.set_progress(74, 100, "Generating plot")
     f_train_test, axes = plot_all_train_vs_test(
         rdf, title="Mantels: {}s, split by {}, {}-masked, {}-ranked, {}-normed, by {}, top-{}".format(
             rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], rdict['norm'], plot_descriptor[:3].upper(),
@@ -643,9 +918,29 @@ def assess_mantel(self, plot_descriptor, data_root="/data"):
     )
     f_train_test.savefig(os.path.join(data_root, "plots", "{}_mantel.png".format(plot_descriptor.lower())))
 
-    progress_recorder.set_progress(83, 100, "Generating text")
+    progress_recorder.set_progress(78, 100, "Generating figure 2")
+    f_2, axes = plot_fig_2(
+        rdf, title="Mantels: {}s, split by {}, {}-masked, {}-ranked, {}-normed, by {}, top-{}".format(
+            rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], rdict['norm'], plot_descriptor[:3].upper(),
+            'peak' if rdict['threshold'] is None else rdict['threshold']
+        ),
+        fig_size=(10, 6), ymin=-0.15, ymax=0.90
+    )
+    f_2.savefig(os.path.join(data_root, "plots", "{}_fig_2.png".format(plot_descriptor.lower())))
+
+    progress_recorder.set_progress(82, 100, "Generating figure 3")
+    f_3, axes = plot_fig_3(
+        rdf, title="Mantels: {}s, split by {}, {}-masked, {}-ranked, {}-normed, by {}, top-{}".format(
+            rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], rdict['norm'], plot_descriptor[:3].upper(),
+            'peak' if rdict['threshold'] is None else rdict['threshold']
+        ),
+        fig_size=(8, 6), ymin=-0.1, ymax=0.8
+    )
+    f_3.savefig(os.path.join(data_root, "plots", "{}_fig_3.png".format(plot_descriptor.lower())))
+
+    progress_recorder.set_progress(86, 100, "Generating text")
     description = describe_mantel(
-        rdf,
+        rdf, descriptor=plot_descriptor.lower(),
         title="Mantels: {}s, split by {}, {}-masked, {}-ranked, {}-normed, by {}, top-{}".format(
             rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], rdict['norm'], plot_descriptor[:3].upper(),
             'peak' if rdict['threshold'] is None else rdict['threshold']
@@ -654,7 +949,7 @@ def assess_mantel(self, plot_descriptor, data_root="/data"):
     with open(os.path.join(data_root, "plots", "{}_mantel.html".format(plot_descriptor.lower())), 'w') as f:
         f.write(description)
 
-    progress_recorder.set_progress(86, 100, "Building probe to gene map")
+    progress_recorder.set_progress(90, 100, "Building probe to gene map")
 
     """ Write out relevant gene lists as html. """
     df_ranked_full, description = describe_genes(rdf, rdict, progress_recorder)
@@ -714,9 +1009,7 @@ def assess_overlap(self, plot_descriptor, data_root="/data"):
                 )
 
             """ For each result in actual split-half train data, compare it to its shuffles. """
-            rdf['real_tsv_from_shuffle'] = rdf['path'].apply(
-                lambda x: x.replace("edgeshuffles", "derivatives").replace(
-                    "distshuffles", "derivatives").replace("shuffles", "derivatives")[: -15] + ".tsv")
+            rdf['real_tsv_from_shuffle'] = rdf['path'].apply(derivative_path)
             rdf.loc[shuffle_mask, 'real_v_shuffle_overlap'] = rdf.loc[shuffle_mask, :].apply(
                 lambda x: algorithms.pct_similarity([x.path, x.real_tsv_from_shuffle], top=rdict['threshold']), axis=1)
 
@@ -734,9 +1027,20 @@ def assess_overlap(self, plot_descriptor, data_root="/data"):
     )
     f_overlap.savefig(os.path.join(data_root, "plots", "{}_overlap.png".format(plot_descriptor.lower())))
 
+    progress_recorder.set_progress(92, 100, "Generating figure 4")
+    f_4, axes = plot_fig_4(
+        rdf, title="Overlaps: {}s, split by {}, {}-masked, {}-ranked, {}-normed, by {}, top-{}".format(
+            rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], rdict['norm'], plot_descriptor[:3].upper(),
+            'peak' if rdict['threshold'] is None else rdict['threshold']
+        ), y_min=0.0, y_max=1.0,
+        fig_size=(8, 6),
+    )
+    f_4.savefig(os.path.join(data_root, "plots", "{}_fig_4.png".format(plot_descriptor.lower())))
+
+
     progress_recorder.set_progress(95, 100, "Generating description")
     description = describe_overlap(
-        rdf,
+        rdf, descriptor=plot_descriptor.lower(),
         title="Overlaps: {}s, split by {}, {}-masked, {}-ranked, by {}, top-{}".format(
             rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], plot_descriptor[:3].upper(),
             'peak' if rdict['threshold'] is None else rdict['threshold']
@@ -766,14 +1070,14 @@ def assess_performance(self, plot_descriptor, data_root="/data"):
 
     # Determine an end-point, correlating to 100%
     # There are two sections: first, results * thresholds; second, overlaps, which will just have to normalize to 50/50
-    n = len(rdict['qs'])
+    n = len(rdict['query_set'])
     total = n * len(thresholds) * 2  # The *2 allows for later overlaps to constitute 50% of the reported percentage
     progress_recorder.set_progress(2, 100, "Finding results")
     print("Found {:,} results ({} {} {} {} {} {} {})".format(
         n, "glasser", "fornito", rdict['algo'], rdict['comp'], rdict['parby'], rdict['splby'], rdict['mask']
     ))
 
-    if len(rdict['qs']) > 0:
+    if len(rdict['query_set']) > 0:
         post_file = os.path.join(data_root, "plots", "cache", "{}_ap_post.df".format(plot_descriptor.lower()))
         if os.path.isfile(post_file):
             with open(post_file, "rb") as f:
@@ -783,7 +1087,7 @@ def assess_performance(self, plot_descriptor, data_root="/data"):
             relevant_results = []
 
             """ Calculate (or load) stats for individual tsv files. """
-            for i, path in enumerate(rdict['qs'].values('tsv_path')):
+            for i, path in enumerate(rdict['query_set'].values('tsv_path')):
                 if os.path.isfile(path['tsv_path']):
                     for j, threshold in enumerate(thresholds):
                         relevant_results.append(

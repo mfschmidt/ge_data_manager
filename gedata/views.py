@@ -8,8 +8,9 @@ from django.views import generic
 
 from ge_data_manager.celery import celery_id_from_name, celery_plots_in_progress
 
-from .tasks import clear_jobs, collect_jobs, assess_mantel, assess_overlap, assess_performance, interpret_descriptor
-from .tasks import comp_from_signature
+from .tasks import clear_jobs, collect_jobs, interpret_descriptor, comp_from_signature
+from .tasks import assess_mantel, assess_overlap, assess_performance, assess_everything
+from .tasks import clear_macro_caches, clear_micro_caches
 from .models import PushResult, ResultSummary
 from .forms import thresholds
 
@@ -56,7 +57,7 @@ class InventoryView(generic.ListView):
     template_name = 'gedata/inventory.html'
 
     def get_context_data(self, **kwargs):
-        base_str_n = '<p>{n_none:,} ({n_agno:,}+{n_dist:,}+{n_edge:,}) '
+        base_str_n = '<p>{n_none:,} ({n_agno:,}+{n_dist:,}+{n_edge:,}+{n_be04:,}+{n_be08:,}+{n_be16:,}) '
 
         def span_str(r_id, metric, ext, icon, threshold=""):
             """ Return the html <span ...><a href=...><i ...></i></a></span> for a particular item. """
@@ -107,18 +108,35 @@ class InventoryView(generic.ListView):
                                 span_str(rid, "genes", "html", "fa-dna", threshold[0]),
                                 span_str(rid, "ranked", "csv", "fa-list-ol", threshold[0]),
                                 "@", threshold[1],
+                                span_str(rid, "report", "html", "fa-file-chart-line", 'peak') if threshold[0] == 'peak' else '',
                             ]) for threshold in thresholds])
+                            buttons = " ".join([
+                                "<span id=\"inventory_string\" style=\"display: none;\"></span>",
+                                "<button class=\"btn\" onclick=\"{}\">{}</button>".format(
+                                    "assessEverything('image_{}', 'inventory_string', '{}');".format(rid, rid),
+                                    "<i class='fas fa-abacus'></i>",
+                                ),
+                                "<button class=\"btn\" onclick=\"{}\">{}</button>".format(
+                                    "removeEverything('image_{}', '{}');".format(rid, rid),
+                                    "<i class='fas fa-trash'></i>",
+                                ),
+                                "<div id=\"image_{}\"><img src=\"\"></div>".format(rid),
+                            ])
                             context[rid] = " ".join([
                                 base_str_n.format(
                                     n_none=len(final_queryset.filter(shuffle="derivatives")),
                                     n_agno=len(final_queryset.filter(shuffle="shuffles")),
                                     n_dist=len(final_queryset.filter(shuffle="distshuffles")),
                                     n_edge=len(final_queryset.filter(shuffle="edgeshuffles")),
+                                    n_be04=len(final_queryset.filter(shuffle="edge04shuffles")),
+                                    n_be08=len(final_queryset.filter(shuffle="edge08shuffles")),
+                                    n_be16=len(final_queryset.filter(shuffle="edge16shuffles")),
                                 ),
-                                span_str(rid, "performance", "png", "fa-chart-line"),
-                                "<br />",
-                                span_strings,
+                                span_str(rid, "performance", "png", "fa-chart-line"), "<br />",
+                                span_strings, "<br />",
+                                "<div style=\"text-align: right;\">", buttons, "</div>"
                             ])
+
                             # Duplicate the data so it can be looked up two different ways.
                             context[psc_id][m] = context[rid]
         return context
@@ -135,9 +153,12 @@ def rest_inventory(request, signature):
     agno_string = "\"{}\":\"{}\"".format("agno", len(relevant_results_queryset.filter(shuffle="shuffles")))
     dist_string = "\"{}\":\"{}\"".format("dist", len(relevant_results_queryset.filter(shuffle="distshuffles")))
     edge_string = "\"{}\":\"{}\"".format("edge", len(relevant_results_queryset.filter(shuffle="edgeshuffles")))
+    be04_string = "\"{}\":\"{}\"".format("be04", len(relevant_results_queryset.filter(shuffle="edge04shuffles")))
+    be08_string = "\"{}\":\"{}\"".format("be08", len(relevant_results_queryset.filter(shuffle="edge08shuffles")))
+    be16_string = "\"{}\":\"{}\"".format("be16", len(relevant_results_queryset.filter(shuffle="edge16shuffles")))
     return HttpResponse(
         "{\n    " + ",\n    ".join(
-            [sign_string, none_string, agno_string, dist_string, edge_string, ]
+            [sign_string, none_string, agno_string, dist_string, edge_string, be04_string, be08_string, be16_string, ]
         ) + "\n}"
     )
 
@@ -172,6 +193,16 @@ def rest_refresh(request, job_name):
             celery_result = assess_mantel.delay(job_name.rsplit('_', 1)[0].lower(), data_root="/data")
             jobs_id = celery_result.task_id
             print("     new id for '{}' is '{}'.".format(job_name, jobs_id))
+    elif "everything" in job_name.rsplit('_', 1)[1]:
+        if job_name in plots_in_progress:
+            print("DUPE: {} requested, but is already being worked on.".format(job_name))
+        else:
+            print("NEW: rest_refresh got job '{}', no id returned. New assessment of everything.".format(job_name))
+            for plot in plots_in_progress:
+                print("     already building {}".format(plot))
+            celery_result = assess_everything.delay(job_name.rsplit('_', 1)[0].lower(), data_root="/data")
+            jobs_id = celery_result.task_id
+            print("     new id for '{}' is '{}'.".format(job_name, jobs_id))
     elif "performance" in job_name.rsplit('_', 1)[1]:
         if job_name in plots_in_progress:
             print("DUPE: {} requested, but is already being worked on.".format(job_name))
@@ -191,6 +222,27 @@ def rest_refresh(request, job_name):
             for plot in plots_in_progress:
                 print("     already building {}".format(plot))
             celery_result = assess_overlap.delay(job_name.rsplit('_', 1)[0].lower(), data_root="/data")
+            jobs_id = celery_result.task_id
+            print("     new id for '{}' is '{}'.".format(job_name, jobs_id))
+    elif "clearmacro" in job_name.rsplit('_', 1)[1]:
+        if job_name in plots_in_progress:
+            print("DUPE: {} requested, but is already being worked on.".format(job_name))
+        else:
+            print("NEW: rest_refresh got job '{}', no id returned. New assessment of everything.".format(job_name))
+            for plot in plots_in_progress:
+                print("     already building {}".format(plot))
+            celery_result = clear_macro_caches.delay(job_name.rsplit('_', 1)[0].lower(), data_root="/data")
+            jobs_id = celery_result.task_id
+            print("     new id for '{}' is '{}'.".format(job_name, jobs_id))
+    elif "clearmicro" in job_name.rsplit('_', 1)[1]:
+        if job_name in plots_in_progress:
+            print("DUPE: {} requested, but is already being worked on.".format(job_name))
+        else:
+            print("NEW: rest_refresh got job '{}', no id returned. New assessment of everything.".format(
+                job_name))
+            for plot in plots_in_progress:
+                print("     already building {}".format(plot))
+            celery_result = clear_micro_caches.delay(job_name.rsplit('_', 1)[0].lower(), data_root="/data")
             jobs_id = celery_result.task_id
             print("     new id for '{}' is '{}'.".format(job_name, jobs_id))
     else:
