@@ -8,7 +8,7 @@
 
     <p> The earlier analyses each focused on a complete sample from a particular donor. We now focus on a subset of these many analyses that used split-half resampling.
         All split halves are based on all donors <b>(sub-all)</b>, all hemispheres <b>(hem-A)</b>,
-        but only samples that can fit into left hemisphere Glasser parcellations <b>(samp-glasser)</b>, and the Fornito/Arnatkeviciute selection of probes <b>(prob-fornito)</b>.
+        but only samples that can map into left hemisphere Glasser parcellations <b>(samp-glasser)</b>, and the Fornito/Arnatkeviciute selection of probes <b>(prob-fornito)</b>.
         This results in a starting expression similarity matrix with 15,745 probes and 1,280 samples, <b>[15745, 1280]</b>, for all split-half experiments.
         In some, we used the 1,280 Glasser-compatible original AHBA wellids for sample locations <b>(parby-wellid)</b>
         and in others we averaged groups of wellids into 180 Glasser parcels <b>(parby-glasser)</b>, although only 177 are represented.
@@ -29,7 +29,23 @@
         was applied at 16mm <b>(mask-16)</b>, 32mm <b>(mask-32)</b>, and 64mm <b>(mask-64)</b>
         thresholds for comparison with unmasked <b>(mask-none)</b> data. There is a mix of 'once' and 'smrt' algorithms, all 'max' some 'min'
     </p>
-    <p> So, the available comparisons at this point in time (each with 16 train/test splits and 256 permutations of each shuffle type) are:
+    <p> So, the SRS-adjusted and properly-masked available comparisons at this point in time
+        (each with 16 train/test splits and 256 permutations of each shuffle type) are:
+    </p>
+
+    <ul>HCP:
+        <li>parby-<b>wellid</b>_splby <b>wellid</b> ~ <b>hcpniftismoothgrandmeansim</b>  mask-none (splits 200-205 from Dec 28, 2018 - present)</li>
+        <li>parby-<b>wellid</b>_splby <b>wellid</b> ~ <b>hcpniftismoothgrandmeansim</b>  mask-16 (splits 200-205 from Dec 28, 2018 - present)</li>
+        <li>parby-<b>wellid</b>_splby <b>wellid</b> ~ <b>hcpniftismoothgrandmeansim</b>  mask-32 (splits 200-205 from Dec 28, 2018 - present)</li>
+        <li>parby-<b>wellid</b>_splby <b>wellid</b> ~ <b>hcpniftismoothgrandmeansim</b>  mask-64 (splits 200-205 from Dec 28, 2018 - present)</li>
+    </ul>
+    <ul>NKI INDI:
+        <li>none</li>
+    </ul>
+    <p> The primary result is in bold, based on an earlier conversations. Each partially bolded collection has only one variable altered from the primary.
+        We can use each of these to see how changing that particular variable would have changed our primary results.
+    </p>
+    <p> The following results were NOT SRS-adjusted, but are available from backup. Ask Mike if you're interested.
     </p>
 
     <ul>HCP:
@@ -58,9 +74,6 @@
         <li>parby-wellid_splby glasser ~ indiconnsim  mask-none  (2 + 1,536: Aug 1 - Aug 25)</li>
         <li>parby-wellid_splby wellid ~ indiconnsim  mask-none  (2 + 1,536: Aug 1 - Aug 25)</li>
     </ul>
-    <p> The primary result is in bold, based on an earlier conversations. Each partially bolded collection has only one variable altered from the primary.
-        We can use each of these to see how changing that particular variable would have changed our primary results.
-    </p>
     <ul style="color: gray;">
         <li>A validation batch was run July 28th to ensure new code with new naming conventions produced identical results to older code.
             These identical runs eventually overwrote the originals during consolidation of all results, so some timestamps may not match this report.
