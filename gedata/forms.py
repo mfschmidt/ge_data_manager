@@ -92,7 +92,10 @@ def filter_results(request):
                         len(query_set.filter(shuffle='derivatives')),
                         len(query_set.filter(shuffle='shuffles')),
                         len(query_set.filter(shuffle='distshuffles')),
-                        len(query_set.filter(shuffle='edgeshuffles'))
+                        len(query_set.filter(shuffle='edgeshuffles')),
+                        len(query_set.filter(shuffle='edge04shuffles')),
+                        len(query_set.filter(shuffle='edge08shuffles')),
+                        len(query_set.filter(shuffle='edge16shuffles')),
                     ))
     else:
         # Create a blank form
