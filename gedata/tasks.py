@@ -761,20 +761,28 @@ def assess_everything(self, plot_descriptor, data_root="/data"):
             """ This explores the idea of viewing similarity between same-split-seed runs and same-shuffle-seed runs
                 vs all shuffled runs of the type. All three of these are "internal" or "intra-list" overlap.
             """
-            print("Calculating percent overlaps for {}-shuffles".format(shuffle))
-            progress_recorder.set_progress((100.0 * i / n), 100, "Step 2/2<br />{}-shuffle overlaps".format(shuffle))
+            print("Calculating percent overlaps and Kendall taus for {}-shuffles".format(shuffle))
+            progress_recorder.set_progress((100.0 * i / n), 100, "Step 2/2<br />{}-shuffle similarity".format(shuffle))
 
             shuffle_mask = rdf['shuffle'] == shuffle
             # We can only do this in training data, unless we want to double the workload above for test, too.
             rdf.loc[shuffle_mask, 'train_overlap'] = algorithms.pct_similarity_list(
                 list(rdf.loc[shuffle_mask, 'path']), top=rdict['threshold']
             )
+            rdf.loc[shuffle_mask, 'train_ktau'] = algorithms.kendall_tau_list(
+                list(rdf.loc[shuffle_mask, 'path'])
+            )
 
             # For each shuffled result, compare it against same-shuffled results from the same split
             for split in list(set(rdf['split'])):
+                # These values will all be 'nan' for unshuffled results. There's only one per split.
                 split_mask = rdf['split'] == split
+                # The following similarities are masked to include only one shuffle type, and one split-half
                 rdf.loc[shuffle_mask & split_mask, 'overlap_by_split'] = algorithms.pct_similarity_list(
                     list(rdf.loc[shuffle_mask & split_mask, 'path']), top=rdict['threshold']
+                )
+                rdf.loc[shuffle_mask & split_mask, 'ktau_by_split'] = algorithms.kendall_tau_list(
+                    list(rdf.loc[shuffle_mask & split_mask, 'path'])
                 )
 
             # For each shuffled result, compare it against same-shuffled results from the same shuffle seed
@@ -783,29 +791,25 @@ def assess_everything(self, plot_descriptor, data_root="/data"):
                 rdf.loc[shuffle_mask & seed_mask, 'overlap_by_seed'] = algorithms.pct_similarity_list(
                     list(rdf.loc[shuffle_mask & seed_mask, 'path']), top=rdict['threshold']
                 )
+                rdf.loc[shuffle_mask & seed_mask, 'ktau_by_seed'] = algorithms.kendall_tau_list(
+                    list(rdf.loc[shuffle_mask & seed_mask, 'path'])
+                )
 
             """ For each result in actual split-half train data, compare it to its shuffles. """
+            # Each unshuffled run will match itself only for these two, resulting in a 1.0 perfect comparison.
             rdf.loc[shuffle_mask, 'real_v_shuffle_overlap'] = rdf.loc[shuffle_mask, :].apply(
-                lambda x: algorithms.pct_similarity([x.path, x.real_tsv_from_shuffle], top=rdict['threshold']), axis=1)
+                lambda x: algorithms.pct_similarity([x.path, x.real_tsv_from_shuffle], top=rdict['threshold']), axis=1
+            )
+            rdf.loc[shuffle_mask, 'real_v_shuffle_ktau'] = rdf.loc[shuffle_mask, :].apply(
+                lambda x: algorithms.kendall_tau([x.path, x.real_tsv_from_shuffle]), axis=1
+            )
 
-    progress_recorder.set_progress(99, 100, "Step 2/2<br />Overlaps calculated")
+    progress_recorder.set_progress(99, 100, "Step 2/2<br />Similarity calculated")
     print("Pickling {}".format(post_file))
     rdf.to_pickle(post_file)
 
     i = 0  # i is the index into how many plots to build
     n = 6
-    """
-    progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3. Plotting. big old plot")
-    f_train_test, axes = plot_all_train_vs_test(
-        rdf, title="Mantels: {}s, split by {}, {}-masked, {}-ranked, {}-normed, by {}, top-{}".format(
-            rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], rdict['norm'], plot_descriptor[:3].upper(),
-            'peak' if rdict['threshold'] is None else rdict['threshold']
-        ),
-        fig_size=(12, 12), ymin=-0.15, ymax=0.90
-    )
-    f_train_test.savefig(os.path.join(data_root, "plots", "{}_mantel.png".format(plot_descriptor.lower())))
-    i += 1
-    """
 
     progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3. Plotting. figure 2")
     f_2, axes = plot_fig_2(
@@ -813,7 +817,7 @@ def assess_everything(self, plot_descriptor, data_root="/data"):
             rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], rdict['norm'], plot_descriptor[:3].upper(),
             'peak' if rdict['threshold'] is None else rdict['threshold']
         ),
-        fig_size=(10, 6), ymin=-0.15, ymax=0.90
+        fig_size=(12, 6), y_min=-0.15, y_max=0.90
     )
     f_2.savefig(os.path.join(data_root, "plots", "{}_fig_2.png".format(plot_descriptor.lower())))
     i += 1
@@ -824,7 +828,7 @@ def assess_everything(self, plot_descriptor, data_root="/data"):
             rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], rdict['norm'], plot_descriptor[:3].upper(),
             'peak' if rdict['threshold'] is None else rdict['threshold']
         ),
-        fig_size=(8, 6), ymin=-0.1, ymax=0.8
+        fig_size=(6, 5), y_min=-0.1, y_max=0.8
     )
     f_3.savefig(os.path.join(data_root, "plots", "{}_fig_3.png".format(plot_descriptor.lower())))
     i += 1
@@ -841,37 +845,20 @@ def assess_everything(self, plot_descriptor, data_root="/data"):
 
     progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3<br />Plotting gene lists")
 
-    """ Write out relevant gene lists as html. """
-    df_ranked_full, description = describe_genes(rdf, rdict, progress_recorder)
+    """ Rank genes and write them out as csv. """
+    df_ranked_full, gene_description = describe_genes(rdf, rdict, plot_descriptor.lower(), progress_recorder)
     df_ranked_full.to_csv(os.path.join(data_root, "plots", "{}_ranked_full.csv".format(plot_descriptor.lower())))
     df_ranked_final = df_ranked_full[['entrez_id', ]]
     df_ranked_final.to_csv(os.path.join(data_root, "plots", "{}_ranked.csv".format(plot_descriptor.lower())))
-    with open(os.path.join(data_root, "plots", "{}_genes.html".format(plot_descriptor.lower())), 'w') as f:
-        f.write(description)
     i += 1
-
-    """
-    progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3<br />Plotting overlaps")
-    print("Plotting overlaps with {} threshold(s).".format(len(set(rdf['threshold']))))
-    f_overlap, axes = plot_overlap(
-        rdf,
-        title="Overlaps: {}s, split by {}, {}-masked, {}-ranked, by {}, top-{}".format(
-            rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], plot_descriptor[:3].upper(),
-            'peak' if rdict['threshold'] is None else rdict['threshold']
-        ),
-        fig_size=(12, 7), y_min=0.0, y_max=1.0,
-    )
-    f_overlap.savefig(os.path.join(data_root, "plots", "{}_overlap.png".format(plot_descriptor.lower())))
-    i += 1
-    """
 
     progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3<br />Plotting figure 4")
     f_4, axes = plot_fig_4(
-        rdf, title="Overlaps: {}s, split by {}, {}-masked, {}-ranked, {}-normed, by {}, top-{}".format(
+        rdf, title="Similarity: {}s, split by {}, {}-masked, {}-ranked, {}-normed, by {}, top-{}".format(
             rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], rdict['norm'], plot_descriptor[:3].upper(),
             'peak' if rdict['threshold'] is None else rdict['threshold']
-        ), y_min=0.0, y_max=1.0,
-        fig_size=(8, 6),
+        ), y_min=0.0, y_max=1.1,
+        fig_size=(13, 5),
     )
     f_4.savefig(os.path.join(data_root, "plots", "{}_fig_4.png".format(plot_descriptor.lower())))
     i += 1
@@ -889,6 +876,8 @@ def assess_everything(self, plot_descriptor, data_root="/data"):
         f.write(mantel_description)
         f.write("<h1>Overlap Descriptions</h1>\n")
         f.write(overlap_description)
+        f.write("<h1>Probe/Gene Descriptions</h1>\n")
+        f.write(gene_description)
     i += 1
 
     progress_recorder.set_progress(99, 100, "Step 3/3. Plotting finished")
@@ -914,7 +903,7 @@ def assess_mantel(self, plot_descriptor, data_root="/data"):
             rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], rdict['norm'], plot_descriptor[:3].upper(),
             'peak' if rdict['threshold'] is None else rdict['threshold']
         ),
-        fig_size=(12, 12), ymin=-0.15, ymax=0.90
+        fig_size=(12, 12), y_min=-0.15, y_max=0.90
     )
     f_train_test.savefig(os.path.join(data_root, "plots", "{}_mantel.png".format(plot_descriptor.lower())))
 
@@ -924,7 +913,7 @@ def assess_mantel(self, plot_descriptor, data_root="/data"):
             rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], rdict['norm'], plot_descriptor[:3].upper(),
             'peak' if rdict['threshold'] is None else rdict['threshold']
         ),
-        fig_size=(10, 6), ymin=-0.15, ymax=0.90
+        fig_size=(10, 6), y_min=-0.15, y_max=0.90
     )
     f_2.savefig(os.path.join(data_root, "plots", "{}_fig_2.png".format(plot_descriptor.lower())))
 
@@ -934,7 +923,7 @@ def assess_mantel(self, plot_descriptor, data_root="/data"):
             rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], rdict['norm'], plot_descriptor[:3].upper(),
             'peak' if rdict['threshold'] is None else rdict['threshold']
         ),
-        fig_size=(8, 6), ymin=-0.1, ymax=0.8
+        fig_size=(8, 6), y_min=-0.1, y_max=0.8
     )
     f_3.savefig(os.path.join(data_root, "plots", "{}_fig_3.png".format(plot_descriptor.lower())))
 
