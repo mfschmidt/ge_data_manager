@@ -1,6 +1,8 @@
+import os
 from pygest.convenience import create_symbol_to_id_map, create_id_to_symbol_map
 from statistics import mean
 import pandas as pd
+import numpy as np
 from scipy.stats import ttest_ind
 
 from pygest import algorithms
@@ -70,35 +72,49 @@ def ranked_probes(tsvs, top):
 def describe_three_relevant_overlaps(relevant_results, phase, threshold):
     """ Filter results by the arguments, and report percent similarity and consistent top genes. """
     print("=== {} ===".format(phase))
-    in_shuf = (relevant_results['shuffle'] == 'none')
-    more_relevant_results = relevant_results[in_shuf]
-    print("  {:,} out of {:,} results are relevant here.".format(len(more_relevant_results), len(relevant_results)))
+    unshuffled_results = relevant_results[relevant_results['shuffle'] == 'none']
+    print("  {:,} out of {:,} results are unshuffled.".format(len(unshuffled_results), len(relevant_results)))
 
-    print("  Overlap between 16 random (train) halves, @{} = {:0.1%}".format(
-        threshold, algorithms.pct_similarity(
-            list(more_relevant_results[more_relevant_results['phase'] == 'train']['path']),
-            map_probes_to_genes_first=False, top=threshold
-        )
-    ))
-    print("  Overlap between 16 random (test) halves, @{} = {:0.1%}".format(
-        threshold, algorithms.pct_similarity(
-            list(more_relevant_results[more_relevant_results['phase'] == 'test']['path']),
-            map_probes_to_genes_first=False, top=threshold
-        )
-    ))
+    for which_phase in ["train", "test", ]:
+        phased_results = unshuffled_results[unshuffled_results['phase'] == which_phase]
+        print("  Overlap between 16 random ({}) halves, @{} = {:0.1%}; kendall tau is {:0.03}".format(
+            phase, threshold,
+            algorithms.pct_similarity(list(phased_results['path']), map_probes_to_genes_first=False, top=threshold),
+            algorithms.kendall_tau(list(phased_results['path']))
+        ))
+
     acrosses = []
-    for t in more_relevant_results[more_relevant_results['phase'] == 'train']['path']:
+    for t in unshuffled_results[unshuffled_results['phase'] == 'train']['path']:
         comps = [t, t.replace('train', 'test'), ]
-        olap = algorithms.pct_similarity(comps, map_probes_to_genes_first=False, top=threshold)
-        acrosses.append(olap)
-        # print("    {:0.2%}% - {}".format(olap, t))
+        comps = [f for f in comps if os.path.isfile(f)]
+        if len(comps) > 0:
+            olap = algorithms.pct_similarity(comps, map_probes_to_genes_first=False, top=threshold)
+            acrosses.append(olap)
+            # print("    {:0.2%}% - {}".format(olap, t))
     print("  Overlap between each direct train-vs-test pair @{} = {:0.1%}".format(
         threshold, mean(acrosses)
     ))
-    return more_relevant_results
+    return unshuffled_results
 
 
-def describe_genes(rdf, rdict, progress_recorder):
+def rank_genes_respecting_shuffles(actual_files, shuffle_files):
+    """ Given gene rankings from actual data and gene rankings from shuffled data,
+        calculate how likely each gene is to have outperformed the shuffle in actual data.
+    """
+
+    # Calculate ranking of each gene in each result, and average rankings for overall.
+    # Each ranking dataframe is ordered by ranking, and each is different, so we must re-order each to match
+    actual_rankings = ranked_probes(actual_files, None).sort_index()
+    shuffle_rankings = ranked_probes(shuffle_files, None).sort_index()
+
+    # Count how many shuffled rankings, for each gene, are better than the real data.
+    hits = shuffle_rankings[[col for col in shuffle_rankings.columns if "rank" in col]].lt(actual_rankings['mean'], axis=0)
+
+    df = pd.DataFrame(hits.sum(axis=1) / hits.count(axis=1), columns=["p", ], index=actual_rankings.index)
+    return df.sort_values(by=['p', ])
+
+
+def describe_genes(rdf, rdict, plot_descriptor, progress_recorder):
     """ Create a description of the top genes. """
 
     progress_recorder.set_progress(86, 100, "Building gene maps")
@@ -110,24 +126,44 @@ def describe_genes(rdf, rdict, progress_recorder):
     survivors = pervasive_probes(relevant_tsvs, rdict['threshold'])
     all_ranked = ranked_probes(relevant_tsvs, rdict['threshold'])
     all_ranked['rank'] = range(1, len(all_ranked.index) + 1, 1)
+    all_ranked['probe_id'] = all_ranked.index
 
     output = ["<p>Comparison of Mantel correlations between the test half (using probes discovered in the train half) vs connectivity similarity.</p>",
               "<ol>"]
     # Calculate p with a t-test between real and shuffled.
+    actuals = rdf[rdf['shuffle'] == 'none']
     for shf in ['be16', 'be08', 'be04', 'edge', 'dist', 'agno']:
-        t, p = ttest_ind(
-            # 'test_score' is in the test set, could do 'train_score', too
-            rdf[rdf['shuffle'] == 'none']['test_score'].values,
-            rdf[rdf['shuffle'] == shf]['test_score'].values,
-        )
-        output.append("  <li>discovery in real vs discovery in {}: t = {:0.2f}, p = {:0.10f}</li>".format(shf, t, p))
-
-    # Calculate p by counting rankings higher than expected.
-    for shf in ['be16', 'be08', 'be04', 'edge', 'dist', 'agno']:
-        reals = rdf[rdf['shuffle'] == 'none']['test_score'].values
-        shuffles = rdf[rdf['shuffle'] == shf]['test_score'].values
-
+        # 'test_score' is in the test set, and is most appropriate and conservative; could do 'train_score', too
+        shuffles = rdf[rdf['shuffle'] == shf]
+        t, p = ttest_ind(actuals['test_score'].values, shuffles['test_score'].values)
+        output.append("  <li>discovery in real vs discovery in {} (t-test): t = {:0.2f}, p = {:0.5f}</li>".format(shf, t, p))
     output.append("</ol>")
+
+    progress_recorder.set_progress(92, 100, "Calculating p-values per gene")
+    # Calculate p for each gene by counting how many times its shuffled rank outperforms its real rank.
+    actuals = rdf[rdf['shuffle'] == 'none']
+    df_gene_ps = rank_genes_respecting_shuffles(actuals['path'], actuals['path']).sort_index()
+    p_lines = []
+    for shf in ['be16', 'be08', 'be04', 'edge', 'dist', 'agno']:
+        shuffles = rdf[rdf['shuffle'] == shf]
+        tmpdf = rank_genes_respecting_shuffles(actuals['path'], shuffles['path']).sort_index()
+        df_gene_ps["p_" + shf] = tmpdf['p']
+        p_lines.append("{:,} {} {}-shuffled data (p<0.05) ({:,} if p<0.01). {} {:,} genes is {:,}.".format(
+            len(tmpdf[tmpdf['p'] < 0.05].index),
+            "genes perform better in actual than",
+            shf,
+            len(tmpdf[tmpdf['p'] < 0.01].index),
+            "The average ranking of these",
+            len(tmpdf[tmpdf['p'] < 0.05].index),
+            int(all_ranked[all_ranked['probe_id'].isin(tmpdf[tmpdf['p'] < 0.05].index)]['rank'].mean()),
+        ))
+    output.append("<p>{}</p>".format(" ".join([
+        "Some genes survive optimization longer in real data than shuffled.",
+        "<ul><li>", "</li><li>".join(p_lines), "</li></ul>",
+        "That doesn't mean they performed well, just better in actual than shuffled.",
+        "See {}_ranked_full.csv for quantitative details.".format(plot_descriptor),
+    ])))
+    all_ranked = pd.concat([all_ranked, df_gene_ps], axis=1)
 
     """ Next, for the description file, report top genes. """
     progress_recorder.set_progress(95, 100, "Summarizing genes")
@@ -138,6 +174,7 @@ def describe_genes(rdf, rdict, progress_recorder):
     line2 = "This is a ranking of ALL probes, so the selected threshold does not change it."
     output.append("<p>" + line1 + " " + line2 + "</p>\n  <ol>")
     # print(line)
+    all_ranked = all_ranked.sort_values("rank")
     for p in (list(all_ranked.index[0:20]) + [x for x in survivors['probe_id'] if
                                               x not in all_ranked.index[0:20]]):
         asterisk = " *" if p in list(survivors['probe_id']) else ""
@@ -164,6 +201,7 @@ def describe_genes(rdf, rdict, progress_recorder):
     output.append("    <p>Asterisks indicate probes making the top {} in all 16 splits.</p>".format(rdict['threshold']))
     output.append("</div>")
 
-    return all_ranked.set_index("rank"), "\n".join(output)
-
-
+    # Return the all_ranked dataframe, with two key-like Series as the first columns
+    ordered_columns = ["entrez_id", "probe_id", ] + \
+                      [item for item in all_ranked.columns if item not in ["entrez_id", "probe_id", ]]
+    return all_ranked[ordered_columns], "\n".join(output)

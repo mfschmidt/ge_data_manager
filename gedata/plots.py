@@ -16,6 +16,21 @@ def mean_and_sd(numbers):
         tmean(numbers), tstd(numbers), len(numbers), min(numbers), max(numbers)
     )
 
+def calc_hilo(min_val, max_val, df, cols_to_test):
+    """ Return lowest and highest values from min_val and max_val if present, or calculate from df. """
+
+    # Calculate (or blindly accept) the range of the y-axis, which must be the same for all four axes.
+    if (max_val is None) and (len(df.index) > 0):
+        highest_possible_score = max([max(df[col]) for col in cols_to_test])
+    else:
+        highest_possible_score = max_val
+    if (min_val is None) and (len(df.index) > 0):
+        lowest_possible_score = min([min(df[col]) for col in cols_to_test])
+    else:
+        lowest_possible_score = min_val
+
+    return lowest_possible_score, highest_possible_score
+
 
 def box_and_swarm(figure, placement, label, variable, data, high_score=1.0, orientation="v", lim=None, ps=True, cols=4):
     """ Create an axes object with a swarm plot draw over a box plot of the same data. """
@@ -44,15 +59,15 @@ def box_and_swarm(figure, placement, label, variable, data, high_score=1.0, orie
 
     ax = figure.add_axes(placement, label=label)
     if orientation == "v":
-        sns.boxplot(data=data, x='shuffle', y=variable, order=shuffle_order, palette=shuffle_color_boxes, ax=ax)
         sns.swarmplot(data=data, x='shuffle', y=variable, order=shuffle_order, palette=shuffle_color_points, ax=ax)
+        sns.boxplot(data=data, x='shuffle', y=variable, order=shuffle_order, palette=shuffle_color_boxes, ax=ax)
         ax.set_ylabel(None)
         ax.set_xlabel(label)
         if lim is not None:
             ax.set_ylim(lim)
     else:
-        sns.boxplot(data=data, x=variable, y='shuffle', order=shuffle_order, palette=shuffle_color_boxes, ax=ax)
         sns.swarmplot(data=data, x=variable, y='shuffle', order=shuffle_order, palette=shuffle_color_points, ax=ax)
+        sns.boxplot(data=data, x=variable, y='shuffle', order=shuffle_order, palette=shuffle_color_boxes, ax=ax)
         ax.set_xlabel(None)
         ax.set_ylabel(label)
         if lim is not None:
@@ -111,7 +126,7 @@ def box_and_swarm(figure, placement, label, variable, data, high_score=1.0, orie
     return ax
 
 
-def plot_all_train_vs_test(df, title="Title", fig_size=(8, 8), ymin=None, ymax=None):
+def plot_all_train_vs_test(df, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
     """ Plot everything from initial distributions, through training curves, to training outcomes.
         Then the results of using discovered genes in train and test sets both complete and masked.
         Then even report overlap internal to each cluster of differing gene lists.
@@ -119,27 +134,13 @@ def plot_all_train_vs_test(df, title="Title", fig_size=(8, 8), ymin=None, ymax=N
         :param pandas.DataFrame df:
         :param str title: The title to put on the top of the whole plot
         :param fig_size: A tuple of inches across x inches high
-        :param ymin: Hard code the bottom of the y-axis
-        :param ymax: Hard code the top of the y-axis
+        :param y_min: Hard code the bottom of the y-axis
+        :param y_max: Hard code the top of the y-axis
     """
 
-    # Calculate (or blindly accept) the range of the y-axis, which must be the same for all four axes.
-    if (ymax is None) and (len(df.index) > 0):
-        highest_possible_score = max(
-            max(df['best']),
-            max(df['train_score']), max(df['test_score']),
-            max(df['masked_train_score']), max(df['masked_test_score']),
-        )
-    else:
-        highest_possible_score = ymax
-    if (ymin is None) and (len(df.index) > 0):
-        lowest_possible_score = min(
-            min(df['best']),
-            min(df['train_score']), min(df['test_score']),
-            min(df['masked_train_score']), min(df['masked_test_score']),
-        )
-    else:
-        lowest_possible_score = ymin
+    lowest_possible_score, highest_possible_score = calc_hilo(
+        y_min, y_max, df, ['best', 'train_score', 'test_score', 'masked_train_score', 'masked_test_score', ]
+    )
 
     """ Plot the first pane, rising lines representing rising Mantel correlations as probes are dropped. """
     a = df.loc[df['shuffle'] == 'none', 'path']
@@ -245,7 +246,7 @@ def plot_all_train_vs_test(df, title="Title", fig_size=(8, 8), ymin=None, ymax=N
                  )
 
 
-def plot_fig_2(df, title="Title", fig_size=(8, 8), ymin=None, ymax=None):
+def plot_fig_2(df, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
     """ Plot everything from initial distributions, through training curves, to training outcomes.
         Then the results of using discovered genes in train and test sets both complete and masked.
         Then even report overlap internal to each cluster of differing gene lists.
@@ -253,27 +254,13 @@ def plot_fig_2(df, title="Title", fig_size=(8, 8), ymin=None, ymax=None):
         :param pandas.DataFrame df:
         :param str title: The title to put on the top of the whole plot
         :param fig_size: A tuple of inches across x inches high
-        :param ymin: Hard code the bottom of the y-axis
-        :param ymax: Hard code the top of the y-axis
+        :param y_min: Hard code the bottom of the y-axis
+        :param y_max: Hard code the top of the y-axis
     """
 
-    # Calculate (or blindly accept) the range of the y-axis, which must be the same for all four axes.
-    if (ymax is None) and (len(df.index) > 0):
-        highest_possible_score = max(
-            max(df['best']),
-            max(df['train_score']), max(df['test_score']),
-            max(df['masked_train_score']), max(df['masked_test_score']),
-        )
-    else:
-        highest_possible_score = ymax
-    if (ymin is None) and (len(df.index) > 0):
-        lowest_possible_score = min(
-            min(df['best']),
-            min(df['train_score']), min(df['test_score']),
-            min(df['masked_train_score']), min(df['masked_test_score']),
-        )
-    else:
-        lowest_possible_score = ymin
+    lowest_possible_score, highest_possible_score = calc_hilo(
+        y_min, y_max, df, ['best', 'train_score', 'test_score', 'masked_train_score', 'masked_test_score', ]
+    )
 
     """ Plot the first pane, rising lines representing rising Mantel correlations as probes are dropped. """
     a = df.loc[df['shuffle'] == 'none', 'path']
@@ -292,7 +279,7 @@ def plot_fig_2(df, title="Title", fig_size=(8, 8), ymin=None, ymax=None):
         {'files': list(b), 'linestyle': ':', 'color': 'orchid'},
         {'files': list(a), 'linestyle': '-', 'color': 'black'}, ],
         # title="Split-half train vs test results",
-        label_keys=['shuffle'],
+        label_keys=['shuffle', ],
         fig_size=fig_size,
         title="",
         plot_overlaps=False,
@@ -307,13 +294,14 @@ def plot_fig_2(df, title="Title", fig_size=(8, 8), ymin=None, ymax=None):
     """ Top Row """
 
     """ Rising training curve plot """
-    ax_curve.set_position([margin, margin, main_ratio, main_ratio])
+    ax_curve.set_position([margin + 0.01, margin, main_ratio, main_ratio])
     ax_curve.set_label('rise')
     ax_curve.set_xlabel('Training')
+    ax_curve.set_ylabel('Mantel r')
 
     """ Horizontal peak plot """
     ax_peaks = box_and_swarm(
-        fig, [margin, margin + main_ratio + margin, main_ratio, alt_ratio],
+        fig, [margin + 0.01, margin + main_ratio + margin, main_ratio, alt_ratio],
         'Peaks', 'peak', df, orientation="h", lim=ax_curve.get_xlim()
     )
     ax_peaks.set_xticklabels([])
@@ -324,51 +312,37 @@ def plot_fig_2(df, title="Title", fig_size=(8, 8), ymin=None, ymax=None):
         'Peak Mantel', 'best', df, high_score=highest_possible_score, lim=ax_curve.get_ylim()
     )
 
-    fig.text(margin + 0.01, margin + (2 * main_ratio / 3), "A", ha='left', va='top', fontsize=14)
-    fig.text(margin + 0.01, 1.0 - margin - 0.01, "B", ha='left', va='top', fontsize=14)
+    fig.text(margin + (2.0 * main_ratio / 5.0), margin + main_ratio - 0.01, "A", ha='left', va='top', fontsize=14)
+    fig.text(margin + 0.02, 1.0 - margin - 0.01, "B", ha='left', va='top', fontsize=14)
     fig.text(margin + main_ratio + margin + 0.01, margin + main_ratio - 0.01, "C", ha='left', va='top', fontsize=14)
 
     return fig, (ax_curve, ax_peaks, ax_post)
 
 
-def plot_fig_3(df, title="Title", fig_size=(8, 8), ymin=None, ymax=None):
+def plot_fig_3(df, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
     """ Plot everything from initial distributions, through training curves, to training outcomes.
         Then the results of using discovered genes in train and test sets both complete and masked.
         Then even report overlap internal to each cluster of differing gene lists.
 
         :param pandas.DataFrame df:
         :param fig_size: A tuple of inches across x inches high
-        :param ymin: Hard code the bottom of the y-axis
-        :param ymax: Hard code the top of the y-axis
+        :param y_min: Hard code the bottom of the y-axis
+        :param y_max: Hard code the top of the y-axis
     """
 
-    # Calculate (or blindly accept) the range of the y-axis, which must be the same for all four axes.
-    if (ymax is None) and (len(df.index) > 0):
-        highest_possible_score = max(
-            max(df['best']),
-            max(df['train_score']), max(df['test_score']),
-            max(df['masked_train_score']), max(df['masked_test_score']),
-        )
-    else:
-        highest_possible_score = ymax
-    if (ymin is None) and (len(df.index) > 0):
-        lowest_possible_score = min(
-            min(df['best']),
-            min(df['train_score']), min(df['test_score']),
-            min(df['masked_train_score']), min(df['masked_test_score']),
-        )
-    else:
-        lowest_possible_score = ymin
+    lowest_possible_score, highest_possible_score = calc_hilo(
+        y_min, y_max, df, ['best', 'train_score', 'test_score', 'masked_train_score', 'masked_test_score', ]
+    )
 
     fig = plt.figure(figsize=fig_size)
 
     margin = 0.05
-    ax_height = 0.90
+    ax_height = 0.85
     ax_width = 0.42
 
     """ Train box and swarm plots """
     ax_a = box_and_swarm(
-        fig, [margin, margin, ax_width, ax_height],
+        fig, [margin, margin * 2, ax_width, ax_height],
         'Train unmasked', 'train_score', df, high_score=highest_possible_score,
     )
     # The top of the plot must be at least 0.25 higher than the highest value to make room for p-values.
@@ -379,7 +353,7 @@ def plot_fig_3(df, title="Title", fig_size=(8, 8), ymin=None, ymax=None):
 
     """ Test box and swarm plots """
     ax_b = box_and_swarm(
-        fig, [1.0 - margin - ax_width, margin, ax_width, ax_height],
+        fig, [1.0 - margin - ax_width, margin * 2, ax_width, ax_height],
         'Test unmasked', 'test_score', df, high_score=highest_possible_score, lim=ax_a.get_ylim()
     )
     ax_b.yaxis.tick_left()
@@ -391,96 +365,50 @@ def plot_fig_3(df, title="Title", fig_size=(8, 8), ymin=None, ymax=None):
     return fig, (ax_a, ax_b)
 
 
-def plot_fig_4(df, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
-    """ Plot everything from initial distributions, through training curves, to training outcomes.
-        Then the results of using discovered genes in train and test sets both complete and masked.
-        Then even report overlap internal to each cluster of differing gene lists.
-
-        :param pandas.DataFrame df:
-        :param fig_size: A tuple of inches across x inches high
-        :param y_min: Hard code the bottom of the y-axis
-        :param y_max: Hard code the top of the y-axis
-    """
-
-    fig = plt.figure(figsize=fig_size)
-
-    margin = 0.05
-    ax_width = 0.42
-    ax_height = 0.90
-
-    """ Internal overlap plots """
-    df.loc[df['shuffle'] == 'none', 'real_v_shuffle_overlap'] = df.loc[df['shuffle'] == 'none', 'overlap_by_seed']
-    ax_a = box_and_swarm(
-        fig, [margin, margin, ax_width, ax_height],
-        'train vs shuffles', 'real_v_shuffle_overlap', df, orientation="v", ps=True
-    )
-
-    ax_b = box_and_swarm(
-        fig, [1.0 - margin - ax_width, margin, ax_width, ax_height],
-        'intra-list similarity', 'train_overlap', df, orientation="v", ps=True, lim=ax_a.get_ylim()
-    )
-
-    if (y_min is not None) and (y_max is not None):
-        ax_a.set_ylim(bottom=y_min, top=y_max)
-        ax_b.set_ylim(bottom=y_min, top=y_max)
-    else:
-        ax_a.set_ylim(
-            bottom=min(ax_a.get_ylim()[0], ax_b.get_ylim()[0], ax_a.get_ylim()[1], ax_b.get_ylim()[1]),
-            top=max(ax_a.get_ylim()[0], ax_b.get_ylim()[0], ax_a.get_ylim()[1], ax_b.get_ylim()[1])
-        )
-        ax_b.set_ylim(ax_a.get_ylim())
-
-    ax_a.yaxis.tick_right()
-    ax_a.set_yticklabels([])
-    ax_a.set_ylabel('Overlap % (past peak)')
-    ax_b.yaxis.tick_left()
-    # ax_b.set_ylabel('Overlap % (past peak)')
-
-    fig.text(margin + 0.01, 1.0 - margin - 0.01, "A", ha='left', va='top', fontsize=14)
-    fig.text(margin + ax_width + margin + 0.01, 1.0 - margin - 0.01, "B", ha='left', va='top', fontsize=14)
-
-    return fig, (ax_a, ax_b)
-
-
 def describe_mantel(df, descriptor="", title="Title"):
     """ Generate textual descriptions to go along with the plot generated. """
 
     df['top_n'] = df['n'] - df['peak']
 
-    d = ["<p><span class=\"heavy\">{}</span></p>".format(title),
-         "<p><span class=\"heavy\">Training peak heights and locations:</span></p>"]
+    d = [
+        "<h2><span class=\"heavy\">{}</span></h2>".format(title),
+        "<h3><span class=\"heavy\">Training peak heights and locations:</span></h3>",
+        "<p><img src=\"./{}_fig_2.png\" alt=\"Figure 2. Mantel optimization\" width=\"768\"></p>".format(descriptor),
+        "<p><strong>Figure 2. Mantel optimization.</strong> " + \
+             "A) The Mantel correlation rises as each 'worst' gene is dropped. " + \
+             "B) Few genes remain at peak correlation. " + \
+             "C) Higher correlations are attained in real gene expression data than in any shuffled version of it." + \
+             "</p>",
+    ]
     for shuffle in ['none', 'be04', 'be08', 'be16', 'edge', 'dist', 'agno', ]:
+        highlighter = ("<mark>", "</mark>") if shuffle == "none" else ("", "")
         masked_df = df[df['shuffle'] == shuffle]
         d.append("<p>Mantel peaks with {}-shuffled training sets peaked with {} probes remaining.".format(
             shuffle, mean_and_sd(masked_df['top_n'])
         ))
-        d.append("{}-shuffled Mantel correlations rose from {} to a peak of {}.".format(
-            shuffle, mean_and_sd(masked_df['initial']), mean_and_sd(masked_df['best'])
+        d.append("{}-shuffled Mantel correlations rose from {} to a peak of {}{}{}.</p>".format(
+            shuffle, mean_and_sd(masked_df['initial']), highlighter[0], mean_and_sd(masked_df['best']), highlighter[1]
         ))
-        d.append("Mantel peak locations with {}-shuffled: {}.</p>".format(
-            shuffle, mean_and_sd(masked_df['top_n'])
-        ))
-    d.append("<p><img src=\"./{}_fig_2.png\" alt=\"Figure 2. Mantel optimization\"></p>".format(descriptor))
-    d.append("<p><strong>Figure 2. Mantel optimization.</strong> " + \
-             "A) The Mantel correlation rises as each 'worst' gene is dropped. " + \
-             "B) Few genes remain at peak correlation. " + \
-             "C) Higher correlations are attained in real gene expression data than in any shuffled version of it.</p>")
-    d.append("<p><span class=\"heavy\">Using probes discovered in training to filter original split-half data, and re-Mantel:</span></p>")
+    d.append("<h3><span class=\"heavy\">Using probes discovered in training to filter original split-half data, and re-Mantel:</span></h3>")
+    d.append("<p><img src=\"./{}_fig_3.png\" alt=\"Figure 3. Mantel Optimization\" width=\"384\"></p>".format(descriptor))
+    d.append("<p><strong>Figure 3. Gene performance.</strong> " + \
+             "A) In original, complete training data, genes discovered in real data still perform better than " + \
+             "genes discovered in shuffled data. Expression data shuffled to maintain distance relationships " + \
+             "generated genes that performed better than those from agnostic permutations. " + \
+             "B) Genes discovered in training data were also used to generate a Mantel correlation in test " + \
+             "data, the left-out samples from splitting halves. Patterns are similar to training data, but " + \
+             "genes discovered in real training data fall slightly in independent test data." + \
+             "</p>")
     for shuffle in ['none', 'be04', 'be08', 'be16', 'edge', 'dist', 'agno', ]:
+        highlighter = ("<mark>", "</mark>") if shuffle == "none" else ("", "")
         masked_df = df[df['shuffle'] == shuffle]
         d.append("<p>Real Mantel correlations with probes discovered in {}-shuffled training sets.".format(shuffle))
         d.append("In unmasked train half: {}.".format( mean_and_sd(masked_df['train_score'])))
         d.append("In masked train half: {}.".format(mean_and_sd(masked_df['masked_train_score'])))
-        d.append("In unmasked test half: {}.".format(mean_and_sd(masked_df['test_score'])))
+        d.append("In unmasked test half: {}{}{}.".format(
+            highlighter[0], mean_and_sd(masked_df['test_score']), highlighter[1]
+        ))
         d.append("In masked test half: {}.</p>".format(mean_and_sd(masked_df['masked_test_score'])))
-    d.append("<p><img src=\"./{}_fig_3.png\" alt=\"Figure 3. Mantel Optimization\"></p>".format(descriptor))
-    d.append("<p><strong>Figure 3. Gene performance.</strong> " + \
-             "A) In original, complete training data, genes discovered in real data still perform better than " + \
-             "genes discovered in shuffled data. Expression data shuffled to maintain distance relationships " + \
-             "generated genes that performed better than those from agnostic permutations. "
-             "B) Genes discovered in training data were also used to generate a Mantel correlation in test " + \
-             "data, the left-out samples from splitting halves. Patterns are similar to training data, but " + \
-             "genes discovered in real training data fall slightly in independent test data.</p>")
     return "\n".join(d)
 
 
@@ -495,6 +423,10 @@ def plot_overlap(df, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
         :param y_min: Hard code the bottom of the y-axis
         :param y_max: Hard code the top of the y-axis
     """
+
+    lowest_possible_score, highest_possible_score = calc_hilo(
+        y_min, y_max, df, ['best', 'train_score', 'test_score', 'masked_train_score', 'masked_test_score', ]
+    )
 
     fig = plt.figure(figsize=fig_size)
 
@@ -515,46 +447,148 @@ def plot_overlap(df, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
         fig, [x_left, bottom, box_width, box_height],
         'train vs shuffles', 'real_v_shuffle_overlap', df, orientation="v", ps=True
     )
-    if (y_min is not None) and (y_max is not None):
-        ax.set_ylim(bottom=y_min, top=y_max)
+    ax.set_ylim(bottom=lowest_possible_score, top=highest_possible_score)
 
     return fig, (ax, )
+
+
+def plot_fig_4(df, title="Title", fig_size=(8, 5), y_min=None, y_max=None):
+    """ Plot everything from initial distributions, through training curves, to training outcomes.
+        Then the results of using discovered genes in train and test sets both complete and masked.
+        Then even report overlap internal to each cluster of differing gene lists.
+
+        :param pandas.DataFrame df:
+        :param fig_size: A tuple of inches across x inches high
+        :param y_min: Hard code the bottom of the y-axis
+        :param y_max: Hard code the top of the y-axis
+    """
+
+    lowest_possible_score, highest_possible_score = calc_hilo(
+        y_min, y_max, df, ['overlap_by_seed', 'ktau_by_seed', 'overlap_by_split', 'ktau_by_split', ]
+    )
+    fig = plt.figure(figsize=fig_size)
+
+    margin = 0.050
+    gap = 0.040
+    ax_width = 0.190
+    ax_height = 0.840
+
+    """ Internal overlap plots """
+    # For 'real_v_shuffle_overlap', all unshuffled values are 1.0 because each result matches itself.
+    # It needs to be replaced with its internal intra-group overlap for a visual baseline,
+    # even though it's not within-split and shouldn't be compared quantitatively against shuffles.
+    df.loc[df['shuffle'] == 'none', 'real_v_shuffle_overlap'] = df.loc[df['shuffle'] == 'none', 'overlap_by_seed']
+    df.loc[df['shuffle'] == 'none', 'real_v_shuffle_ktau'] = df.loc[df['shuffle'] == 'none', 'ktau_by_seed']
+    # In only the unshuffled runs, fill in the zeroes (or NaNs) with intra-group data. Unshuffled runs have no seeds.
+    # Shuffled runs already have correct calculated overlaps.
+    df.loc[df['shuffle'] == 'none', 'overlap_by_split'] = df.loc[df['shuffle'] == 'none', 'overlap_by_seed']
+    df.loc[df['shuffle'] == 'none', 'ktau_by_split'] = df.loc[df['shuffle'] == 'none', 'ktau_by_seed']
+
+    ax_a = box_and_swarm(
+        fig, [margin, margin * 2, ax_width, ax_height],
+        'intra-split-half similarity', 'overlap_by_split', df, orientation="v", ps=False
+    )
+    ax_a.set_ylim(bottom=lowest_possible_score, top=highest_possible_score)
+
+    ax_b = box_and_swarm(
+        fig, [margin + ax_width + gap, margin * 2, ax_width, ax_height],
+        'train vs shuffles', 'real_v_shuffle_overlap', df[df['shuffle'] != 'none'], orientation="v", ps=False
+    )
+    ax_b.set_ylim(ax_a.get_ylim())
+
+    ax_c = box_and_swarm(
+        fig, [1.0 - margin - ax_width - gap - ax_width, margin * 2, ax_width, ax_height],
+        'intra-split-half similarity', 'ktau_by_split', df, orientation="v", ps=False
+    )
+    ax_c.set_ylim(ax_a.get_ylim())
+
+    ax_d = box_and_swarm(
+        fig, [1.0 - margin - ax_width, margin * 2, ax_width, ax_height],
+        'train vs shuffles', 'real_v_shuffle_ktau', df[df['shuffle'] != 'none'], orientation="v", ps=False
+    )
+    ax_d.set_ylim(ax_a.get_ylim())
+
+    ax_a.yaxis.tick_right()
+    ax_a.set_yticklabels([])
+    ax_a.set_ylabel('Overlap % (past peak)')
+    ax_b.yaxis.tick_left()
+
+    ax_c.yaxis.tick_right()
+    ax_c.set_yticklabels([])
+    ax_c.set_ylabel('Kendall tau')
+    ax_d.yaxis.tick_left()
+
+    fig.text(margin + ax_width + (gap / 2.0), 1.0 - 0.01,
+             "Overlap of top genes", ha='center', va='top', fontsize=14
+    )
+    fig.text(margin + 0.01, 1.0 - margin - 0.02, "A", ha='left', va='top', fontsize=14)
+    fig.text(margin + ax_width + gap + 0.01, 1.0 - margin - 0.02, "B", ha='left', va='top', fontsize=14)
+
+    fig.text(1.0 - margin - ax_width - (gap / 2.0), 1.0 - 0.01,
+             "Kendall tau of entire list", ha='center', va='top', fontsize=14
+    )
+    fig.text(1.0 - margin - ax_width - gap - ax_width + 0.01, 1.0 - margin - 0.02, "C", ha='left', va='top', fontsize=14)
+    fig.text(1.0 - margin - ax_width + 0.01, 1.0 - margin - 0.02, "D", ha='left', va='top', fontsize=14)
+
+    return fig, (ax_a, ax_b, ax_c, ax_d)
 
 
 def describe_overlap(df, descriptor="", title="Title"):
     """ Generate textual descriptions to go along with the plot generated. """
 
-    d = ["<p><span class=\"heavy\">{}</span></p>".format(title),
-         "<p><span class=\"heavy\">Internal altogether (not plotted):</span></p><p>"]
+    d = [
+        "<h2><span class=\"heavy\">{}</span></h2>".format(title),
+        "<p><img src=\"./{}_fig_4.png\" alt=\"Figure 4. Overlapping genes\" width=\"768\"></p>".format(descriptor),
+        "<p><strong>Figure 4. Overlapping genes.</strong> " + \
+            "A) Intra-type consistency. The percent overlap between each past-peak gene list and its comparable, same-split-half, gene lists. " + \
+            "Non-shuffled results have only one gene list per split-half and are necessarily plotted across all split-halves. " + \
+            "B) Inter-type consistency, or how well a shuffle's top genes approximate those from un-shuffled data. " + \
+            ". The percent overlap between the gene list surviving past the peak in each " + \
+            "shuffle, and the gene list discovered in the raw data it was shuffled from. " + \
+            "C) Intra-type consistency. The kendall tau between each complete ranked gene list and its comparable, same-split-half, gene lists." + \
+            "Non-shuffled results have only one gene list per split-half and are necessarily plotted across all split-halves. " + \
+            "D) Inter-type consistency, or how well a shuffle approximates un-shuffled data. " + \
+            "The kendall tau correlation between the ranked gene list in each " + \
+            "shuffle, and the ranked gene list discovered in the raw data it was shuffled from. " + \
+            "</p>",
+        "<h3><span class=\"heavy\">Internal altogether (not plotted):</span></h3><p>",
+    ]
     for shuffle in ['none', 'be04', 'be08', 'be16', 'edge', 'dist', 'agno', ]:
-        d.append("Overlap within {}-shuffled: {}.".format(
+        d.append("Overlap within {}-shuffled: {}.<br />".format(
             shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['train_overlap'])
         ))
+        d.append("Kendall tau within {}-shuffled: {}.<br />".format(
+            shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['train_ktau'])
+        ))
     d.append("</p>")
-    d.append("<p><span class=\"heavy\">Internal by shuffle:</span></p><p>")
+    d.append("<h3><span class=\"heavy\">Internal within a shuffle seed, across splits:</span></h3><p>")
     for shuffle in ['none', 'be04', 'be08', 'be16', 'edge', 'dist', 'agno', ]:
-        d.append("Overlap within {}-shuffled, by seed: {}.".format(
+        d.append("Overlap within {}-shuffled, within shuffle seed: {}.<br />".format(
             shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['overlap_by_seed'])
         ))
+        d.append("Kendall tau within {}-shuffled, within shuffle seed: {}.<br />".format(
+            shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['ktau_by_seed'])
+        ))
     d.append("</p>")
-    d.append("<p><span class=\"heavy\">Internal by split:</span></p><p>")
+    d.append("<h3><span class=\"heavy\">Internal within a split, across shuffle seeds (feeds figure 4 B):</span></h3><p>")
     for shuffle in ['none', 'be04', 'be08', 'be16', 'edge', 'dist', 'agno', ]:
-        d.append("Overlap within {}-shuffled, by split: {}.".format(
+        d.append("Overlap within {}-shuffled, within split batch: {}.<br />".format(
             shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['overlap_by_split'])
         ))
+        d.append("Kendall tau within {}-shuffled, within split batch: {}.<br />".format(
+            shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['ktau_by_split'])
+        ))
     d.append("</p>")
-    d.append("<p><span class=\"heavy\">Real vs shuffled similarity:</span></p><p>")
+    d.append("<h3><span class=\"heavy\">Real vs shuffled similarity:</span></h3><p>")
     for shuffle in ['none', 'be04', 'be08', 'be16', 'edge', 'dist', 'agno', ]:
-        d.append("Overlap between un-shuffled and {}-shuffled: {}.".format(
+        d.append("Overlap between un-shuffled and {}-shuffled: {}.<br />".format(
             shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['real_v_shuffle_overlap'])
         ))
-    d.append("<p><img src=\"./{}_fig_4.png\" alt=\"Figure 4. Overlapping genes\"></p>".format(descriptor))
-    d.append("<p><strong>Figure 4. Overlapping genes.</strong> " + \
-             "A) Inter-type consistency. The percent overlap between the gene list surviving past the peak in each " + \
-             "shuffle, and the gene list discovered in the raw data it was shuffled from. " + \
-             "B) Intra-type consistency. The percent overlap between each run and its comparable runs.</p>")
+        d.append("Kendall tau between un-shuffled and {}-shuffled: {}.<br />".format(
+            shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['real_v_shuffle_ktau'])
+        ))
     d.append("</p>")
-    d.append("<p><span class=\"heavy\">Train vs test:</span></p>")
+    d.append("<h3><span class=\"heavy\">Train vs test:</span></h3>")
     d.append("<p>Overlap between top train-discovered probes and what would have been discovered in the other half: ")
     d.append("    {}.</p>".format(mean_and_sd(df[df['shuffle'] == 'none']['train_vs_test_overlap'])))
     return "\n".join(d)
