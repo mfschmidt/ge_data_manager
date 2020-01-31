@@ -16,7 +16,7 @@ import pandas as pd
 import logging
 import json
 from scipy import stats
-
+import errno
 
 from pygest import algorithms
 from pygest.convenience import bids_val
@@ -460,9 +460,17 @@ def train_vs_test_overlap(tsv_file, probe_significance_threshold=None):
         print("Non train/test file: '{}'".format(tsv_file))
         return 0.0
 
-    return algorithms.pct_similarity(
-        [tsv_file, comp_file], map_probes_to_genes_first=False, top=probe_significance_threshold
-    )
+    # Sometimes, a comparision will be requested between a train file and its nonexistent test counterpart.
+    # In that situation, it's best to just return 0.0 rather than add all the logic to determine test completion.
+    if os.path.isfile(tsv_file) and os.path.isfile(comp_file):
+        return algorithms.pct_similarity(
+            [tsv_file, comp_file], map_probes_to_genes_first=False, top=probe_significance_threshold
+        )
+        # raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), comp_file)
+    else:
+        return 0.00
+
+
 
 
 def extract_seed(path, key):
@@ -729,6 +737,101 @@ def clear_micro_caches(self, descriptor, progress_from=0, progress_to=100, data_
     return rdict
 
 
+def kendall_tau_calculation(list_of_lists):
+    """ Normally, a list of files would be sent to pygest.algorithms.kendall_tau_list. But because our files each
+        has a different length, pygest.algorithms.kendall_tau_list cannot handle them. This function will calculate
+        kendall taus here rather than sending them off.
+    """
+
+    from scipy.stats import kendalltau
+
+    # Calculate the Kendall tau for each edge in the matrix; save time by duplicating across the diagonal & filling 1's
+    taus = np.zeros((len(list_of_lists), len(list_of_lists)), dtype=np.float64)
+    for row, y in enumerate(list_of_lists):
+        for col, x in enumerate(list_of_lists):
+            if col < row:
+                taus[row, col], p = kendalltau(list_of_lists[row], list_of_lists[col])
+                taus[col, row] = taus[row, col]
+            elif col == row:
+                taus[row, col] = 1.0
+
+    return taus
+
+
+def kendall_tau_coerced_value(file_list, coerce_by="none"):
+    """ Pass the work along, and return a single mean scalar. """
+
+    taus = kendall_tau_coerced_matrix(file_list, coerce_by=coerce_by)
+    return np.mean(taus[np.tril_indices_from(taus, k=-1)])
+
+
+def kendall_tau_coerced_list(file_list, coerce_by="none"):
+    """ Pass the work along, and return a list rather than matrix. """
+
+    taus = kendall_tau_coerced_matrix(file_list, coerce_by=coerce_by)
+    return list((np.sum(taus, axis=0) - 1.0) / (len(taus) - 1))
+
+
+def kendall_tau_coerced_matrix(file_list, coerce_by="none"):
+    """ Kendall tau requires two equal-sized lists. But in our case, gene lists can differ in size, and even
+        in contents. So we must clean them up first, then send them to the actual Kendall tau calculator.
+
+        :param file_list: list of file paths, each a tsv-formatted whack-a-probe optimization result
+        :param coerce_by: How to treat results with differing genes in their lists so they match, "trim" or "fill"
+        :returns float: The mean of all kendall tau relationships between menbers of file_list
+    """
+
+    if len(file_list) == 0:
+        print("zero-len file list passed to kendall_tau_coerced_matrix")
+        return np.ndarray((0, 0), dtype=np.float64)
+    elif len(file_list) == 1:
+        print("length-one file list passed to kendall_tau_coerced_matrix")
+        return np.array([[1.0]])
+
+    # Loading files is relatively expensive; load them all once and save their contents to memory.
+    result_values = []
+    for i, f in enumerate(file_list):
+        df = pd.read_csv(f, sep='\t' if f[-4:] == '.tsv' else ',')
+        if 'Unnamed: 0' in df.columns:
+            df = df[['Unnamed: 0', 'probe_id']].set_index('probe_id').sort_index().rename(
+                columns={"Unnamed: 0": "rank_{:02d}".format(i)}
+            )
+        else:
+            print("File '{}' does not have the expected column names. Guessing...".format(f))
+            df = df[df.columns[0:3:2]].set_index(df.columns[2]).sort_index()
+
+        # df['rank_{:02d}'.format(i)] += 1  # Ranks should be 1-based, not zero-based - already are!
+        result_values.append(df)
+
+    # Create the single dataframe with one probe_id index and multiple Series of rankings.
+    # Some of these values will be nan if the probe_id did not make the list for that series.
+    all_results = pd.concat(result_values, axis=1)
+
+    if coerce_by == "trim":
+        # Drop any probes that were not represented in ALL listed files.
+        all_results = all_results.dropna(axis=0, how='any')
+    elif coerce_by == "fill":
+        # Don't drop any probes; fill in nans with the lowest rankings.
+        for col in all_results.columns:
+            # Replace this column's nans with this column's highest (worst) rankings
+            # print("column has {} values ranging from {} to {}; {} are NaN. Replace them with {}".format(
+            #     len(all_results),
+            #     all_results[col].min(), all_results[col].max(),
+            #     len(all_results.loc[np.isnan(all_results.loc[:, col]), col]),
+            #     len(list(range(int(max(all_results[col]) + 1), len(all_results) + 1)))
+            # ))
+            # if len(all_results) > 15000:
+            #     print("{} files, starting with {}".format(len(file_list), file_list[0]))
+
+            all_results.loc[np.isnan(all_results.loc[:, col]), col] = len(all_results)
+            # all_results.loc[np.isnan(all_results.loc[:, col]), col] = \
+            #     range(int(max(all_results[col]) + 1), len(all_results) + 1)
+
+    # Send a list of manipulated rankings off for calculation.
+    all_results = all_results.sort_index()
+    return kendall_tau_calculation([list(all_results[col]) for col in all_results.columns])
+
+
 @shared_task(bind=True)
 def assess_everything(self, plot_descriptor, data_root="/data"):
     """ Wrap both assess_mantel and assess_overlap into a single function.
@@ -769,8 +872,11 @@ def assess_everything(self, plot_descriptor, data_root="/data"):
             rdf.loc[shuffle_mask, 'train_overlap'] = algorithms.pct_similarity_list(
                 list(rdf.loc[shuffle_mask, 'path']), top=rdict['threshold']
             )
-            rdf.loc[shuffle_mask, 'train_ktau'] = algorithms.kendall_tau_list(
-                list(rdf.loc[shuffle_mask, 'path'])
+            rdf.loc[shuffle_mask, 'train_ktau_fill'] = kendall_tau_coerced_list(
+                list(rdf.loc[shuffle_mask, 'path']), "fill",
+            )
+            rdf.loc[shuffle_mask, 'train_ktau_trim'] = kendall_tau_coerced_list(
+                list(rdf.loc[shuffle_mask, 'path']), "trim",
             )
 
             # For each shuffled result, compare it against same-shuffled results from the same split
@@ -781,8 +887,11 @@ def assess_everything(self, plot_descriptor, data_root="/data"):
                 rdf.loc[shuffle_mask & split_mask, 'overlap_by_split'] = algorithms.pct_similarity_list(
                     list(rdf.loc[shuffle_mask & split_mask, 'path']), top=rdict['threshold']
                 )
-                rdf.loc[shuffle_mask & split_mask, 'ktau_by_split'] = algorithms.kendall_tau_list(
-                    list(rdf.loc[shuffle_mask & split_mask, 'path'])
+                rdf.loc[shuffle_mask & split_mask, 'ktau_by_split_fill'] = kendall_tau_coerced_list(
+                    list(rdf.loc[shuffle_mask & split_mask, 'path']), "fill",
+                )
+                rdf.loc[shuffle_mask & split_mask, 'ktau_by_split_trim'] = kendall_tau_coerced_list(
+                    list(rdf.loc[shuffle_mask & split_mask, 'path']), "trim",
                 )
 
             # For each shuffled result, compare it against same-shuffled results from the same shuffle seed
@@ -791,8 +900,11 @@ def assess_everything(self, plot_descriptor, data_root="/data"):
                 rdf.loc[shuffle_mask & seed_mask, 'overlap_by_seed'] = algorithms.pct_similarity_list(
                     list(rdf.loc[shuffle_mask & seed_mask, 'path']), top=rdict['threshold']
                 )
-                rdf.loc[shuffle_mask & seed_mask, 'ktau_by_seed'] = algorithms.kendall_tau_list(
-                    list(rdf.loc[shuffle_mask & seed_mask, 'path'])
+                rdf.loc[shuffle_mask & seed_mask, 'ktau_by_seed_fill'] = kendall_tau_coerced_list(
+                    list(rdf.loc[shuffle_mask & seed_mask, 'path']), "fill",
+                )
+                rdf.loc[shuffle_mask & seed_mask, 'ktau_by_seed_trim'] = kendall_tau_coerced_list(
+                    list(rdf.loc[shuffle_mask & seed_mask, 'path']), "trim",
                 )
 
             """ For each result in actual split-half train data, compare it to its shuffles. """
@@ -800,8 +912,11 @@ def assess_everything(self, plot_descriptor, data_root="/data"):
             rdf.loc[shuffle_mask, 'real_v_shuffle_overlap'] = rdf.loc[shuffle_mask, :].apply(
                 lambda x: algorithms.pct_similarity([x.path, x.real_tsv_from_shuffle], top=rdict['threshold']), axis=1
             )
-            rdf.loc[shuffle_mask, 'real_v_shuffle_ktau'] = rdf.loc[shuffle_mask, :].apply(
-                lambda x: algorithms.kendall_tau([x.path, x.real_tsv_from_shuffle]), axis=1
+            rdf.loc[shuffle_mask, 'real_v_shuffle_ktau_fill'] = rdf.loc[shuffle_mask, :].apply(
+                lambda x: kendall_tau_coerced_value([x.path, x.real_tsv_from_shuffle], "fill"), axis=1
+            )
+            rdf.loc[shuffle_mask, 'real_v_shuffle_ktau_trim'] = rdf.loc[shuffle_mask, :].apply(
+                lambda x: kendall_tau_coerced_value([x.path, x.real_tsv_from_shuffle], "trim"), axis=1
             )
 
     progress_recorder.set_progress(99, 100, "Step 2/2<br />Similarity calculated")
@@ -941,7 +1056,7 @@ def assess_mantel(self, plot_descriptor, data_root="/data"):
     progress_recorder.set_progress(90, 100, "Building probe to gene map")
 
     """ Write out relevant gene lists as html. """
-    df_ranked_full, description = describe_genes(rdf, rdict, progress_recorder)
+    df_ranked_full, description = describe_genes(rdf, rdict, plot_descriptor.lower(), progress_recorder)
     df_ranked_full.to_csv(os.path.join(data_root, "plots", "{}_ranked_full.csv".format(plot_descriptor.lower())))
     df_ranked_final = df_ranked_full[['entrez_id', ]]
     df_ranked_final.to_csv(os.path.join(data_root, "plots", "{}_ranked.csv".format(plot_descriptor.lower())))

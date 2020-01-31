@@ -32,7 +32,8 @@ def calc_hilo(min_val, max_val, df, cols_to_test):
     return lowest_possible_score, highest_possible_score
 
 
-def box_and_swarm(figure, placement, label, variable, data, high_score=1.0, orientation="v", lim=None, ps=True, cols=4):
+def box_and_swarm(figure, placement, label, variable, data, high_score=1.0, orientation="v",
+                  lim=None, ps=True, cols=4, push_ordinate_to=None):
     """ Create an axes object with a swarm plot draw over a box plot of the same data. """
 
     shuffle_order = ['none', 'be04', 'be08', 'be16', 'edge', 'dist', 'agno']
@@ -56,6 +57,9 @@ def box_and_swarm(figure, placement, label, variable, data, high_score=1.0, orie
         {'shuffle': 'dist', 'xo': 5.0, 'xp': 2.5},
         {'shuffle': 'agno', 'xo': 6.0, 'xp': 3.0},
     ]
+
+    if push_ordinate_to is not None:
+        data[variable] = data[variable] + push_ordinate_to - data[variable].max()
 
     ax = figure.add_axes(placement, label=label)
     if orientation == "v":
@@ -283,6 +287,7 @@ def plot_fig_2(df, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
         fig_size=fig_size,
         title="",
         plot_overlaps=False,
+        push_x_to = 15745,
     )
     # The top of the plot must be at least 0.25 higher than the highest value to make room for p-values.
     ax_curve.set_ylim(bottom=lowest_possible_score, top=highest_possible_score + 0.25)
@@ -302,7 +307,7 @@ def plot_fig_2(df, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
     """ Horizontal peak plot """
     ax_peaks = box_and_swarm(
         fig, [margin + 0.01, margin + main_ratio + margin, main_ratio, alt_ratio],
-        'Peaks', 'peak', df, orientation="h", lim=ax_curve.get_xlim()
+        'Peaks', 'peak', df, orientation="h", lim=ax_curve.get_xlim(), push_ordinate_to=15745
     )
     ax_peaks.set_xticklabels([])
 
@@ -464,13 +469,15 @@ def plot_fig_4(df, title="Title", fig_size=(8, 5), y_min=None, y_max=None):
     """
 
     lowest_possible_score, highest_possible_score = calc_hilo(
-        y_min, y_max, df, ['overlap_by_seed', 'ktau_by_seed', 'overlap_by_split', 'ktau_by_split', ]
+        y_min, y_max, df,
+        ['overlap_by_seed', 'ktau_by_seed_fill', 'ktau_by_seed_trim',
+         'overlap_by_split', 'ktau_by_split_fill', 'ktau_by_split_trim', ]
     )
     fig = plt.figure(figsize=fig_size)
 
     margin = 0.050
     gap = 0.040
-    ax_width = 0.190
+    ax_width = 0.120
     ax_height = 0.840
 
     """ Internal overlap plots """
@@ -478,59 +485,90 @@ def plot_fig_4(df, title="Title", fig_size=(8, 5), y_min=None, y_max=None):
     # It needs to be replaced with its internal intra-group overlap for a visual baseline,
     # even though it's not within-split and shouldn't be compared quantitatively against shuffles.
     df.loc[df['shuffle'] == 'none', 'real_v_shuffle_overlap'] = df.loc[df['shuffle'] == 'none', 'overlap_by_seed']
-    df.loc[df['shuffle'] == 'none', 'real_v_shuffle_ktau'] = df.loc[df['shuffle'] == 'none', 'ktau_by_seed']
+    df.loc[df['shuffle'] == 'none', 'real_v_shuffle_ktau_fill'] = df.loc[df['shuffle'] == 'none', 'ktau_by_seed_fill']
+    df.loc[df['shuffle'] == 'none', 'real_v_shuffle_ktau_trim'] = df.loc[df['shuffle'] == 'none', 'ktau_by_seed_trim']
     # In only the unshuffled runs, fill in the zeroes (or NaNs) with intra-group data. Unshuffled runs have no seeds.
     # Shuffled runs already have correct calculated overlaps.
     df.loc[df['shuffle'] == 'none', 'overlap_by_split'] = df.loc[df['shuffle'] == 'none', 'overlap_by_seed']
-    df.loc[df['shuffle'] == 'none', 'ktau_by_split'] = df.loc[df['shuffle'] == 'none', 'ktau_by_seed']
+    df.loc[df['shuffle'] == 'none', 'ktau_by_split_fill'] = df.loc[df['shuffle'] == 'none', 'ktau_by_seed_fill']
+    df.loc[df['shuffle'] == 'none', 'ktau_by_split_trim'] = df.loc[df['shuffle'] == 'none', 'ktau_by_seed_trim']
 
+    # A & B
+    left_side = margin
     ax_a = box_and_swarm(
-        fig, [margin, margin * 2, ax_width, ax_height],
-        'intra-split-half similarity', 'overlap_by_split', df, orientation="v", ps=False
+        fig, [left_side, margin * 2, ax_width, ax_height],
+        'intra-split-half similarity', 'overlap_by_seed', df, orientation="v", ps=False
     )
     ax_a.set_ylim(bottom=lowest_possible_score, top=highest_possible_score)
 
     ax_b = box_and_swarm(
-        fig, [margin + ax_width + gap, margin * 2, ax_width, ax_height],
+        fig, [left_side + ax_width + gap, margin * 2, ax_width, ax_height],
         'train vs shuffles', 'real_v_shuffle_overlap', df[df['shuffle'] != 'none'], orientation="v", ps=False
     )
     ax_b.set_ylim(ax_a.get_ylim())
-
-    ax_c = box_and_swarm(
-        fig, [1.0 - margin - ax_width - gap - ax_width, margin * 2, ax_width, ax_height],
-        'intra-split-half similarity', 'ktau_by_split', df, orientation="v", ps=False
-    )
-    ax_c.set_ylim(ax_a.get_ylim())
-
-    ax_d = box_and_swarm(
-        fig, [1.0 - margin - ax_width, margin * 2, ax_width, ax_height],
-        'train vs shuffles', 'real_v_shuffle_ktau', df[df['shuffle'] != 'none'], orientation="v", ps=False
-    )
-    ax_d.set_ylim(ax_a.get_ylim())
 
     ax_a.yaxis.tick_right()
     ax_a.set_yticklabels([])
     ax_a.set_ylabel('Overlap % (past peak)')
     ax_b.yaxis.tick_left()
 
-    ax_c.yaxis.tick_right()
-    ax_c.set_yticklabels([])
-    ax_c.set_ylabel('Kendall tau')
-    ax_d.yaxis.tick_left()
-
-    fig.text(margin + ax_width + (gap / 2.0), 1.0 - 0.01,
+    fig.text(left_side + ax_width + (gap / 2.0), 1.0 - 0.01,
              "Overlap of top genes", ha='center', va='top', fontsize=14
     )
     fig.text(margin + 0.01, 1.0 - margin - 0.02, "A", ha='left', va='top', fontsize=14)
     fig.text(margin + ax_width + gap + 0.01, 1.0 - margin - 0.02, "B", ha='left', va='top', fontsize=14)
 
-    fig.text(1.0 - margin - ax_width - (gap / 2.0), 1.0 - 0.01,
-             "Kendall tau of entire list", ha='center', va='top', fontsize=14
+    # C & D, ktau filled
+    left_side = margin + (2 * (ax_width + gap))
+    ax_c = box_and_swarm(
+        fig, [left_side, margin * 2, ax_width, ax_height],
+        'intra-split-half (fill)', 'ktau_by_seed_fill', df, orientation="v", ps=False
     )
-    fig.text(1.0 - margin - ax_width - gap - ax_width + 0.01, 1.0 - margin - 0.02, "C", ha='left', va='top', fontsize=14)
-    fig.text(1.0 - margin - ax_width + 0.01, 1.0 - margin - 0.02, "D", ha='left', va='top', fontsize=14)
+    ax_c.set_ylim(ax_a.get_ylim())
 
-    return fig, (ax_a, ax_b, ax_c, ax_d)
+    ax_d = box_and_swarm(
+        fig, [left_side + ax_width + gap, margin * 2, ax_width, ax_height],
+        'train vs shuffles (fill)', 'real_v_shuffle_ktau_fill', df[df['shuffle'] != 'none'], orientation="v", ps=False
+    )
+    ax_d.set_ylim(ax_a.get_ylim())
+
+    ax_c.yaxis.tick_right()
+    ax_c.set_yticklabels([])
+    ax_c.set_ylabel('Kendall tau (filled)')
+    ax_d.yaxis.tick_left()
+
+    fig.text(left_side + ax_width + (gap / 2.0), 1.0 - 0.01,
+             "Kendall tau (filled) of entire list", ha='center', va='top', fontsize=14
+    )
+    fig.text(left_side + 0.01, 1.0 - margin - 0.02, "C", ha='left', va='top', fontsize=14)
+    fig.text(left_side + ax_width + gap + 0.01, 1.0 - margin - 0.02, "D", ha='left', va='top', fontsize=14)
+
+    # E & F, ktau trimmed
+    left_side = margin + (4 * (ax_width + gap))
+    ax_e = box_and_swarm(
+        fig, [left_side, margin * 2, ax_width, ax_height],
+        'intra-split-half (trim)', 'ktau_by_seed_trim', df, orientation="v", ps=False
+    )
+    ax_e.set_ylim(ax_a.get_ylim())
+
+    ax_f = box_and_swarm(
+        fig, [left_side + ax_width + gap, margin * 2, ax_width, ax_height],
+        'train vs shuffles (trim)', 'real_v_shuffle_ktau_trim', df[df['shuffle'] != 'none'], orientation="v", ps=False
+    )
+    ax_f.set_ylim(ax_a.get_ylim())
+
+    ax_e.yaxis.tick_right()
+    ax_e.set_yticklabels([])
+    ax_e.set_ylabel('Kendall tau (trimmed)')
+    ax_f.yaxis.tick_left()
+
+    fig.text(left_side + ax_width + (gap / 2.0), 1.0 - 0.01,
+             "Kendall tau (trimmed) of entire list", ha='center', va='top', fontsize=14
+    )
+    fig.text(left_side + 0.01, 1.0 - margin - 0.02, "E", ha='left', va='top', fontsize=14)
+    fig.text(left_side + ax_width + gap + 0.01, 1.0 - margin - 0.02, "F", ha='left', va='top', fontsize=14)
+
+    return fig, (ax_a, ax_b, ax_c, ax_d, ax_e, ax_f)
 
 
 def describe_overlap(df, descriptor="", title="Title"):
@@ -557,8 +595,11 @@ def describe_overlap(df, descriptor="", title="Title"):
         d.append("Overlap within {}-shuffled: {}.<br />".format(
             shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['train_overlap'])
         ))
-        d.append("Kendall tau within {}-shuffled: {}.<br />".format(
-            shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['train_ktau'])
+        d.append("Kendall tau (filled) within {}-shuffled: {}.<br />".format(
+            shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['train_ktau_fill'])
+        ))
+        d.append("Kendall tau (trimmed) within {}-shuffled: {}.<br />".format(
+            shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['train_ktau_trim'])
         ))
     d.append("</p>")
     d.append("<h3><span class=\"heavy\">Internal within a shuffle seed, across splits:</span></h3><p>")
@@ -566,8 +607,11 @@ def describe_overlap(df, descriptor="", title="Title"):
         d.append("Overlap within {}-shuffled, within shuffle seed: {}.<br />".format(
             shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['overlap_by_seed'])
         ))
-        d.append("Kendall tau within {}-shuffled, within shuffle seed: {}.<br />".format(
-            shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['ktau_by_seed'])
+        d.append("Kendall tau (filled) within {}-shuffled, within shuffle seed: {}.<br />".format(
+            shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['ktau_by_seed_fill'])
+        ))
+        d.append("Kendall tau (trimmed) within {}-shuffled, within shuffle seed: {}.<br />".format(
+            shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['ktau_by_seed_trim'])
         ))
     d.append("</p>")
     d.append("<h3><span class=\"heavy\">Internal within a split, across shuffle seeds (feeds figure 4 B):</span></h3><p>")
@@ -575,8 +619,11 @@ def describe_overlap(df, descriptor="", title="Title"):
         d.append("Overlap within {}-shuffled, within split batch: {}.<br />".format(
             shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['overlap_by_split'])
         ))
-        d.append("Kendall tau within {}-shuffled, within split batch: {}.<br />".format(
-            shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['ktau_by_split'])
+        d.append("Kendall tau (filled) within {}-shuffled, within split batch: {}.<br />".format(
+            shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['ktau_by_split_fill'])
+        ))
+        d.append("Kendall tau (trimmed) within {}-shuffled, within split batch: {}.<br />".format(
+            shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['ktau_by_split_trim'])
         ))
     d.append("</p>")
     d.append("<h3><span class=\"heavy\">Real vs shuffled similarity:</span></h3><p>")
@@ -584,8 +631,11 @@ def describe_overlap(df, descriptor="", title="Title"):
         d.append("Overlap between un-shuffled and {}-shuffled: {}.<br />".format(
             shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['real_v_shuffle_overlap'])
         ))
-        d.append("Kendall tau between un-shuffled and {}-shuffled: {}.<br />".format(
-            shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['real_v_shuffle_ktau'])
+        d.append("Kendall tau (filled) between un-shuffled and {}-shuffled: {}.<br />".format(
+            shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['real_v_shuffle_ktau_fill'])
+        ))
+        d.append("Kendall tau (trimmed) between un-shuffled and {}-shuffled: {}.<br />".format(
+            shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['real_v_shuffle_ktau_trim'])
         ))
     d.append("</p>")
     d.append("<h3><span class=\"heavy\">Train vs test:</span></h3>")
