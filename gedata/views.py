@@ -85,6 +85,8 @@ class InventoryView(generic.ListView):
             samp="glasser", prob="fornito", algo='smrt', batch__startswith='train',
         )
 
+        print("Building inventory from {:,} initial results.".format(len(initial_queryset)))
+
         context = super(InventoryView, self).get_context_data(**kwargs)
         context['masks'] = ["00", "16", "32", "64"]
         for p in ['w', 'g']:
@@ -93,52 +95,65 @@ class InventoryView(generic.ListView):
                     psc_id = "{}{}{}{}".format(c, p, s, 's')
                     context[psc_id] = {}
                     for m in ['00', '16', '32', '64']:
-                        for nrm in ['s', '']:
-                            final_queryset = initial_queryset.filter(
-                                comp=comp_from_signature(c + p),
-                                parby="glasser" if p == "g" else "wellid",
-                                splby="glasser" if s == "g" else "wellid",
-                                mask='none' if m == "00" else m,
-                                norm='srs' if nrm == 's' else 'none',
-                            )
-                            rid = "{}{}{}{}{}{}".format(c, p, s, m, 's', nrm)
-                            span_strings = "<br />".join([" ".join([
-                                span_str(rid, "mantel", "png", "fa-box-up", threshold[0]),
-                                span_str(rid, "overlap", "png", "fa-object-group", threshold[0]),
-                                span_str(rid, "genes", "html", "fa-dna", threshold[0]),
-                                span_str(rid, "ranked", "csv", "fa-list-ol", threshold[0]),
-                                "@", threshold[1],
-                                span_str(rid, "report", "html", "fa-file-chart-line", 'peak') if threshold[0] == 'peak' else '',
-                            ]) for threshold in thresholds])
-                            buttons = " ".join([
-                                "<span id=\"inventory_string\" style=\"display: none;\"></span>",
-                                "<button class=\"btn\" onclick=\"{}\">{}</button>".format(
-                                    "assessEverything('image_{}', 'inventory_string', '{}');".format(rid, rid),
-                                    "<i class='fas fa-abacus'></i>",
-                                ),
-                                "<button class=\"btn\" onclick=\"{}\">{}</button>".format(
-                                    "removeEverything('image_{}', '{}');".format(rid, rid),
-                                    "<i class='fas fa-trash'></i>",
-                                ),
-                                "<div id=\"image_{}\"><img src=\"\"></div>".format(rid),
-                            ])
-                            context[rid] = " ".join([
-                                base_str_n.format(
-                                    n_none=len(final_queryset.filter(shuffle="derivatives")),
-                                    n_agno=len(final_queryset.filter(shuffle="shuffles")),
-                                    n_dist=len(final_queryset.filter(shuffle="distshuffles")),
-                                    n_edge=len(final_queryset.filter(shuffle="edgeshuffles")),
-                                    n_be04=len(final_queryset.filter(shuffle="edge04shuffles")),
-                                    n_be08=len(final_queryset.filter(shuffle="edge08shuffles")),
-                                    n_be16=len(final_queryset.filter(shuffle="edge16shuffles")),
-                                ),
-                                span_str(rid, "performance", "png", "fa-chart-line"), "<br />",
-                                span_strings, "<br />",
-                                "<div style=\"text-align: right;\">", buttons, "</div>"
-                            ])
+                        for nrm in ['s', '_']:
+                            for xv in ['2', '4', ]:
+                                min_split = 0
+                                max_split = 0
+                                if xv == '2':
+                                    min_split = 200
+                                    max_split = 299
+                                elif xv == '4':
+                                    min_split = 400
+                                    max_split = 499
+                                final_queryset = initial_queryset.filter(
+                                    comp=comp_from_signature(c + p),
+                                    parby="glasser" if p == "g" else "wellid",
+                                    splby="glasser" if s == "g" else "wellid",
+                                    mask='none' if m == "00" else m,
+                                    norm='srs' if nrm == 's' else 'none',
+                                    split__gte=min_split, split__lte=max_split
+                                )
+                                rid = "{}{}{}{}{}{}{}".format(c, p, s, m, 's', nrm, xv)
+                                if len(final_queryset) > 0:
+                                    print("  {:,} are for {}".format(len(final_queryset), rid))
 
-                            # Duplicate the data so it can be looked up two different ways.
-                            context[psc_id][m] = context[rid]
+                                span_strings = "<br />".join([" ".join([
+                                    span_str(rid, "mantel", "png", "fa-box-up", threshold[0]),
+                                    span_str(rid, "overlap", "png", "fa-object-group", threshold[0]),
+                                    span_str(rid, "genes", "html", "fa-dna", threshold[0]),
+                                    span_str(rid, "ranked", "csv", "fa-list-ol", threshold[0]),
+                                    "@", threshold[1],
+                                    span_str(rid, "report", "html", "fa-file-chart-line", 'peak') if threshold[0] == 'peak' else '',
+                                ]) for threshold in thresholds])
+                                buttons = " ".join([
+                                    "<span id=\"inventory_string\" style=\"display: none;\"></span>",
+                                    "<button class=\"btn\" onclick=\"{}\">{}</button>".format(
+                                        "assessEverything('image_{}', 'inventory_string', '{}');".format(rid, rid),
+                                        "<i class='fas fa-abacus'></i>",
+                                    ),
+                                    "<button class=\"btn\" onclick=\"{}\">{}</button>".format(
+                                        "removeEverything('image_{}', '{}');".format(rid, rid),
+                                        "<i class='fas fa-trash'></i>",
+                                    ),
+                                    "<div id=\"image_{}\"><img src=\"\"></div>".format(rid),
+                                ])
+                                context[rid] = " ".join([
+                                    base_str_n.format(
+                                        n_none=len(final_queryset.filter(shuffle="derivatives")),
+                                        n_agno=len(final_queryset.filter(shuffle="shuffles")),
+                                        n_dist=len(final_queryset.filter(shuffle="distshuffles")),
+                                        n_edge=len(final_queryset.filter(shuffle="edgeshuffles")),
+                                        n_be04=len(final_queryset.filter(shuffle="edge04shuffles")),
+                                        n_be08=len(final_queryset.filter(shuffle="edge08shuffles")),
+                                        n_be16=len(final_queryset.filter(shuffle="edge16shuffles")),
+                                    ),
+                                    span_str(rid, "performance", "png", "fa-chart-line"), "<br />",
+                                    span_strings, "<br />",
+                                    "<div style=\"text-align: right;\">", buttons, "</div>"
+                                ])
+
+                                # Duplicate the data so it can be looked up two different ways.
+                                context[psc_id][m] = context[rid]
         return context
 
     def get_queryset(self):

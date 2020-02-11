@@ -54,27 +54,33 @@ def ranked_probes(tsvs, top):
     print("    These {:,} results average {:0.2%} overlap.".format(
         len(tsvs), algorithms.pct_similarity(tsvs, map_probes_to_genes_first=False, top=top)
     ))
+    if len(tsvs) < 1:
+        return None
+
     rs = []
     for i, tsv in enumerate(tsvs):
         df = pd.read_csv(tsv, sep='\t')
         # Add 1 to zero-based indices so they're 1-based rankings
-        rankings = pd.Series(data=df.index, index=df['probe_id'], name="rank{:03d}".format(i)) + 1
-        rs.append(rankings)
+        ranking_series = pd.Series(data=df.index, index=df['probe_id'], name="rank{:03d}".format(i))
+        ranking_series += 1
+        rs.append(ranking_series)
         if i == len(tsvs):
             print("    ranked all probes in {} results.".format(i + 1))
     dfr = pd.concat(rs, axis=1)
 
     # Replace NaNs (genes in at least one list, but not all) with the worst rankings in each column
     # A NaN represents a score too low to make the given list and should penalize the mean ranking
-    for col in dfr.columns:
-        # Replace this column's nans with this column's highest (worst) rankings
-        print("column has {} values ranging from {} to {}; {} are NaN. Replace them with {}".format(
-            len(dfr),
-            dfr[col].min(), dfr[col].max(),
-            len(dfr.loc[np.isnan(dfr.loc[:, col]), col]),
-            len(list(range(int(max(dfr[col]) + 1), len(dfr) + 1)))
-        ))
-        dfr.loc[np.isnan(dfr.loc[:, col]), col] = range(int(max(dfr[col]) + 1), len(dfr) + 1)
+    if dfr.isnull().values.any():
+
+        for col in dfr.columns:
+            # Replace this column's nans with this column's highest (worst) rankings
+            print("column has {} values ranging from {} to {}; {} are NaN. Replace them with {}".format(
+                len(dfr),
+                dfr[col].min(), dfr[col].max(),
+                len(dfr.loc[np.isnan(dfr.loc[:, col]), col]),
+                len(list(range(int(max(dfr[col]) + 1), len(dfr) + 1)))
+            ))
+            dfr.loc[np.isnan(dfr.loc[:, col]), col] = range(int(max(dfr[col]) + 1), len(dfr) + 1)
 
     dfr['mean'] = dfr.mean(axis=1)
     dfr['entrez_id'] = dfr.index.map(miscellaneous.map_pid_to_eid_fornito)
@@ -116,14 +122,17 @@ def rank_genes_respecting_shuffles(actual_files, shuffle_files):
 
     # Calculate ranking of each gene in each result, and average rankings for overall.
     # Each ranking dataframe is ordered by ranking, and each is different, so we must re-order each to match
-    actual_rankings = ranked_probes(actual_files, None).sort_index()
-    shuffle_rankings = ranked_probes(shuffle_files, None).sort_index()
+    if len(actual_files) > 0 and len(shuffle_files) > 0:
+        actual_rankings = ranked_probes(actual_files, None).sort_index()
+        shuffle_rankings = ranked_probes(shuffle_files, None).sort_index()
 
-    # Count how many shuffled rankings, for each gene, are better than the real data.
-    hits = shuffle_rankings[[col for col in shuffle_rankings.columns if "rank" in col]].lt(actual_rankings['mean'], axis=0)
+        # Count how many shuffled rankings, for each gene, are better than the real data.
+        hits = shuffle_rankings[[col for col in shuffle_rankings.columns if "rank" in col]].lt(actual_rankings['mean'], axis=0)
 
-    df = pd.DataFrame(hits.sum(axis=1) / hits.count(axis=1), columns=["p", ], index=actual_rankings.index)
-    return df.sort_values(by=['p', ])
+        df = pd.DataFrame(hits.sum(axis=1) / hits.count(axis=1), columns=["p", ], index=actual_rankings.index)
+        return df.sort_values(by=['p', ])
+    else:
+        return pd.DataFrame()
 
 
 def describe_genes(rdf, rdict, plot_descriptor, progress_recorder):
@@ -158,27 +167,30 @@ def describe_genes(rdf, rdict, plot_descriptor, progress_recorder):
     p_lines = []
     for shf in ['be16', 'be08', 'be04', 'edge', 'dist', 'agno']:
         shuffles = rdf[rdf['shuffle'] == shf]
-        tmpdf = rank_genes_respecting_shuffles(actuals['path'], shuffles['path']).sort_index()
-        df_gene_ps["p_" + shf] = tmpdf['p']
-        low_p_indices = all_ranked['probe_id'].isin(tmpdf[tmpdf['p'] < 0.05].index)
-        top_5 = all_ranked[low_p_indices]
-        print("{} items in top_5".format(len(top_5)))
-        top_5_str = "No probes have p < 0.05"
-        if len(top_5) > 0:
-            top_5_str = "{} genes with p < 0.05.".format(
-                len(top_5),
-                # ", ".join(["#{}. {}".format(row['rank'], row['probe_id']) for idx, row in top_5.iterrows()][:10])
-            )
-        p_lines.append("{:,} {} {}-shuffled data (p<0.05) ({:,} if p<0.01). {} {:,} genes is {:,}. {}.".format(
-            len(tmpdf[tmpdf['p'] < 0.05].index),
-            "genes perform better in actual than",
-            shf,
-            len(tmpdf[tmpdf['p'] < 0.01].index),
-            "The average ranking of these",
-            len(tmpdf[tmpdf['p'] < 0.05].index),
-            int(all_ranked[low_p_indices]['rank'].mean()),
-            top_5_str,
-        ))
+        if len(shuffles) > 0:
+            tmpdf = rank_genes_respecting_shuffles(actuals['path'], shuffles['path']).sort_index()
+            df_gene_ps["p_" + shf] = tmpdf['p']
+            low_p_indices = all_ranked['probe_id'].isin(tmpdf[tmpdf['p'] < 0.05].index)
+            top_5 = all_ranked[low_p_indices]
+            print("{} items in top_5".format(len(top_5)))
+            top_5_str = "No probes have p < 0.05"
+            if len(top_5) > 0:
+                top_5_str = "{} genes with p < 0.05.".format(
+                    len(top_5),
+                    # ", ".join(["#{}. {}".format(row['rank'], row['probe_id']) for idx, row in top_5.iterrows()][:10])
+                )
+            p_lines.append("{:,} {} {}-shuffled data (p<0.05) ({:,} if p<0.01). {} {:,} genes is {:,}. {}.".format(
+                len(tmpdf[tmpdf['p'] < 0.05].index),
+                "genes perform better in actual than",
+                shf,
+                len(tmpdf[tmpdf['p'] < 0.01].index),
+                "The average ranking of these",
+                len(tmpdf[tmpdf['p'] < 0.05].index),
+                int(all_ranked[low_p_indices]['rank'].mean()),
+                top_5_str,
+            ))
+        else:
+            p_lines.append("No {}-shuffled data available for comparison.".format(shf))
     output.append("<p>{}</p>".format(" ".join([
         "Some genes survive optimization longer in real data than shuffled.",
         "<ul><li>", "</li><li>".join(p_lines), "</li></ul>",

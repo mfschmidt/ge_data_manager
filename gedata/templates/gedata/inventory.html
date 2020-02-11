@@ -7,6 +7,7 @@
 <div style="display: none;" id="active_rid">empty</div>
 
 <h2>SRS-normalized</h2>
+<h3>16 split halves</h3>
     <table class="inventory_table">
         <!-- Table Header -->
         <tr>
@@ -27,10 +28,38 @@
             <th rowspan="1">wellid</th>
             <th rowspan="1">wellid</th>
             <th>hcp</th>
-            <td id="hcpww00ss" class="data_cell osdc_active">{{ hcpww00ss |safe }}</td>
-            <td id="hcpww16ss" class="data_cell osdc_active osdc_primary">{{ hcpww16ss |safe }}</td>
-            <td id="hcpww32ss" class="data_cell osdc_active">{{ hcpww32ss |safe }}</td>
-            <td id="hcpww64ss" class="data_cell osdc_active">{{ hcpww64ss |safe }}</td>
+            <td id="hcpww00ss2" class="data_cell osdc_active">{{ hcpww00ss2 |safe }}</td>
+            <td id="hcpww16ss2" class="data_cell osdc_active osdc_primary">{{ hcpww16ss2 |safe }}</td>
+            <td id="hcpww32ss2" class="data_cell osdc_active">{{ hcpww32ss2 |safe }}</td>
+            <td id="hcpww64ss2" class="data_cell osdc_active">{{ hcpww64ss2 |safe }}</td>
+        </tr>
+    </table>
+
+<h3>8 split quarters (more to come)</h3>
+    <table class="inventory_table">
+        <!-- Table Header -->
+        <tr>
+            <th>parcel</th>
+            <th>split</th>
+            <th>comp</th>
+            <th colspan="4">mask</th>
+        </tr>
+        <tr>
+            <th colspan="3"></th>
+            <th>none</th>
+            <th>&lt; 16mm</th>
+            <th>&lt; 32mm</th>
+            <th>&lt; 64mm</th>
+        </tr>
+        <!-- Table Body -->
+        <tr>
+            <th rowspan="1">wellid</th>
+            <th rowspan="1">wellid</th>
+            <th>hcp</th>
+            <td id="hcpww00ss4" class="data_cell osdc_active">{{ hcpww00ss4 |safe }}</td>
+            <td id="hcpww16ss4" class="data_cell osdc_active osdc_primary">{{ hcpww16ss4 |safe }}</td>
+            <td id="hcpww32ss4" class="data_cell osdc_active">{{ hcpww32ss4 |safe }}</td>
+            <td id="hcpww64ss4" class="data_cell osdc_active">{{ hcpww64ss4 |safe }}</td>
         </tr>
     </table>
 
@@ -55,63 +84,63 @@
             <th rowspan="4">wellid</th>
             <th rowspan="2">wellid</th>
             <th>hcp</th>
-            <td id="hcpww00s" class="data_cell  osdc_neglected">{{ hcpww00s |safe }}</td>
-            <td id="hcpww16s" class="data_cell  osdc_neglected">{{ hcpww16s |safe }}</td>
-            <td id="hcpww32s" class="data_cell  osdc_neglected">{{ hcpww32s |safe }}</td>
-            <td id="hcpww64s" class="data_cell  osdc_neglected">{{ hcpww64s |safe }}</td>
+            <td id="hcpww00s_2" class="data_cell  osdc_neglected">{{ hcpww00s_2 |safe }}</td>
+            <td id="hcpww16s_2" class="data_cell  osdc_neglected">{{ hcpww16s_2 |safe }}</td>
+            <td id="hcpww32s_2" class="data_cell  osdc_neglected">{{ hcpww32s_2 |safe }}</td>
+            <td id="hcpww64s_2" class="data_cell  osdc_neglected">{{ hcpww64s_2 |safe }}</td>
         </tr>
         <tr>
             <th>nki</th>
-            <td id="nkiww00s" class="data_cell  osdc_neglected">{{ nkiww00s |safe }}</td>
-            <td id="nkiww16s" class="data_cell  osdc_neglected">{{ nkiww16s |safe }}</td>
-            <td id="nkiww32s" class="data_cell  osdc_neglected">{{ nkiww32s |safe }}</td>
-            <td id="nkiww64s" class="data_cell  osdc_neglected">{{ nkiww64s |safe }}</td>
+            <td id="nkiww00s_2" class="data_cell  osdc_neglected">{{ nkiww00s_2 |safe }}</td>
+            <td id="nkiww16s_2" class="data_cell  osdc_neglected">{{ nkiww16s_2 |safe }}</td>
+            <td id="nkiww32s_2" class="data_cell  osdc_neglected">{{ nkiww32s_2 |safe }}</td>
+            <td id="nkiww64s_2" class="data_cell  osdc_neglected">{{ nkiww64s_2 |safe }}</td>
         </tr>
         <tr>
             <th rowspan="2">glasser</th>
             <th>hcp</th>
-            <td id="hcpwg00s" class="data_cell osdc_neglected">{{ hcpwg00s |safe }}</td>
-            <td id="hcpwg16s" class="data_cell osdc_neglected">{{ hcpwg16s |safe }}</td>
-            <td id="hcpwg32s" class="data_cell osdc_neglected">{{ hcpwg32s |safe }}</td>
-            <td id="hcpwg64s" class="data_cell osdc_neglected">{{ hcpwg64s |safe }}</td>
+            <td id="hcpwg00s_2" class="data_cell osdc_neglected">{{ hcpwg00s_2 |safe }}</td>
+            <td id="hcpwg16s_2" class="data_cell osdc_neglected">{{ hcpwg16s_2 |safe }}</td>
+            <td id="hcpwg32s_2" class="data_cell osdc_neglected">{{ hcpwg32s_2 |safe }}</td>
+            <td id="hcpwg64s_2" class="data_cell osdc_neglected">{{ hcpwg64s_2 |safe }}</td>
         </tr>
         <tr>
             <th>nki</th>
-            <td id="nkiwg00s" class="data_cell  osdc_neglected">{{ nkiwg00s |safe }}</td>
-            <td id="nkiwg16s" class="data_cell  osdc_neglected">{{ nkiwg16s |safe }}</td>
-            <td id="nkiwg32s" class="data_cell  osdc_neglected">{{ nkiwg32s |safe }}</td>
-            <td id="nkiwg64s" class="data_cell  osdc_neglected">{{ nkiwg64s |safe }}</td>
+            <td id="nkiwg00s_2" class="data_cell  osdc_neglected">{{ nkiwg00s_2 |safe }}</td>
+            <td id="nkiwg16s_2" class="data_cell  osdc_neglected">{{ nkiwg16s_2 |safe }}</td>
+            <td id="nkiwg32s_2" class="data_cell  osdc_neglected">{{ nkiwg32s_2 |safe }}</td>
+            <td id="nkiwg64s_2" class="data_cell  osdc_neglected">{{ nkiwg64s_2 |safe }}</td>
         </tr>
         <tr>
             <th rowspan="4">glasser</th>
             <th rowspan="2">wellid</th>
             <th>hcp</th>
-            <td id="hcpgw00s" class="data_cell  osdc_neglected">{{ hcpgw00s |safe }}</td>
-            <td id="hcpgw16s" class="data_cell  osdc_neglected">{{ hcpgw16s |safe }}</td>
-            <td id="hcpgw32s" class="data_cell  osdc_neglected">{{ hcpgw32s |safe }}</td>
-            <td id="hcpgw64s" class="data_cell  osdc_neglected">{{ hcpgw64s |safe }}</td>
+            <td id="hcpgw00s_2" class="data_cell  osdc_neglected">{{ hcpgw00s_2 |safe }}</td>
+            <td id="hcpgw16s_2" class="data_cell  osdc_neglected">{{ hcpgw16s_2 |safe }}</td>
+            <td id="hcpgw32s_2" class="data_cell  osdc_neglected">{{ hcpgw32s_2 |safe }}</td>
+            <td id="hcpgw64s_2" class="data_cell  osdc_neglected">{{ hcpgw64s_2 |safe }}</td>
         </tr>
         <tr>
             <th>nki</th>
-            <td id="nkigw00s" class="data_cell  osdc_neglected">{{ nkigw00s |safe }}</td>
-            <td id="nkigw16s" class="data_cell  osdc_neglected">{{ nkigw16s |safe }}</td>
-            <td id="nkigw32s" class="data_cell  osdc_neglected">{{ nkigw32s |safe }}</td>
-            <td id="nkigw64s" class="data_cell  osdc_neglected">{{ nkigw64s |safe }}</td>
+            <td id="nkigw00s_2" class="data_cell  osdc_neglected">{{ nkigw00s_2 |safe }}</td>
+            <td id="nkigw16s_2" class="data_cell  osdc_neglected">{{ nkigw16s_2 |safe }}</td>
+            <td id="nkigw32s_2" class="data_cell  osdc_neglected">{{ nkigw32s_2 |safe }}</td>
+            <td id="nkigw64s_2" class="data_cell  osdc_neglected">{{ nkigw64s_2 |safe }}</td>
         </tr>
         <tr>
             <th rowspan="2">glasser</th>
             <th>hcp</th>
-            <td id="hcpgg00s" class="data_cell  osdc_neglected">{{ hcpgg00s |safe }}</td>
-            <td id="hcpgg16s" class="data_cell  osdc_neglected">{{ hcpgg16s |safe }}</td>
-            <td id="hcpgg32s" class="data_cell  osdc_neglected">{{ hcpgg32s |safe }}</td>
-            <td id="hcpgg64s" class="data_cell  osdc_neglected">{{ hcpgg64s |safe }}</td>
+            <td id="hcpgg00s_2" class="data_cell  osdc_neglected">{{ hcpgg00s_2 |safe }}</td>
+            <td id="hcpgg16s_2" class="data_cell  osdc_neglected">{{ hcpgg16s_2 |safe }}</td>
+            <td id="hcpgg32s_2" class="data_cell  osdc_neglected">{{ hcpgg32s_2 |safe }}</td>
+            <td id="hcpgg64s_2" class="data_cell  osdc_neglected">{{ hcpgg64s_2 |safe }}</td>
         </tr>
         <tr>
             <th>nki</th>
-            <td id="nkigg00s" class="data_cell  osdc_neglected">{{ nkigg00s |safe }}</td>
-            <td id="nkigg16s" class="data_cell  osdc_neglected">{{ nkigg16s |safe }}</td>
-            <td id="nkigg32s" class="data_cell  osdc_neglected">{{ nkigg32s |safe }}</td>
-            <td id="nkigg64s" class="data_cell  osdc_neglected">{{ nkigg64s |safe }}</td>
+            <td id="nkigg00s_2" class="data_cell  osdc_neglected">{{ nkigg00s_2 |safe }}</td>
+            <td id="nkigg16s_2" class="data_cell  osdc_neglected">{{ nkigg16s_2 |safe }}</td>
+            <td id="nkigg32s_2" class="data_cell  osdc_neglected">{{ nkigg32s_2 |safe }}</td>
+            <td id="nkigg64s_2" class="data_cell  osdc_neglected">{{ nkigg64s_2 |safe }}</td>
         </tr>
     </table>
     <p>Cells with <span class="osdc_complete">white backgrounds</span> are complete.</p>
@@ -137,18 +166,18 @@
             <th rowspan="3">glasser</th>
             <th rowspan="3">glasser</th>
             <th>fear-neutral</th>
-            <td id="fn_gg00s" class="data_cell osdc_neglected">{{ fn_gg00s |safe }}</td>
-            <td id="fn_gg16s" class="data_cell osdc_neglected">{{ fn_gg16s |safe }}</td>
+            <td id="fn_gg00s_2" class="data_cell osdc_neglected">{{ fn_gg00s_2 |safe }}</td>
+            <td id="fn_gg16s_2" class="data_cell osdc_neglected">{{ fn_gg16s_2 |safe }}</td>
         </tr>
         <tr>
             <th>fear</th>
-            <td id="f__gg00s" class="data_cell osdc_neglected">{{ f__gg00s |safe }}</td>
-            <td id="f__gg16s" class="data_cell osdc_neglected">{{ f__gg16s |safe }}</td>
+            <td id="f__gg00s_2" class="data_cell osdc_neglected">{{ f__gg00s_2 |safe }}</td>
+            <td id="f__gg16s_2" class="data_cell osdc_neglected">{{ f__gg16s_2 |safe }}</td>
         </tr>
         <tr>
             <th>neutral</th>
-            <td id="n__gg00s" class="data_cell osdc_neglected">{{ n__gg00s |safe }}</td>
-            <td id="n__gg16s" class="data_cell osdc_neglected">{{ n__gg16s |safe }}</td>
+            <td id="n__gg00s_2" class="data_cell osdc_neglected">{{ n__gg00s_2 |safe }}</td>
+            <td id="n__gg16s_2" class="data_cell osdc_neglected">{{ n__gg16s_2 |safe }}</td>
         </tr>
     </table>
     <!-- The button has been replaced by just calculating it all in the django view
