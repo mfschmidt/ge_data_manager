@@ -16,7 +16,6 @@ import pandas as pd
 import logging
 import json
 from scipy import stats
-import errno
 
 from pygest import algorithms
 from pygest.convenience import bids_val
@@ -33,11 +32,6 @@ class NullHandler(logging.Handler):
     def emit(self, record):
         pass
 null_handler = NullHandler()
-
-@shared_task
-def add(x, y):
-    return x + y
-
 
 @shared_task(bind=True)
 def test_task(self, seconds):
@@ -161,6 +155,8 @@ def collect_jobs(self, data_path="/data", rebuild=False):
                             n += 1
                             progress_recorder.set_progress(i, n)
 
+    print("{:,} results from {}...".format(len(results), data_path))
+
     # Gather information about each result.
     for i, result in enumerate(results):
         # First, parse out the BIDS key-value pairs from the path.
@@ -184,6 +180,8 @@ def collect_jobs(self, data_path="/data", rebuild=False):
         # Second, parse the key-value pairs from the json file containing processing information.
         json_dict = json_contents(os.path.join(result['path'], result['json_file']))
         result.update(json_dict)
+
+        split_key = "batch-test" if "batch-test" in result['path'] else "batch-train"
 
         # Finally, put it all into a model for storage in the database.
         r = PushResult(
@@ -212,6 +210,7 @@ def collect_jobs(self, data_path="/data", rebuild=False):
             mask=result.get("mask", ""),
             adj=result.get("adj", ""),
             seed=int(result.get("seed", "0")),
+            split=extract_seed(os.path.join(result['path'], result['json_file'].replace("json", "tsv")), split_key),
             columns=0,
             rows=0,
         )
@@ -400,12 +399,13 @@ def test_score(tsv_file, base_path='/data', own_expr=False, mask='none', probe_s
         batch = bids_val("batch", tsv_file).replace('test', 'train')
 
     # Figure out where to get data, based on which score we want.
-    expr_file = os.path.join(base_path,
-                             "splits", "sub-all_hem-A_samp-glasser_prob-fornito",
-                             "batch-{}".format(batch),
-                             "parcelby-{}_splitby-{}.df".format(
-                                 bids_val('parby', tsv_file), bids_val('splby', tsv_file))
-                             )
+    expr_file = os.path.join(
+        base_path, "splits", "sub-all_hem-A_samp-glasser_prob-fornito", "batch-{}".format(batch),
+        "parcelby-{}_splitby-{}.{}.df".format(
+            bids_val('parby', tsv_file), bids_val('splby', tsv_file),
+            "raw" if bids_val('norm', tsv_file) == "none" else bids_val('norm', tsv_file)
+        )
+    )
     # If comp_from_signature is given a comp BIDS string, it will return the filename of the comp file.
     comp_file = os.path.join(base_path, "conn", comp_from_signature(bids_val('comp', tsv_file)))
 
@@ -432,6 +432,10 @@ def test_score(tsv_file, base_path='/data', own_expr=False, mask='none', probe_s
     #     "self" if own_expr else "othr", scoring_phase, expr_file, comp_file, tsv_file
     # ))
     overlapping_samples = [col for col in comp.columns if col in expr.columns]
+    print("   tsv: {}".format(tsv_file))
+    print("  expr: {}".format(expr_file))
+    print("  comp: {}".format(comp_file))
+    print("  test score from top {:,} probes, and {:,} samples".format(len(scoring_probes), len(overlapping_samples)))
     expr = expr.loc[scoring_probes, overlapping_samples]
     comp = comp.loc[overlapping_samples, overlapping_samples]
     expr_mat = np.corrcoef(expr, rowvar=False)
@@ -469,8 +473,6 @@ def train_vs_test_overlap(tsv_file, probe_significance_threshold=None):
         # raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), comp_file)
     else:
         return 0.00
-
-
 
 
 def extract_seed(path, key):
@@ -562,6 +564,7 @@ def interpret_descriptor(plot_descriptor):
     mask = 'none' if plot_descriptor[5:7] == "00" else plot_descriptor[5:7]
     algo = 'once' if plot_descriptor[7] == "o" else "smrt"
     norm = 'srs' if ((len(plot_descriptor) > 8) and (plot_descriptor[8] == "s")) else "none"
+    xval = plot_descriptor[9] if len(plot_descriptor) > 9 else '0'
     phase = 'train'
     opposite_phase = 'test'
 
@@ -571,9 +574,20 @@ def interpret_descriptor(plot_descriptor):
         # This catches "peak" or "", both should be fine as None
         threshold = None
 
+    # The xval, or cross-validation sample split range indicator,
+    # is '2' for splits in the 200's and '4' for splits in the 400s.
+    # Splits in the 200's are split-halves; 400's are split-quarters.
+    split_min = 0
+    split_max = 999
+    if xval == '2':
+        split_min = 200
+        split_max = 299
+    if xval == '4':
+        split_min = 400
+        split_max = 499
     relevant_results_queryset = PushResult.objects.filter(
         samp="glasser", prob="fornito", algo=algo, comp=comp, parby=parby, splby=splby, mask=mask, norm=norm,
-        batch__startswith=phase,
+        batch__startswith=phase, split__gte=split_min, split__lte=split_max
     )
 
     return {
@@ -583,10 +597,12 @@ def interpret_descriptor(plot_descriptor):
         'mask': mask,
         'algo': algo,
         'norm': norm,
+        'xval': xval,
         'phase': phase,
         'opposite_phase': opposite_phase,
         'threshold': threshold,
         'query_set': relevant_results_queryset,
+        'n': relevant_results_queryset.count(),
     }
 
 
@@ -630,10 +646,9 @@ def collect_results(descriptor, progress_recorder, progress_from=0, progress_to=
     """ Determine the list of results necessary, and build or load a dataframe around them. """
 
     rdict = interpret_descriptor(descriptor)
-    n = len(rdict['query_set'])
     progress_recorder.set_progress(progress_from, progress_to, "Step 1/3<br />Finding results")
     print("Found {:,} results ({} {} {} {} {} {} {} {}) @{}".format(
-        n, "glasser", "fornito",
+        rdict['n'], "glasser", "fornito",
         rdict['algo'], rdict['comp'], rdict['parby'], rdict['splby'], rdict['mask'], rdict['norm'],
         'peak' if rdict['threshold'] is None else rdict['threshold'],
     ))
@@ -653,9 +668,10 @@ def collect_results(descriptor, progress_recorder, progress_from=0, progress_to=
                 )
             else:
                 print("ERR: DOES NOT EXIST: {}".format(path['tsv_path']))
-            complete_portion = ((i + 1) / n) * (progress_to - progress_from)
+            complete_portion = ((i + 1) / rdict['n']) * (progress_to - progress_from)
             progress_recorder.set_progress(
-                progress_from + complete_portion, 100, "Step 1/3<br />Processing {:,}/{:,} results".format(i, n)
+                progress_from + complete_portion, 100,
+                "Step 1/3<br />Processing {:,}/{:,} results".format(i, rdict['n'])
             )
 
         df = pd.DataFrame(relevant_results)
@@ -663,7 +679,11 @@ def collect_results(descriptor, progress_recorder, progress_from=0, progress_to=
         os.makedirs(os.path.join(data_root, "plots", "cache"), exist_ok=True)
         df.to_pickle(cache_file)
 
-    progress_recorder.set_progress(progress_to - 1, 100, "Step 1/3<br />Processed {:,} results".format(n))
+    progress_recorder.set_progress(
+        progress_to - 1, 100,
+        "Step 1/3<br />Processed {:,} results".format(rdict['n'])
+    )
+
     return rdict, df
 
 
@@ -710,9 +730,8 @@ def clear_micro_caches(self, descriptor, progress_from=0, progress_to=100, data_
     progress_recorder = ProgressRecorder(self)
     progress_recorder.set_progress(progress_from, progress_to, "Clearing individual result caches")
     rdict = interpret_descriptor(descriptor)
-    n = len(rdict['query_set'])
     print("Found {:,} results ({} {} {} {} {} {} {} {}) @{}".format(
-        n, "glasser", "fornito",
+        rdict['n'], "glasser", "fornito",
         rdict['algo'], rdict['comp'], rdict['parby'], rdict['splby'], rdict['mask'], rdict['norm'],
         'peak' if rdict['threshold'] is None else rdict['threshold'],
     ))
@@ -726,10 +745,10 @@ def clear_micro_caches(self, descriptor, progress_from=0, progress_to=100, data_
         if os.path.isfile(analyzed_path):
             os.remove(analyzed_path)
             n_removed += 1
-        complete_portion = ((i + 1) / n) * (progress_to - progress_from)
+        complete_portion = ((i + 1) / rdict['n']) * (progress_to - progress_from)
         progress_recorder.set_progress(
             progress_from + complete_portion, 100, "Deleting {:,}/{:,} results, removed {:,} caches.".format(
-                i, n, n_removed
+                i, rdict['n'], n_removed
             )
         )
 
@@ -796,6 +815,10 @@ def kendall_tau_coerced_matrix(file_list, coerce_by="none"):
             df = df[['Unnamed: 0', 'probe_id']].set_index('probe_id').sort_index().rename(
                 columns={"Unnamed: 0": "rank_{:02d}".format(i)}
             )
+        elif 'seq' in df.columns:
+            df = df[['seq', 'probe_id']].set_index('probe_id').sort_index().rename(
+                columns={"seq": "rank_{:02d}".format(i)}
+            )
         else:
             print("File '{}' does not have the expected column names. Guessing...".format(f))
             df = df[df.columns[0:3:2]].set_index(df.columns[2]).sort_index()
@@ -812,20 +835,7 @@ def kendall_tau_coerced_matrix(file_list, coerce_by="none"):
         all_results = all_results.dropna(axis=0, how='any')
     elif coerce_by == "fill":
         # Don't drop any probes; fill in nans with the lowest rankings.
-        for col in all_results.columns:
-            # Replace this column's nans with this column's highest (worst) rankings
-            # print("column has {} values ranging from {} to {}; {} are NaN. Replace them with {}".format(
-            #     len(all_results),
-            #     all_results[col].min(), all_results[col].max(),
-            #     len(all_results.loc[np.isnan(all_results.loc[:, col]), col]),
-            #     len(list(range(int(max(all_results[col]) + 1), len(all_results) + 1)))
-            # ))
-            # if len(all_results) > 15000:
-            #     print("{} files, starting with {}".format(len(file_list), file_list[0]))
-
-            all_results.loc[np.isnan(all_results.loc[:, col]), col] = len(all_results)
-            # all_results.loc[np.isnan(all_results.loc[:, col]), col] = \
-            #     range(int(max(all_results[col]) + 1), len(all_results) + 1)
+        all_results = all_results.fillna(len(all_results))
 
     # Send a list of manipulated rankings off for calculation.
     all_results = all_results.sort_index()
@@ -872,10 +882,10 @@ def assess_everything(self, plot_descriptor, data_root="/data"):
             rdf.loc[shuffle_mask, 'train_overlap'] = algorithms.pct_similarity_list(
                 list(rdf.loc[shuffle_mask, 'path']), top=rdict['threshold']
             )
-            rdf.loc[shuffle_mask, 'train_ktau_fill'] = kendall_tau_coerced_list(
-                list(rdf.loc[shuffle_mask, 'path']), "fill",
-            )
-            rdf.loc[shuffle_mask, 'train_ktau_trim'] = kendall_tau_coerced_list(
+            # rdf.loc[shuffle_mask, 'train_ktau_fill'] = kendall_tau_coerced_list(
+            #     list(rdf.loc[shuffle_mask, 'path']), "fill",
+            # )
+            rdf.loc[shuffle_mask, 'train_ktau'] = kendall_tau_coerced_list(
                 list(rdf.loc[shuffle_mask, 'path']), "trim",
             )
 
@@ -887,10 +897,10 @@ def assess_everything(self, plot_descriptor, data_root="/data"):
                 rdf.loc[shuffle_mask & split_mask, 'overlap_by_split'] = algorithms.pct_similarity_list(
                     list(rdf.loc[shuffle_mask & split_mask, 'path']), top=rdict['threshold']
                 )
-                rdf.loc[shuffle_mask & split_mask, 'ktau_by_split_fill'] = kendall_tau_coerced_list(
-                    list(rdf.loc[shuffle_mask & split_mask, 'path']), "fill",
-                )
-                rdf.loc[shuffle_mask & split_mask, 'ktau_by_split_trim'] = kendall_tau_coerced_list(
+                # rdf.loc[shuffle_mask & split_mask, 'ktau_by_split_fill'] = kendall_tau_coerced_list(
+                #     list(rdf.loc[shuffle_mask & split_mask, 'path']), "fill",
+                # )
+                rdf.loc[shuffle_mask & split_mask, 'ktau_by_split'] = kendall_tau_coerced_list(
                     list(rdf.loc[shuffle_mask & split_mask, 'path']), "trim",
                 )
 
@@ -900,10 +910,10 @@ def assess_everything(self, plot_descriptor, data_root="/data"):
                 rdf.loc[shuffle_mask & seed_mask, 'overlap_by_seed'] = algorithms.pct_similarity_list(
                     list(rdf.loc[shuffle_mask & seed_mask, 'path']), top=rdict['threshold']
                 )
-                rdf.loc[shuffle_mask & seed_mask, 'ktau_by_seed_fill'] = kendall_tau_coerced_list(
-                    list(rdf.loc[shuffle_mask & seed_mask, 'path']), "fill",
-                )
-                rdf.loc[shuffle_mask & seed_mask, 'ktau_by_seed_trim'] = kendall_tau_coerced_list(
+                # rdf.loc[shuffle_mask & seed_mask, 'ktau_by_seed_fill'] = kendall_tau_coerced_list(
+                #     list(rdf.loc[shuffle_mask & seed_mask, 'path']), "fill",
+                # )
+                rdf.loc[shuffle_mask & seed_mask, 'ktau_by_seed'] = kendall_tau_coerced_list(
                     list(rdf.loc[shuffle_mask & seed_mask, 'path']), "trim",
                 )
 
@@ -912,10 +922,10 @@ def assess_everything(self, plot_descriptor, data_root="/data"):
             rdf.loc[shuffle_mask, 'real_v_shuffle_overlap'] = rdf.loc[shuffle_mask, :].apply(
                 lambda x: algorithms.pct_similarity([x.path, x.real_tsv_from_shuffle], top=rdict['threshold']), axis=1
             )
-            rdf.loc[shuffle_mask, 'real_v_shuffle_ktau_fill'] = rdf.loc[shuffle_mask, :].apply(
-                lambda x: kendall_tau_coerced_value([x.path, x.real_tsv_from_shuffle], "fill"), axis=1
-            )
-            rdf.loc[shuffle_mask, 'real_v_shuffle_ktau_trim'] = rdf.loc[shuffle_mask, :].apply(
+            # rdf.loc[shuffle_mask, 'real_v_shuffle_ktau_fill'] = rdf.loc[shuffle_mask, :].apply(
+            #     lambda x: kendall_tau_coerced_value([x.path, x.real_tsv_from_shuffle], "fill"), axis=1
+            # )
+            rdf.loc[shuffle_mask, 'real_v_shuffle_ktau'] = rdf.loc[shuffle_mask, :].apply(
                 lambda x: kendall_tau_coerced_value([x.path, x.real_tsv_from_shuffle], "trim"), axis=1
             )
 
@@ -1174,14 +1184,13 @@ def assess_performance(self, plot_descriptor, data_root="/data"):
 
     # Determine an end-point, correlating to 100%
     # There are two sections: first, results * thresholds; second, overlaps, which will just have to normalize to 50/50
-    n = len(rdict['query_set'])
-    total = n * len(thresholds) * 2  # The *2 allows for later overlaps to constitute 50% of the reported percentage
+    total = rdict['n'] * len(thresholds) * 2  # The *2 allows for later overlaps to constitute 50% of the reported percentage
     progress_recorder.set_progress(2, 100, "Finding results")
     print("Found {:,} results ({} {} {} {} {} {} {})".format(
-        n, "glasser", "fornito", rdict['algo'], rdict['comp'], rdict['parby'], rdict['splby'], rdict['mask']
+        rdict['n'], "glasser", "fornito", rdict['algo'], rdict['comp'], rdict['parby'], rdict['splby'], rdict['mask']
     ))
 
-    if len(rdict['query_set']) > 0:
+    if rdict['n'] > 0:
         post_file = os.path.join(data_root, "plots", "cache", "{}_ap_post.df".format(plot_descriptor.lower()))
         if os.path.isfile(post_file):
             with open(post_file, "rb") as f:
@@ -1201,7 +1210,8 @@ def assess_performance(self, plot_descriptor, data_root="/data"):
                             )
                         )
                         progress_recorder.set_progress(
-                            2 + ((i * len(thresholds) + j) / total) * 88, 100, "Processing {:,}/{:,} results".format(i, n)
+                            2 + ((i * len(thresholds) + j) / total) * 88, 100,
+                            "Processing {:,}/{:,} results".format(i, rdict['n'])
                         )
                 else:
                     print("ERR: DOES NOT EXIST: {}".format(path['tsv_path']))
@@ -1221,7 +1231,7 @@ def assess_performance(self, plot_descriptor, data_root="/data"):
                 shuffle_mask = rdf['shuffle'] == shuffle
                 for l, split in enumerate(splits):
                     progress_recorder.set_progress(
-                        (n * len(thresholds)) + int(((k * len(splits) + l) / calcs) * (n * len(thresholds) / 2)),
+                        (rdict['n'] * len(thresholds)) + int(((k * len(splits) + l) / calcs) * (rdict['n'] * len(thresholds) / 2)),
                         total + calcs,
                         "overlap list {}:{}/{}:{}".format(k, len(shuffles), l, len(splits))
                     )

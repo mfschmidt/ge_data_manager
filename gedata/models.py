@@ -36,7 +36,8 @@ class PushResult(models.Model):
     comp = models.CharField(max_length = 48)
     mask = models.CharField(max_length = 32)
     adj = models.CharField(max_length = 16)
-    seed = models.IntegerField()
+    split = models.IntegerField(default=0)
+    seed = models.IntegerField(default=0)
 
     # Result details
     columns = models.SmallIntegerField()
