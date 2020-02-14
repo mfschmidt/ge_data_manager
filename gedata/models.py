@@ -7,6 +7,9 @@ import datetime
 class PushResult(models.Model):
     """ Each run of PyGEST has many features. They are recorded in the PushResult class. """
 
+    # Index for rapid searching of inventory
+    descriptor = models.CharField(max_length = 16, default="")
+
     # File information
     json_path = models.FilePathField(path="/data", max_length=256)
     tsv_path = models.FilePathField(path="/data", max_length=256)
