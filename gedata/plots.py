@@ -37,9 +37,14 @@ def box_and_swarm(figure, placement, label, variable, data, high_score=1.0, orie
                   lim=None, ps=True, cols=4, push_ordinate_to=None):
     """ Create an axes object with a swarm plot draw over a box plot of the same data. """
 
-    shuffle_order = ['none', 'be04', 'be08', 'be16', 'edge', 'dist', 'agno']
-    shuffle_color_boxes = sns.color_palette(['gray', 'orchid', 'orchid', 'orchid', 'orchid', 'red', 'green'])
-    shuffle_color_points = sns.color_palette(['black', 'orchid', 'orchid', 'orchid', 'orchid', 'red', 'green'])
+    shuffle_order = ['none', 'be04', 'agno']
+    shuffle_color_boxes = sns.color_palette(['gray', 'lightcoral', 'lightblue'])
+    shuffle_color_points = sns.color_palette(['black', 'red', 'blue'])
+    annot_columns = [
+        {'shuffle': 'none', 'xo': 0.0, 'xp': 0.0},
+        {'shuffle': 'be04', 'xo': 1.0, 'xp': 0.5},
+        {'shuffle': 'agno', 'xo': 2.0, 'xp': 1.0},
+    ]
     if cols == 3:
         shuffle_order = shuffle_order[1:]
         shuffle_color_boxes = shuffle_color_boxes[1:]
@@ -49,22 +54,13 @@ def box_and_swarm(figure, placement, label, variable, data, high_score=1.0, orie
         shuffle_color_boxes = shuffle_color_boxes[0:1]
         shuffle_color_points = shuffle_color_points[0:1]
 
-    annot_columns = [
-        {'shuffle': 'none', 'xo': 0.0, 'xp': 0.0},
-        {'shuffle': 'be04', 'xo': 1.0, 'xp': 0.5},
-        {'shuffle': 'be08', 'xo': 2.0, 'xp': 1.0},
-        {'shuffle': 'be16', 'xo': 3.0, 'xp': 1.5},
-        {'shuffle': 'edge', 'xo': 4.0, 'xp': 2.0},
-        {'shuffle': 'dist', 'xo': 5.0, 'xp': 2.5},
-        {'shuffle': 'agno', 'xo': 6.0, 'xp': 3.0},
-    ]
-
     if push_ordinate_to is not None:
         data[variable] = data[variable] + push_ordinate_to - data[variable].max()
 
     ax = figure.add_axes(placement, label=label)
     if orientation == "v":
-        sns.swarmplot(data=data, x='shuffle', y=variable, order=shuffle_order, palette=shuffle_color_points, ax=ax)
+        sns.swarmplot(data=data, x='shuffle', y=variable,
+                      order=shuffle_order, palette=shuffle_color_points, size=3.0, ax=ax)
         sns.boxplot(data=data, x='shuffle', y=variable, order=shuffle_order, palette=shuffle_color_boxes, ax=ax)
         ax.set_ylabel(None)
         ax.set_xlabel(label)
@@ -270,25 +266,16 @@ def plot_fig_2(df, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
     """ Plot the first pane, rising lines representing rising Mantel correlations as probes are dropped. """
     a = df.loc[df['shuffle'] == 'none', 'path']
     b = df.loc[df['shuffle'] == 'be04', 'path']
-    c = df.loc[df['shuffle'] == 'be08', 'path']
-    d = df.loc[df['shuffle'] == 'be16', 'path']
-    e = df.loc[df['shuffle'] == 'edge', 'path']
-    f = df.loc[df['shuffle'] == 'dist', 'path']
-    g = df.loc[df['shuffle'] == 'agno', 'path']
+    c = df.loc[df['shuffle'] == 'agno', 'path']
     fig, ax_curve = plot.push_plot([
-        {'files': list(g), 'linestyle': ':', 'color': 'green'},
-        {'files': list(f), 'linestyle': ':', 'color': 'red'},
-        {'files': list(e), 'linestyle': ':', 'color': 'orchid'},
-        {'files': list(d), 'linestyle': ':', 'color': 'orchid'},
-        {'files': list(c), 'linestyle': ':', 'color': 'orchid'},
-        {'files': list(b), 'linestyle': ':', 'color': 'orchid'},
+        {'files': list(c), 'linestyle': ':', 'color': 'blue'},
+        {'files': list(b), 'linestyle': ':', 'color': 'red'},
         {'files': list(a), 'linestyle': '-', 'color': 'black'}, ],
         # title="Split-half train vs test results",
         label_keys=['shuffle', ],
         fig_size=fig_size,
         title="",
         plot_overlaps=False,
-        push_x_to = 15745,
     )
     # The top of the plot must be at least 0.25 higher than the highest value to make room for p-values.
     ax_curve.set_ylim(bottom=lowest_possible_score, top=highest_possible_score + 0.25)
@@ -308,7 +295,7 @@ def plot_fig_2(df, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
     """ Horizontal peak plot """
     ax_peaks = box_and_swarm(
         fig, [margin + 0.01, margin + main_ratio + margin, main_ratio, alt_ratio],
-        'Peaks', 'peak', df, orientation="h", lim=ax_curve.get_xlim(), push_ordinate_to=15745
+        'Peaks', 'peak', df, orientation="h", lim=ax_curve.get_xlim()
     )
     ax_peaks.set_xticklabels([])
 
@@ -493,12 +480,12 @@ def plot_fig_4(df, title="Title", fig_size=(8, 5), y_min=None, y_max=None):
     df.loc[df['shuffle'] == 'none', 'real_v_shuffle_ktau'] = df.loc[df['shuffle'] == 'none', 'ktau_by_seed']
     # In only the unshuffled runs, fill in the zeroes (or NaNs) with intra-group data. Unshuffled runs have no seeds.
     # Shuffled runs already have correct calculated overlaps.
-    df.loc[df['shuffle'] == 'none', 'overlap_by_split'] = df.loc[df['shuffle'] == 'none', 'overlap_by_seed']
-    df.loc[df['shuffle'] == 'none', 'ktau_by_split'] = df.loc[df['shuffle'] == 'none', 'ktau_by_seed']
+    df.loc[df['shuffle'] == 'none', 'overlap_by_seed'] = df.loc[df['shuffle'] == 'none', 'overlap_by_seed']
+    df.loc[df['shuffle'] == 'none', 'ktau_by_seed'] = df.loc[df['shuffle'] == 'none', 'ktau_by_seed']
 
     ax_a = box_and_swarm(
         fig, [margin, margin * 2, ax_width, ax_height],
-        'intra-split-half similarity', 'overlap_by_split', df, orientation="v", ps=False
+        'intra-shuffle-seed similarity', 'overlap_by_seed', df, orientation="v", ps=False
     )
     ax_a.set_ylim(bottom=lowest_possible_score, top=highest_possible_score)
 
@@ -510,7 +497,7 @@ def plot_fig_4(df, title="Title", fig_size=(8, 5), y_min=None, y_max=None):
 
     ax_c = box_and_swarm(
         fig, [1.0 - margin - ax_width - gap - ax_width, margin * 2, ax_width, ax_height],
-        'intra-split-half similarity', 'ktau_by_split', df, orientation="v", ps=False
+        'intra-shuffle-seed similarity', 'ktau_by_seed', df, orientation="v", ps=False
     )
     ax_c.set_ylim(ax_a.get_ylim())
 
@@ -570,9 +557,6 @@ def describe_overlap(df, descriptor="", title="Title"):
             d.append("Overlap within {}-shuffled: {}.<br />".format(
                 shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['train_overlap'])
             ))
-            # d.append("Kendall tau (filled) within {}-shuffled: {}.<br />".format(
-            #     shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['train_ktau_fill'])
-            # ))
             d.append("Kendall tau (trimmed) within {}-shuffled: {}.<br />".format(
                 shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['train_ktau'])
             ))
@@ -583,9 +567,6 @@ def describe_overlap(df, descriptor="", title="Title"):
             d.append("Overlap within {}-shuffled, within shuffle seed: {}.<br />".format(
                 shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['overlap_by_seed'])
             ))
-            # d.append("Kendall tau (filled) within {}-shuffled, within shuffle seed: {}.<br />".format(
-            #     shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['ktau_by_seed_fill'])
-            # ))
             d.append("Kendall tau (trimmed) within {}-shuffled, within shuffle seed: {}.<br />".format(
                 shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['ktau_by_seed'])
             ))
@@ -596,9 +577,6 @@ def describe_overlap(df, descriptor="", title="Title"):
             d.append("Overlap within {}-shuffled, within split batch: {}.<br />".format(
                 shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['overlap_by_split'])
             ))
-            # d.append("Kendall tau (filled) within {}-shuffled, within split batch: {}.<br />".format(
-            #     shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['ktau_by_split_fill'])
-            # ))
             d.append("Kendall tau (trimmed) within {}-shuffled, within split batch: {}.<br />".format(
                 shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['ktau_by_split'])
             ))
@@ -609,9 +587,6 @@ def describe_overlap(df, descriptor="", title="Title"):
             d.append("Overlap between un-shuffled and {}-shuffled: {}.<br />".format(
                 shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['real_v_shuffle_overlap'])
             ))
-            # d.append("Kendall tau (filled) between un-shuffled and {}-shuffled: {}.<br />".format(
-            #     shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['real_v_shuffle_ktau_fill'])
-            # ))
             d.append("Kendall tau (trimmed) between un-shuffled and {}-shuffled: {}.<br />".format(
                 shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['real_v_shuffle_ktau'])
             ))
