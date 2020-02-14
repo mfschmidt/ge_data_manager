@@ -105,15 +105,10 @@ class InventoryView(generic.ListView):
                                 elif xv == '4':
                                     min_split = 400
                                     max_split = 499
-                                final_queryset = initial_queryset.filter(
-                                    comp=comp_from_signature(c + p),
-                                    parby="glasser" if p == "g" else "wellid",
-                                    splby="glasser" if s == "g" else "wellid",
-                                    mask='none' if m == "00" else m,
-                                    norm='srs' if nrm == 's' else 'none',
-                                    split__gte=min_split, split__lte=max_split
-                                )
                                 rid = "{}{}{}{}{}{}{}".format(c, p, s, m, 's', nrm, xv)
+                                final_queryset = initial_queryset.filter(
+                                    descriptor=rid,
+                                )
                                 if len(final_queryset) > 0:
                                     print("  {:,} are for {}".format(len(final_queryset), rid))
 
@@ -135,7 +130,7 @@ class InventoryView(generic.ListView):
                                         "removeEverything('image_{}', '{}');".format(rid, rid),
                                         "<i class='fas fa-trash'></i>",
                                     ),
-                                    "<div id=\"image_{}\"><img src=\"\"></div>".format(rid),
+                                    "<div id=\"image_{}\"><span class=\"leave_blank\"></span></div>".format(rid),
                                 ])
                                 context[rid] = " ".join([
                                     base_str_n.format(
