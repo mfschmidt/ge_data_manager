@@ -8,7 +8,7 @@ class PushResult(models.Model):
     """ Each run of PyGEST has many features. They are recorded in the PushResult class. """
 
     # Index for rapid searching of inventory
-    descriptor = models.CharField(max_length = 16, default="")
+    descriptor = models.CharField(db_index=True, max_length = 16, default="")
 
     # File information
     json_path = models.FilePathField(path="/data", max_length=256)
@@ -25,7 +25,7 @@ class PushResult(models.Model):
     duration = models.IntegerField()
 
     # Data preparation and execution details
-    shuffle = models.CharField(max_length = 16)  # 'derivatives', 'shuffles', 'edge08shuffles', etc.
+    shuffle = models.CharField(db_index=True, max_length = 16)  # 'derivatives', 'shuffles', 'edge08shuffles', etc.
     sub = models.CharField(max_length = 32)
     hem = models.CharField(max_length = 1)
     samp = models.CharField(max_length = 16)
