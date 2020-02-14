@@ -102,6 +102,10 @@ function shouldBailOnBuilding(image_element, select_element) {
         // But don't mess with active spinners (which do not contain "img src" substring)
         console.log("  priming the " + select_element.id.toUpperCase()[0] + " image spot for " + select_element.innerText + " with empty.");
         loadPlot(image_element, "/static/gedata/empty.png");
+    } else if (image_element.innerHTML.includes("leave_blank")) {
+        // Immediately set the image blank, just to give feedback we registered the click.
+        // But don't mess with active spinners (which do not contain "img src" substring)
+        console.log("  leaving the " + select_element.id.toUpperCase()[0] + " image spot for " + select_element.innerText + " alone.");
     }
     return false;
 }
