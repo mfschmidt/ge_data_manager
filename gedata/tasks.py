@@ -185,6 +185,10 @@ def collect_jobs(self, data_path="/data", rebuild=False):
 
         # Finally, put it all into a model for storage in the database.
         r = PushResult(
+            descriptor=build_descriptor(
+                result.get("comp", ""), result.get("splby", ""), result.get("mask", ""),
+                result.get("norm", ""), result.get("batch", ""),
+            ),
             json_path=os.path.join(result['path'], result['json_file']),
             tsv_path=os.path.join(result['path'], result['json_file'].replace("json", "tsv")),
             log_path=os.path.join(result['path'], result['json_file'].replace("json", "log")),
@@ -556,6 +560,54 @@ def results_as_dict(tsv_file, base_path, probe_sig_threshold=None, use_cache=Tru
     return result_dict
 
 
+def build_descriptor(comp, splitby, mask, normalization, batch):
+    """ Generate a shorthand descriptor for the group a result belongs to. """
+
+    # From actual file, or from path to result, boil down comparator to its abbreviation
+    comp_map = {
+        'glasser-connectivity_sim.df': 'hcpg',
+        'glasserconnectivitysim': 'hcpg',
+        'hcp_niftismooth_grandmean_sim.df': 'hcpw',
+        'hcpniftismoothgrandmeansim': 'hcpw',
+        'indi-glasser-conn_sim.df': 'nkig',
+        'indiglasserconnsim': 'nkig',
+        'indi-connectivity_sim.df': 'nkiw',
+        'indiconnsim': 'nkiw',
+        'fear_glasser_sim.df': 'f__g',
+        'fearglassersim': 'f__g',
+        'fear_sim.df': 'f__w',
+        'fearsim': 'f__w',
+        'neutral_glasser_sim.df': 'n__g',
+        'neutralglassersim': 'n__g',
+        'neutral_sim.df': 'n__w',
+        'neutralsim': 'n__w',
+        'fear-neutral_glasser_sim.df': 'fn_g',
+        'fearneutralglassersim': 'fn_g',
+        'fear-neutral_sim.df': 'fn_w',
+        'fearneutralsim': 'fn_w',
+    }
+
+    # Make short string for split seed and normalization
+    split = int(batch[-5:])
+    if 200 <= split < 300:
+        xv = "2"
+    elif 400 <= split < 500:
+        xv = "4"
+    else:
+        xv = "_"
+    norm = "s" if normalization == "srs" else "_"
+
+    # Build and return the descriptor
+    return "{}{}{:0>2}{}{}{}".format(
+        comp_map[comp],
+        splitby[0],
+        0 if mask == "none" else int(mask),
+        's',
+        norm,
+        xv,
+    )
+
+
 def interpret_descriptor(descriptor):
     """ Parse the plot descriptor into parts """
     comp = comp_from_signature(descriptor[:4])
@@ -893,17 +945,17 @@ def assess_everything(self, plot_descriptor, data_root="/data"):
         'peak' if rdict['threshold'] is None else rdict['threshold']
     )
     progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3<br />Plotting figure 2")
-    f_2, axes = plot_fig_2(rdf, title=plot_title, fig_size=(12, 6), y_min=-0.15, y_max=0.90)
+    f_2, axes = plot_fig_2(rdf, title=plot_title, fig_size=(12, 6), y_min=-0.15, y_max=0.50)
     f_2.savefig(os.path.join(data_root, "plots", "{}_fig_2.png".format(plot_descriptor.lower())))
     i += 1
 
     progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3<br />Plotting figure 3")
-    f_3, axes = plot_fig_3(rdf, title=plot_title, fig_size=(6, 5), y_min=-0.1, y_max=0.8)
+    f_3, axes = plot_fig_3(rdf, title=plot_title, fig_size=(6, 5), y_min=-0.1, y_max=0.50)
     f_3.savefig(os.path.join(data_root, "plots", "{}_fig_3.png".format(plot_descriptor.lower())))
     i += 1
 
     progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3<br />Plotting figure 4")
-    f_4, axes = plot_fig_4(rdf, title=plot_title, y_min=0.0, y_max=1.1, fig_size=(13, 5),)
+    f_4, axes = plot_fig_4(rdf, title=plot_title, y_min=0.0, y_max=0.80, fig_size=(13, 5),)
     f_4.savefig(os.path.join(data_root, "plots", "{}_fig_4.png".format(plot_descriptor.lower())))
     i += 1
 
