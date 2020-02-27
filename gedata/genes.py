@@ -49,20 +49,20 @@ def pervasive_probes(tsvs, top):
     return winners
 
 
-def ranked_probes(tsvs, top):
+def ranked_probes(tsvs, rank_type, top):
     """ Go through the files provided, at the threshold specified, and report probes in all files. """
 
     if len(tsvs) < 1:
         return None
 
-    print("    These {:,} results average {:0.2%} overlap.".format(
+    print("    Ranking genes in {:,} results, which average {:0.2%} overlap.".format(
         len(tsvs), algorithms.pct_similarity(tsvs, map_probes_to_genes_first=False, top=top)
     ))
 
     # Collect raw rankings of all probes in all tsvs
     rs = []
     for i, tsv in enumerate(tsvs):
-        rs.append(get_ranks_from_file(tsv, column_name="rank{:04d}".format(i))["rank{:04d}".format(i)])
+        rs.append(get_ranks_from_file(tsv, column_name="{}rank{:04d}".format(rank_type, i))["{}rank{:04d}".format(rank_type, i)])
     dfr = pd.concat(rs, axis=1)
 
     # Replace NaNs (genes in at least one list, but not all) with the worst rankings in each column
@@ -80,9 +80,10 @@ def ranked_probes(tsvs, top):
             ))
             dfr.loc[np.isnan(dfr.loc[:, col]), col] = range(int(max(dfr[col]) + 1), len(dfr) + 1)
 
-    dfr['mean'] = dfr.mean(axis=1)
-    dfr['entrez_id'] = dfr.index.map(miscellaneous.map_pid_to_eid_fornito)
-    return dfr.sort_values('mean', ascending=True)
+    dfr[rank_type + '_mean'] = dfr.mean(axis=1)
+    if 'entrez_id' not in dfr.columns:
+        dfr['entrez_id'] = dfr.index.map(miscellaneous.map_pid_to_eid_fornito)
+    return dfr.sort_values(rank_type + '_mean', ascending=True)
 
 
 def describe_three_relevant_overlaps(relevant_results, phase, threshold):
@@ -94,8 +95,8 @@ def describe_three_relevant_overlaps(relevant_results, phase, threshold):
     for which_phase in ["train", "test", ]:
         phased_results = unshuffled_results[unshuffled_results['phase'] == which_phase]
         if len(phased_results) > 0:
-            print("  Overlap between 16 random ({}) halves, @{} = {:0.1%}; kendall tau is {:0.03}".format(
-                phase, threshold,
+            print("  Overlap between {} random ({}) halves, @{} = {:0.1%}; kendall tau is {:0.03}".format(
+                len(phased_results), phase, threshold,
                 algorithms.pct_similarity(list(phased_results['path']), map_probes_to_genes_first=False, top=threshold),
                 algorithms.kendall_tau(list(phased_results['path']))
             ))
@@ -122,17 +123,22 @@ def rank_genes_respecting_shuffles(real_files, shuffle_files):
     """
 
     # Rearrange results to use ranking, ordered by probe_id index
-    reals = ranked_probes(real_files, None).sort_index()
-    shuffles = ranked_probes(shuffle_files, None).sort_index()
+    reals = ranked_probes(real_files, "reals", None).sort_index()
+    shuffles = ranked_probes(shuffle_files, "shufs", None).sort_index()
+
+    # reals.to_csv("/data/plots/cache/_reals_.csv")
+    # shuffles.to_csv("/data/plots/cache/_shufs_.csv")
 
     # Count how many shuffled rankings, for each gene, are better than the real data.
-    hits = shuffles[[col for col in shuffles.columns if "rank" in col]].lt(reals['mean'], axis=0)
+    hits = shuffles[[col for col in shuffles.columns if "shufsrank" in col]].lt(reals['reals_mean'], axis=0)
     n = len(hits.columns)
     hits['hits'] = hits.sum(axis=1)
     hits['p'] = hits['hits'] / n
 
     # The delta is how much better the gene performs in real data than shuffled, higher positive is better
-    hits['delta'] = shuffles['mean'] - reals['mean']
+    hits['delta'] = shuffles['shufs_mean'] - reals['reals_mean']
+
+    # hits.sort_values(by='p').to_csv("/data/plots/cache/_hits_.csv")
 
     return hits.sort_values(by='p')
 
@@ -147,9 +153,11 @@ def describe_genes(rdf, rdict, progress_recorder):
     progress_recorder.set_progress(90, 100, "Ranking genes")
     relevant_tsvs = list(describe_three_relevant_overlaps(rdf, rdict['phase'], rdict['threshold'])['path'])
     survivors = pervasive_probes(relevant_tsvs, rdict['threshold'])
-    all_ranked = ranked_probes(relevant_tsvs, rdict['threshold'])
-    all_ranked['rank'] = range(1, len(all_ranked.index) + 1, 1)
+    all_ranked = ranked_probes(relevant_tsvs, "raw", rdict['threshold'])
+    all_ranked['raw_rank'] = range(1, len(all_ranked.index) + 1, 1)
     all_ranked['probe_id'] = all_ranked.index
+
+    # all_ranked.to_csv("/data/plots/cache/intermediate_a.csv")
 
     output = ["<p>Comparison of Mantel correlations between the test half (using probes discovered in the train half) vs connectivity similarity.</p>",
               "<ol>"]
@@ -165,7 +173,7 @@ def describe_genes(rdf, rdict, progress_recorder):
 
     progress_recorder.set_progress(92, 100, "Calculating p-values per gene")
     # Calculate p for each gene by counting how many times its shuffled rank outperforms its real rank.
-    df_gene_ps = rank_genes_respecting_shuffles(list(actuals['path']), list(actuals['path'])).sort_index()
+    df_gene_ps = rank_genes_respecting_shuffles(list(actuals['path']), list(shuffles['path'])).sort_index()
     p_lines = []
     d_lines = []
     for shf in ['be16', 'be08', 'be04', 'edge', 'dist', 'agno']:
@@ -191,7 +199,7 @@ def describe_genes(rdf, rdict, progress_recorder):
                 len(tmpdf[tmpdf['p'] < 0.01].index),
                 "The average ranking of these",
                 len(tmpdf[tmpdf['p'] < 0.05].index),
-                int(top_by_p['rank'].mean()),
+                int(top_by_p['raw_rank'].mean()),
             ))
             d_lines.append("{}: {:,} {} {}-shuffled data. ({:,} > 2000). {} {:,} genes is {:,}".format(
                 shf,
@@ -201,7 +209,7 @@ def describe_genes(rdf, rdict, progress_recorder):
                 len(tmpdf[tmpdf['delta'] > 2000].index),
                 "The average ranking of these",
                 len(tmpdf[tmpdf['delta'] > 1000].index),
-                int(top_by_delta['rank'].mean()),
+                int(top_by_delta['raw_rank'].mean()),
             ))
         else:
             crap_out_line = "{}: {} actual and {} {}-shuffled results, no comparisons available.".format(
@@ -228,7 +236,7 @@ def describe_genes(rdf, rdict, progress_recorder):
     line2 = "This is a ranking of ALL probes, so the selected threshold does not change it."
     output.append("<p>" + line1 + " " + line2 + "</p>\n  <ol>")
     # print(line)
-    all_ranked = all_ranked.sort_values("rank")
+    all_ranked = all_ranked.sort_values("raw_rank")
     for p in (list(all_ranked.index[0:20]) + [x for x in survivors['probe_id'] if
                                               x not in all_ranked.index[0:20]]):
         asterisk = " *" if p in list(survivors['probe_id']) else ""
@@ -246,9 +254,9 @@ def describe_genes(rdf, rdict, progress_recorder):
             g=gene_symbol
         )
         item_string = "probe {} -> entrez {} -> gene {}, mean rank {:0.1f}{}".format(
-            p, gene_id_string, gene_symbol_string, all_ranked.loc[p, 'mean'] + 1.0, asterisk
+            p, gene_id_string, gene_symbol_string, all_ranked.loc[p, 'raw_mean'] + 1.0, asterisk
         )
-        output.append("    <li value=\"{}\">{}</li>".format(all_ranked.loc[p, 'rank'], item_string))
+        output.append("    <li value=\"{}\">{}</li>".format(all_ranked.loc[p, 'raw_rank'], item_string))
         # print("{}. {}".format(all_ranked.loc[p, 'rank'], item_string))
     output.append("  </ol>\n</p>")
     output.append("<div id=\"notes_below\">")
@@ -257,5 +265,6 @@ def describe_genes(rdf, rdict, progress_recorder):
 
     # Return the all_ranked dataframe, with two key-like Series as the first columns
     ordered_columns = ["entrez_id", "probe_id", ] + \
-                      [item for item in all_ranked.columns if item not in ["entrez_id", "probe_id", ]]
+                      [item for item in all_ranked.columns if "_id" not in item and "rank" not in item] + \
+                      sorted([item for item in all_ranked.columns if "rank" in item])
     return all_ranked[ordered_columns], "\n".join(output)

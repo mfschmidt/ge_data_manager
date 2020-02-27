@@ -833,7 +833,7 @@ def write_gene_lists(rdict, rdf, progress_recorder, data_root="/data"):
     """ Rank genes and write them out as two csvs. """
     df_ranked_full, gene_description = describe_genes(rdf, rdict, progress_recorder)
     df_ranked_full.to_csv(os.path.join(data_root, "plots", "{}_ranked_full.csv".format(rdict['descriptor'])))
-    df_ranked_full[['entrez_id', ]].to_csv(os.path.join(data_root, "plots", "{}_ranked.csv".format(rdict['descriptor'])))
+    df_ranked_full[['entrez_id', ]].to_csv(os.path.join(data_root, "plots", "{}_raw_ranked.csv".format(rdict['descriptor'])))
 
     return gene_description
 
