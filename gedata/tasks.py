@@ -256,7 +256,7 @@ def comp_from_signature(signature, filename=False):
     """
     comp_map = {
         'hcpg': 'glasserconnectivitysim',
-        'hcpw': 'hcpniftismoothgrandmeansim',
+        'hcpw': 'hcpniftismoothconnsim',
         'nkig': 'indiglasserconnsim',
         'nkiw': 'indiconnsim',
         'f__g': 'fearglassersim',
@@ -266,7 +266,7 @@ def comp_from_signature(signature, filename=False):
         'fn_g': 'fearneutralglassersim',
         'fn_w': 'fearneutralsim',
         'glasserconnectivitysim': 'glasser-connectivity_sim.df',
-        'hcpniftismoothgrandmeansim': 'hcp_niftismooth_grandmean_sim.df',
+        'hcpniftismoothconnsim': 'hcp_niftismooth_conn_sim.df',
         'indiglasserconnsim': 'indi-glasser-conn_sim.df',
         'indiconnsim': 'indi-connectivity_sim.df',
         'fearglassersim': 'fear_glasser_sim.df',
@@ -567,8 +567,8 @@ def build_descriptor(comp, splitby, mask, normalization, batch):
     comp_map = {
         'glasser-connectivity_sim.df': 'hcpg',
         'glasserconnectivitysim': 'hcpg',
-        'hcp_niftismooth_grandmean_sim.df': 'hcpw',
-        'hcpniftismoothgrandmeansim': 'hcpw',
+        'hcp_niftismooth_conn_sim.df': 'hcpw',
+        'hcpniftismoothconnsim': 'hcpw',
         'indi-glasser-conn_sim.df': 'nkig',
         'indiglasserconnsim': 'nkig',
         'indi-connectivity_sim.df': 'nkiw',

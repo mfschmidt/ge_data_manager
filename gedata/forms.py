@@ -125,7 +125,7 @@ class CompareForm(forms.Form):
         ('hcpgw16s', 'parby-glasser_splby-wellid ~ glasserconnectivitysim mask-16'),
         ('hcpgw32s', 'parby-glasser_splby-wellid ~ glasserconnectivitysim mask-32'),
         ('hcpgw64s', 'parby-glasser_splby-wellid ~ glasserconnectivitysim mask-64'),
-        ('hcpww00s', 'parby-wellid_splby-wellid ~ hcpniftismoothgrandmeansim mask-none'),
+        ('hcpww00s', 'parby-wellid_splby-wellid ~ hcpniftismoothconnsim mask-none'),
         ('nkigg00s', 'parby-glasser_splby-glasser ~ indiglasserconnsim mask-none'),
         ('nkigg16s', 'parby-glasser_splby-glasser ~ indiglasserconnsim mask-16'),
         ('nkigg32s', 'parby-glasser_splby-glasser ~ indiglasserconnsim mask-32'),
@@ -136,7 +136,7 @@ class CompareForm(forms.Form):
         ('nkigw64s', 'parby-glasser_splby-wellid ~ indiglasserconnsim mask-64'),
         ('nkiwg00s', 'parby-wellid_splby-glasser ~ indiconnsim mask-none'),
         ('nkiww00s', 'parby-wellid_splby-wellid ~ indiconnsim mask-none'),
-        ('hcpww16ss', 'parby-wellid_splby-wellid ~ hcpniftismoothgrandmeansim mask-none norm-srs'),
+        ('hcpww16ss', 'parby-wellid_splby-wellid ~ hcpniftismoothconnsim mask-none norm-srs'),
     ]
     left_set = forms.ChoiceField(
         label="start with", widget=forms.Select, choices=complete_sets, initial='hcpww16ss',
@@ -157,7 +157,7 @@ def image_dict_from_selection(selection):
         if selection[3].lower() == "g":
             image_dict['comp'] = "glasserconnectivitysim"
         elif selection[3].lower() == "w":
-            image_dict['comp'] = "hcpniftismoothgrandmeansim"
+            image_dict['comp'] = "hcpniftismoothconnsim"
     elif selection[:3].lower() == "nki":
         if selection[3].lower() == "g":
             image_dict['comp'] = "indiglasserconnsim"

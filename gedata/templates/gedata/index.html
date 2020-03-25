@@ -24,7 +24,7 @@
         </ul>
     <p> Some variables were also altered to allow comparisons of results under different paradigms.
         We compared these expression similarity matrices with connectivity similarity matrices from two datasets: the HCP data, parcellated into Glasser parcels
-        <b>(comp-glasserconnectivitysim)</b> or left as wellids <b>(comp-hcpniftismoothgrandmeansim)</b>; and the INDI NKI data, parcellated
+        <b>(comp-glasserconnectivitysim)</b> or left as wellids <b>(comp-hcpniftismoothconnsim)</b>; and the INDI NKI data, parcellated
         into Glasser parcels <b>(comp-indiglasserconnsim)</b> or left as wellids <b>(comp-indiconnsim)</b>. In the parcellated HCP data, distance-masking
         was applied at 16mm <b>(mask-16)</b>, 32mm <b>(mask-32)</b>, and 64mm <b>(mask-64)</b>
         thresholds for comparison with unmasked <b>(mask-none)</b> data. There is a mix of 'once' and 'smrt' algorithms, all 'max' some 'min'
@@ -34,10 +34,10 @@
     </p>
 
     <ul>HCP:
-        <li>parby-<b>wellid</b>_splby <b>wellid</b> ~ <b>hcpniftismoothgrandmeansim</b>  mask-none (splits 200-205 from Dec 28, 2018 - present)</li>
-        <li>parby-<b>wellid</b>_splby <b>wellid</b> ~ <b>hcpniftismoothgrandmeansim</b>  mask-16 (splits 200-205 from Dec 28, 2018 - present)</li>
-        <li>parby-<b>wellid</b>_splby <b>wellid</b> ~ <b>hcpniftismoothgrandmeansim</b>  mask-32 (splits 200-205 from Dec 28, 2018 - present)</li>
-        <li>parby-<b>wellid</b>_splby <b>wellid</b> ~ <b>hcpniftismoothgrandmeansim</b>  mask-64 (splits 200-205 from Dec 28, 2018 - present)</li>
+        <li>parby-<b>wellid</b>_splby <b>wellid</b> ~ <b>hcpniftismoothconnsim</b>  mask-none (splits 200-205 from Dec 28, 2018 - present)</li>
+        <li>parby-<b>wellid</b>_splby <b>wellid</b> ~ <b>hcpniftismoothconnsim</b>  mask-16 (splits 200-205 from Dec 28, 2018 - present)</li>
+        <li>parby-<b>wellid</b>_splby <b>wellid</b> ~ <b>hcpniftismoothconnsim</b>  mask-32 (splits 200-205 from Dec 28, 2018 - present)</li>
+        <li>parby-<b>wellid</b>_splby <b>wellid</b> ~ <b>hcpniftismoothconnsim</b>  mask-64 (splits 200-205 from Dec 28, 2018 - present)</li>
     </ul>
     <ul>NKI INDI:
         <li>none</li>
@@ -57,10 +57,10 @@
         <li>parby-glasser_splby wellid ~ glasserconnectivitysim  mask-16 (2 + 1,536: May 2 - May 3)</li>
         <li>parby-glasser_splby wellid ~ glasserconnectivitysim  mask-32 (2 + 1,536: about half from May 23 - May 28, half on June 19)</li>
         <li>parby-glasser_splby wellid ~ glasserconnectivitysim  mask-64 (2 + 1,536: about half from May 23 - May 28, half on June 19)</li>
-        <li>parby-<b>wellid</b>_splby glasser ~ hcpniftismoothgrandmeansim  mask-none (Only 16, all split 205, from July 28)</li>
-        <li>parby-wellid_splby glasser ~ hcpniftismoothgrandmeansim  mask-16 (Only 16, all split 205, from July 28)</li>
-        <li>parby-wellid_splby wellid ~ hcpniftismoothgrandmeansim  mask-none (2 + 1,536 from July 8 - July 28)</li>
-        <li>parby-wellid_splby wellid ~ hcpniftismoothgrandmeansim  mask-16 (Only 16, all split 205, from July 28)</li>
+        <li>parby-<b>wellid</b>_splby glasser ~ hcpniftismoothconnsim  mask-none (Only 16, all split 205, from July 28)</li>
+        <li>parby-wellid_splby glasser ~ hcpniftismoothconnsim  mask-16 (Only 16, all split 205, from July 28)</li>
+        <li>parby-wellid_splby wellid ~ hcpniftismoothconnsim  mask-none (2 + 1,536 from July 8 - July 28)</li>
+        <li>parby-wellid_splby wellid ~ hcpniftismoothconnsim  mask-16 (Only 16, all split 205, from July 28)</li>
     </ul>
     <ul>NKI INDI:
         <li>parby-glasser_splby glasser ~ <b>indiglasserconnsim</b>  mask-none (2 + 1,536: July 28 - Aug 1)</li>
