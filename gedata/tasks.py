@@ -769,7 +769,7 @@ def calculate_group_stats(
 
             """ Calculate overlaps and such, only if there are results available to calculate. """
             if local_n > 0:
-                # We can only do this in training data, unless we want to double the workload for test, too.
+                # Overlap and Kendall tau intra- all members of this shuffle_mask (all 32 'none' shuffles perhaps)
                 rdf.loc[shuffle_mask, 'train_overlap'] = algorithms.pct_similarity_list(
                     list(local_df['path']), top=rdict['threshold']
                 )
@@ -784,8 +784,11 @@ def calculate_group_stats(
                 for split in list(set(local_df['split'])):
                     # These values will all be 'nan' for unshuffled results. There's only one per split.
                     split_mask = rdf['split'] == split
-                    if sum(split_mask) > 0:
-                        print("    overlap and ktau of {} {}-split {}-shuffles".format(sum(split_mask), split, shuffle))
+                    if np.sum(split_mask) > 0:
+                        # For a given split (within-split, across-seeds):
+                        print("    overlap and ktau of {} {}-split {}-shuffles".format(
+                            np.sum(shuffle_mask & split_mask), split, shuffle
+                        ))
                         # The following similarities are masked to include only one shuffle type, and one split-half
                         rdf.loc[shuffle_mask & split_mask, 'overlap_by_split'] = algorithms.pct_similarity_list(
                             list(local_df.loc[split_mask, 'path']), top=rdict['threshold']
@@ -800,8 +803,11 @@ def calculate_group_stats(
                 # For each shuffled result, compare it against same-shuffled results from the same shuffle seed
                 for seed in list(set(local_df['seed'])):
                     seed_mask = rdf['seed'] == seed
-                    if sum(seed_mask) > 0:
-                        print("    overlap and ktau of {} {}-seed {}-shuffles".format(sum(seed_mask), seed, shuffle))
+                    if np.sum(seed_mask) > 0:
+                        # For a given seed (within seed, across splits):
+                        print("    overlap and ktau of {} {}-seed {}-shuffles".format(
+                            np.sum(shuffle_mask & seed_mask), seed, shuffle
+                        ))
                         rdf.loc[shuffle_mask & seed_mask, 'overlap_by_seed'] = algorithms.pct_similarity_list(
                             list(local_df.loc[seed_mask, 'path']), top=rdict['threshold']
                         )

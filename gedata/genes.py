@@ -2,7 +2,8 @@ import os
 from statistics import mean
 import pandas as pd
 import numpy as np
-from scipy.stats import ttest_ind
+from scipy.stats import ttest_ind, ranksums
+import re
 
 from pygest import algorithms
 from pygest.rawdata import miscellaneous
@@ -50,7 +51,13 @@ def pervasive_probes(tsvs, top):
 
 
 def ranked_probes(tsvs, rank_type, top):
-    """ Go through the files provided, at the threshold specified, and report probes in all files. """
+    """ Go through the files provided in tsvs, at the threshold specified in top, and report probes in all files.
+
+        :param list tsvs: A list of result files
+        :param rank_type: a string to label/discriminate different groups of results
+        :param top: Threshold for how many of the top genes to consider relevant
+        :returns: dataframe with probes as rows, and a column of probe ranks for each result, plus a 'mean' column.
+    """
 
     if len(tsvs) < 1:
         return None
@@ -62,14 +69,27 @@ def ranked_probes(tsvs, rank_type, top):
     # Collect raw rankings of all probes in all tsvs
     rs = []
     for i, tsv in enumerate(tsvs):
-        rs.append(get_ranks_from_file(tsv, column_name="{}rank{:04d}".format(rank_type, i))["{}rank{:04d}".format(rank_type, i)])
+        # Decide on a unique column name for this particular gene ranking
+        # Looking for path like ...batch-train00400...
+        m_split = re.search(r"(?P<sub>{})-train(?P<val>[a-zA-Z0-9+]+)".format("batch"), tsv)
+        split = int(m_split.group("val")) if m_split is not None else None
+        m_seed = re.search(r"(?P<sub>{})-(?P<val>[0-9+]+)".format("seed"), tsv)
+        seed = int(m_seed.group("val")) if m_seed is not None else None
+        column_name = "{}_rank_{:04d}".format(
+            rank_type, split if split is not None else 32 + i,
+        )
+        if seed is not None:
+            column_name = "{}-{:04d}".format(column_name, seed)
+
+        # Use the calculated column name for this ranking
+        rs.append(get_ranks_from_file(tsv, column_name=column_name)[column_name])
     dfr = pd.concat(rs, axis=1)
 
     # Replace NaNs (genes in at least one list, but not all) with the worst rankings in each column
     # A NaN represents a score too low to make the given list and should penalize the mean ranking
     # This should no longer ever happen, as we no longer use truncated gene lists.
     if dfr.isnull().values.any():
-        "ACK! truncating probes in genes.py:ranked_probes(); Why?!?!"
+        print("ACK! truncating probes in genes.py:ranked_probes(); Why?!?!")
         for col in dfr.columns:
             # Replace this column's nans with this column's highest (worst) rankings
             print("column has {} values ranging from {} to {}; {} are NaN. Replace them with {}".format(
@@ -87,7 +107,9 @@ def ranked_probes(tsvs, rank_type, top):
 
 
 def describe_three_relevant_overlaps(relevant_results, phase, threshold):
-    """ Filter results by the arguments, and report percent similarity and consistent top genes. """
+    """ Filter results by the arguments, and report percent similarity and consistent top genes.
+    """
+
     print("=== {} ===".format(phase))
     unshuffled_results = relevant_results[relevant_results['shuffle'] == 'none']
     print("  {:,} out of {:,} results are unshuffled.".format(len(unshuffled_results), len(relevant_results)))
@@ -117,30 +139,61 @@ def describe_three_relevant_overlaps(relevant_results, phase, threshold):
     return unshuffled_results
 
 
-def rank_genes_respecting_shuffles(real_files, shuffle_files):
+def rank_genes_respecting_shuffles(real_files, shuffle_files, shuffle_name):
     """ Given gene rankings from actual data and gene rankings from shuffled data,
         calculate how likely each gene is to have outperformed the shuffle in actual data.
     """
 
     # Rearrange results to use ranking, ordered by probe_id index
+    # Get a separate dataframe of probe rankings for each result for reals and shuffles
     reals = ranked_probes(real_files, "reals", None).sort_index()
     shuffles = ranked_probes(shuffle_files, "shufs", None).sort_index()
 
-    # reals.to_csv("/data/plots/cache/_reals_.csv")
-    # shuffles.to_csv("/data/plots/cache/_shufs_.csv")
+    # print("Writing {} reals and {} shuffles, named {} to csv. <genes.py:rank_genes_respecting_shuffles()>".format(
+    #     reals.shape, shuffles.shape, shuffle_name
+    # ))
+    # reals.to_csv("/data/plots/cache/_reals_{}_.csv".format(shuffle_name))
+    # shuffles.to_csv("/data/plots/cache/_shufs_{}_.csv".format(shuffle_name))
+
+    new_df = pd.DataFrame(data=None, index=reals.index)
+
+    # For speed, create a separate curated dataframe for each split, then apply a function rather than for-looping
+    # dfs_by_split = {}
+    for split in sorted([int(col[11:]) for col in reals.columns if "reals_rank_" in col]):  # should be 1 to 32
+        # dfs_by_split[split] = {}
+        # dfs_by_split[split]['reals'] = reals["reals_rank_{:04}".format(split)]
+        shuffle_columns = [col for col in shuffles.columns if "shufs_rank_{:04}".format(split) in col]
+        # dfs_by_split[split]['shuffles'] = shuffles[shuffle_columns]
+
+        new_df['{}-over-real_{:03}_count'.format(shuffle_name, split)] = shuffles[shuffle_columns].lt(
+            reals["reals_rank_{:04}".format(split)], axis='index'
+        ).sum(axis='columns')
+
+    # And, without regard to split, compare real to shuffles.
+    reals_ranks = reals[[col for col in reals.columns if "reals_rank_" in col]]
+    def ttests_vs_real(row):
+        t_ranksums, p_ranksums = ranksums(row.values, reals_ranks.loc[row.name, :].values)
+        t_ttestind, p_ttestind = ttest_ind(row.values, reals_ranks.loc[row.name, :].values)
+        return t_ranksums, p_ranksums, t_ttestind, p_ttestind
+
+    ttest_df = shuffles[[col for col in shuffles.columns if "shufs_rank_" in col]].apply(
+        lambda row: ttests_vs_real(row), axis=1
+    ).apply(pd.Series)
+    ttest_df.columns = ["{}_for-{}".format(test, shuffle_name) for test in [
+        't_by-ranksums', 'p_by-ranksums', 't_by-ttestind', 'p_by-ttestind'
+    ]]
+    ttest_df.index = shuffles.index
+    new_df = pd.concat([new_df, ttest_df, ], axis='columns')
 
     # Count how many shuffled rankings, for each gene, are better than the real data.
-    hits = shuffles[[col for col in shuffles.columns if "shufsrank" in col]].lt(reals['reals_mean'], axis=0)
-    n = len(hits.columns)
-    hits['hits'] = hits.sum(axis=1)
-    hits['p'] = hits['hits'] / n
+    hits = shuffles[[col for col in shuffles.columns if "shufs_rank" in col]].lt(reals['reals_mean'], axis=0)
+    new_df['n_' + shuffle_name + '_gt-realmean'] = hits.sum(axis=1)
+    new_df['p_by-count_for-' + shuffle_name] = new_df['n_' + shuffle_name + '_gt-realmean'] / len(hits.columns)
+    new_df['delta_for-' + shuffle_name] = shuffles['shufs_mean'] - reals['reals_mean']
 
-    # The delta is how much better the gene performs in real data than shuffled, higher positive is better
-    hits['delta'] = shuffles['shufs_mean'] - reals['reals_mean']
+    # new_df.to_csv("/data/plots/cache/_hits_" + shuffle_name + "_.csv")
 
-    # hits.sort_values(by='p').to_csv("/data/plots/cache/_hits_.csv")
-
-    return hits.sort_values(by='p')
+    return new_df
 
 
 def describe_genes(rdf, rdict, progress_recorder):
@@ -153,6 +206,8 @@ def describe_genes(rdf, rdict, progress_recorder):
     progress_recorder.set_progress(90, 100, "Ranking genes")
     relevant_tsvs = list(describe_three_relevant_overlaps(rdf, rdict['phase'], rdict['threshold'])['path'])
     survivors = pervasive_probes(relevant_tsvs, rdict['threshold'])
+
+    # Calculate the raw ranking of all genes over all splits, and create a new 'raw_rank' to summarize them.
     all_ranked = ranked_probes(relevant_tsvs, "raw", rdict['threshold'])
     all_ranked['raw_rank'] = range(1, len(all_ranked.index) + 1, 1)
     all_ranked['probe_id'] = all_ranked.index
@@ -163,52 +218,56 @@ def describe_genes(rdf, rdict, progress_recorder):
               "<ol>"]
     # Calculate p with a t-test between real and shuffled.
     actuals = rdf[rdf['shuffle'] == 'none']
-    for shf in ['be16', 'be08', 'be04', 'edge', 'dist', 'agno']:
+    for shf in list(set(rdf[rdf['shuffle'] != 'none']['shuffle'])):
         # 'test_score' is in the test set, and is most appropriate and conservative; could do 'train_score', too
         shuffles = rdf[rdf['shuffle'] == shf]
         if len(shuffles) > 0 and len(actuals) > 0:
-            t, p = ttest_ind(actuals['test_score'].values, shuffles['test_score'].values)
-            output.append("  <li>discovery in real vs discovery in {} (t-test): t = {:0.2f}, p = {:0.5f}</li>".format(shf, t, p))
+            tt, pt = ttest_ind(actuals['test_score'].values, shuffles['test_score'].values)
+            tr, pr = ranksums(actuals['test_score'].values, shuffles['test_score'].values)
+            output.append("  <li>discovery in real vs discovery in {} ({}) ({})</li>".format(shf,
+                "t-test: t = {:0.2f}, p = {:0.5f}".format(tt, pt),
+                "ranksum-test: t = {:0.2f}, p = {:0.5f}".format(tr, pr),
+            ))
     output.append("</ol>")
 
     progress_recorder.set_progress(92, 100, "Calculating p-values per gene")
-    # Calculate p for each gene by counting how many times its shuffled rank outperforms its real rank.
-    df_gene_ps = rank_genes_respecting_shuffles(list(actuals['path']), list(shuffles['path'])).sort_index()
+    # Calculate delta and p for each gene by counting how many times its shuffled rank outperforms its real rank.
     p_lines = []
     d_lines = []
-    for shf in ['be16', 'be08', 'be04', 'edge', 'dist', 'agno']:
+    for shf in list(set(rdf[rdf['shuffle'] != 'none']['shuffle'])):
         shuffles = rdf[rdf['shuffle'] == shf]
         if len(shuffles) > 0 and len(actuals) > 0:
-            tmpdf = rank_genes_respecting_shuffles(list(actuals['path']), list(shuffles['path'])).sort_index()
+            tmpdf = rank_genes_respecting_shuffles(list(actuals['path']), list(shuffles['path']), shf).sort_index()
+            all_ranked = pd.concat([all_ranked, tmpdf], axis=1)
 
-            df_gene_ps["p_" + shf] = tmpdf['p']
-            low_p_indices = all_ranked['probe_id'].isin(tmpdf[tmpdf['p'] < 0.05].index)
+            # Extract p-values.
+            low_p_indices = all_ranked['probe_id'].isin(tmpdf[tmpdf['p_by-count_for-' + shf] < 0.05].index)
             top_by_p = all_ranked[low_p_indices]
             print("{} items in top_by_p (real outperforms shuffled @ p<0.05)".format(len(top_by_p)))
 
-            df_gene_ps["delta_" + shf] = tmpdf['delta']
-            high_delta_indices = all_ranked['probe_id'].isin(tmpdf[tmpdf['delta'] > 1000].index)
+            # Extract deltas.
+            high_delta_indices = all_ranked['probe_id'].isin(tmpdf[tmpdf['delta_for-' + shf] > 1000].index)
             top_by_delta = all_ranked[high_delta_indices]
             print("{} items in top_by_delta (real ranks >1000 places better than shuffled)".format(len(top_by_delta)))
 
             p_lines.append("{}: {:,} {} {}-shuffled data (p<0.05) ({:,} if p<0.01). {} {:,} genes is {:,}".format(
                 shf,
-                len(tmpdf[tmpdf['p'] < 0.05].index),
+                len(tmpdf[tmpdf['p_by-count_for-' + shf] < 0.05].index),
                 "genes perform better in actual than",
                 shf,
-                len(tmpdf[tmpdf['p'] < 0.01].index),
+                len(tmpdf[tmpdf['p_by-count_for-' + shf] < 0.01].index),
                 "The average ranking of these",
-                len(tmpdf[tmpdf['p'] < 0.05].index),
+                len(tmpdf[tmpdf['p_by-count_for-' + shf] < 0.05].index),
                 int(top_by_p['raw_rank'].mean()),
             ))
             d_lines.append("{}: {:,} {} {}-shuffled data. ({:,} > 2000). {} {:,} genes is {:,}".format(
                 shf,
-                len(tmpdf[tmpdf['delta'] > 1000].index),
+                len(tmpdf[tmpdf['delta_for-' + shf] > 1000].index),
                 "genes perform 1000 spots better in actual than",
                 shf,
-                len(tmpdf[tmpdf['delta'] > 2000].index),
+                len(tmpdf[tmpdf['delta_for-' + shf] > 2000].index),
                 "The average ranking of these",
-                len(tmpdf[tmpdf['delta'] > 1000].index),
+                len(tmpdf[tmpdf['delta_for-' + shf] > 1000].index),
                 int(top_by_delta['raw_rank'].mean()),
             ))
         else:
@@ -225,7 +284,8 @@ def describe_genes(rdf, rdict, progress_recorder):
         "That doesn't mean they performed well, just better in actual than shuffled.",
         "See {}_ranked_full.csv for quantitative details.".format(rdict['descriptor']),
     ])))
-    all_ranked = pd.concat([all_ranked, df_gene_ps], axis=1)
+    # This is unnecessary as df_gene_ps is no longer created.
+    # all_ranked = pd.concat([all_ranked, df_gene_ps], axis=1)
 
     """ Next, for the description file, report top genes. """
     progress_recorder.set_progress(95, 100, "Summarizing genes")
@@ -265,6 +325,7 @@ def describe_genes(rdf, rdict, progress_recorder):
 
     # Return the all_ranked dataframe, with two key-like Series as the first columns
     ordered_columns = ["entrez_id", "probe_id", ] + \
-                      [item for item in all_ranked.columns if "_id" not in item and "rank" not in item] + \
-                      sorted([item for item in all_ranked.columns if "rank" in item])
-    return all_ranked[ordered_columns], "\n".join(output)
+                      sorted([item for item in all_ranked.columns if "_id" not in item and "rank" not in item]) + \
+                      sorted([item for item in all_ranked.columns if "rank" in item]) + \
+                      sorted([item for item in all_ranked.columns if "_id" in item])
+    return all_ranked[ordered_columns + [col for col in all_ranked.columns if col not in ordered_columns]], "\n".join(output)
