@@ -10,27 +10,6 @@ from pygest.rawdata import miscellaneous
 from pygest.convenience import create_symbol_to_id_map, create_id_to_symbol_map, get_ranks_from_file
 
 
-def combine_gene_ranks(tsv_files):
-    """ Go through all genes in the list of tsv_files and generate a single ranking. """
-
-    gene_ranks = {}
-    for tsv in tsv_files:
-        df = pd.read_csv(tsv, sep='\t', index_col=0)
-        for row in df.itertuples():
-            if row.probe_id in gene_ranks.keys():
-                gene_ranks[row.probe_id]['appearances'] += 1
-                gene_ranks[row.probe_id]['ranks'].append(row.Index)
-            else:
-                gene_ranks[row.probe_id] = {
-                    'appearances': 1,
-                    'ranks': [row.Index, ],
-                }
-    rank_df = pd.DataFrame.from_dict(gene_ranks, orient='index')
-    rank_df['rank'] = rank_df['ranks'].apply(mean)
-
-    return rank_df
-
-
 def pervasive_probes(tsvs, top):
     """ Go through the files provided, at the threshold specified, and report probes in all files. """
 
@@ -165,6 +144,8 @@ def rank_genes_respecting_shuffles(real_files, shuffle_files, shuffle_name):
         shuffle_columns = [col for col in shuffles.columns if "shufs_rank_{:04}".format(split) in col]
         # dfs_by_split[split]['shuffles'] = shuffles[shuffle_columns]
 
+        # Values compared here are ranks, 1 being best. So counts are how many times genes scored better
+        # in shuffled data than in real data.
         new_df['{}-over-real_{:03}_count'.format(shuffle_name, split)] = shuffles[shuffle_columns].lt(
             reals["reals_rank_{:04}".format(split)], axis='index'
         ).sum(axis='columns')
