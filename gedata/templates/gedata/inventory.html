@@ -7,33 +7,6 @@
 <div style="display: none;" id="active_rid">empty</div>
 
 <h2>SRS-normalized</h2>
-<h3>16 split halves</h3>
-    <table class="inventory_table">
-        <!-- Table Header -->
-        <tr>
-            <th>parcel</th>
-            <th>split</th>
-            <th>comp</th>
-            <th colspan="4">mask</th>
-        </tr>
-        <tr>
-            <th colspan="3"></th>
-            <th>none</th>
-            <th>&lt; 16mm</th>
-            <th>&lt; 32mm</th>
-            <th>&lt; 64mm</th>
-        </tr>
-        <!-- Table Body -->
-        <tr>
-            <th rowspan="1">wellid</th>
-            <th rowspan="1">wellid</th>
-            <th>hcp</th>
-            <td id="hcpww00ss2" class="data_cell osdc_active">{{ hcpww00ss2 |safe }}</td>
-            <td id="hcpww16ss2" class="data_cell osdc_active osdc_primary">{{ hcpww16ss2 |safe }}</td>
-            <td id="hcpww32ss2" class="data_cell osdc_active">{{ hcpww32ss2 |safe }}</td>
-            <td id="hcpww64ss2" class="data_cell osdc_active">{{ hcpww64ss2 |safe }}</td>
-        </tr>
-    </table>
 
 <h3>32 split quarters</h3>
     <table class="inventory_table">
@@ -60,6 +33,62 @@
             <td id="hcpww16ss4" class="data_cell osdc_active osdc_primary">{{ hcpww16ss4 |safe }}</td>
             <td id="hcpww32ss4" class="data_cell osdc_active">{{ hcpww32ss4 |safe }}</td>
             <td id="hcpww64ss4" class="data_cell osdc_active">{{ hcpww64ss4 |safe }}</td>
+        </tr>
+    </table>
+
+<h2>Fear - Neutral connectivity split quarters</h2>
+    <table class="inventory_table">
+        <!-- Table Header -->
+        <tr>
+            <th>parcel</th>
+            <th>split</th>
+            <th>comp</th>
+            <th colspan="4">mask</th>
+        </tr>
+        <tr>
+            <th colspan="3"></th>
+            <th>none</th>
+            <th>&lt; 16mm</th>
+	    <th>&lt; 32mm</th>
+	    <th>&lt; 64mm</th>
+        </tr>
+        <!-- Table Body -->
+        <tr>
+            <th rowspan="1">wellid</th>
+            <th rowspan="1">wellid</th>
+            <th>fear-neutral</th>
+            <td id="fn_ww00ss4" class="data_cell osdc_neglected">{{ fn_ww00ss4 |safe }}</td>
+            <td id="fn_ww16ss4" class="data_cell osdc_neglected">{{ fn_ww16ss4 |safe }}</td>
+            <td id="fn_ww32ss4" class="data_cell osdc_neglected">{{ fn_ww32ss4 |safe }}</td>
+            <td id="fn_ww64ss4" class="data_cell osdc_neglected">{{ fn_ww64ss4 |safe }}</td>
+        </tr>
+    </table>
+
+<h3>16 split halves</h3>
+    <table class="inventory_table">
+        <!-- Table Header -->
+        <tr>
+            <th>parcel</th>
+            <th>split</th>
+            <th>comp</th>
+            <th colspan="4">mask</th>
+        </tr>
+        <tr>
+            <th colspan="3"></th>
+            <th>none</th>
+            <th>&lt; 16mm</th>
+            <th>&lt; 32mm</th>
+            <th>&lt; 64mm</th>
+        </tr>
+        <!-- Table Body -->
+        <tr>
+            <th rowspan="1">wellid</th>
+            <th rowspan="1">wellid</th>
+            <th>hcp</th>
+            <td id="hcpww00ss2" class="data_cell osdc_active">{{ hcpww00ss2 |safe }}</td>
+            <td id="hcpww16ss2" class="data_cell osdc_active osdc_primary">{{ hcpww16ss2 |safe }}</td>
+            <td id="hcpww32ss2" class="data_cell osdc_active">{{ hcpww32ss2 |safe }}</td>
+            <td id="hcpww64ss2" class="data_cell osdc_active">{{ hcpww64ss2 |safe }}</td>
         </tr>
     </table>
 
