@@ -239,7 +239,7 @@ def describe_genes(rdf, rdict, progress_recorder):
                 len(tmpdf[tmpdf['p_by-count_for-' + shf] < 0.01].index),
                 "The average ranking of these",
                 len(tmpdf[tmpdf['p_by-count_for-' + shf] < 0.05].index),
-                int(top_by_p['raw_rank'].mean()),
+                0.0 if len(top_by_p) == 0 else int(top_by_p['raw_rank'].mean()),
             ))
             d_lines.append("{}: {:,} {} {}-shuffled data. ({:,} > 2000). {} {:,} genes is {:,}".format(
                 shf,
