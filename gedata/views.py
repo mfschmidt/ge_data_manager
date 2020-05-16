@@ -9,7 +9,7 @@ from django.views import generic
 from ge_data_manager.celery import celery_id_from_name, celery_plots_in_progress
 
 from .tasks import clear_jobs, collect_jobs, interpret_descriptor, comp_from_signature
-from .tasks import assess_mantel, assess_overlap, assess_performance, assess_everything
+from .tasks import assess_mantel, assess_overlap, assess_performance, assess_everything, just_genes
 from .tasks import clear_macro_caches, clear_micro_caches
 from .models import PushResult, ResultSummary
 from .forms import thresholds
@@ -127,6 +127,10 @@ class InventoryView(generic.ListView):
                                         "<i class='fas fa-abacus'></i>",
                                     ),
                                     "<button class=\"btn\" onclick=\"{}\">{}</button>".format(
+                                        "assessJustGenes('image_{}', 'inventory_string', '{}');".format(rid, rid),
+                                        "<i class='fas fa-dna'></i>",
+                                    ),
+                                    "<button class=\"btn\" onclick=\"{}\">{}</button>".format(
                                         "removeEverything('image_{}', '{}');".format(rid, rid),
                                         "<i class='fas fa-trash'></i>",
                                     ),
@@ -191,6 +195,16 @@ def rest_refresh(request, job_name):
                 celery_result = collect_jobs.delay("/data", rebuild=True)
             else:
                 celery_result = collect_jobs.delay("/data", rebuild=False)
+            jobs_id = celery_result.task_id
+            print("     new id for '{}' is '{}'.".format(job_name, jobs_id))
+    elif "justgenes" in job_name.rsplit('_', 1)[1]:
+        if job_name in plots_in_progress:
+            print("DUPE: {} requested, but is already being worked on.".format(job_name))
+        else:
+            print("NEW: rest_refresh got job '{}', no id returned. Just redo the genes.".format(job_name))
+            for plot in plots_in_progress:
+                print("     already building {}".format(plot))
+            celery_result = just_genes.delay(job_name.rsplit('_', 1)[0].lower(), data_root="/data")
             jobs_id = celery_result.task_id
             print("     new id for '{}' is '{}'.".format(job_name, jobs_id))
     elif "mantel" in job_name.rsplit('_', 1)[1]:

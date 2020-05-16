@@ -254,8 +254,9 @@ def comp_from_signature(signature, filename=False):
     :param filename: Set filename=True to get the comparator filename rather than its BIDS string representation.
     :return:
     """
+    # TODO: Make this algorithmic, or at least support unknown temporarily.
     comp_map = {
-        'hcpg': 'glasserconnectivitysim',
+        'hcpg': 'hcpniftismoothconnparbyglassersim',
         'hcpw': 'hcpniftismoothconnsim',
         'nkig': 'indiglasserconnsim',
         'nkiw': 'indiconnsim',
@@ -265,7 +266,11 @@ def comp_from_signature(signature, filename=False):
         'n__w': 'neutralconnsim',
         'fn_g': 'fearneutralglassersim',
         'fn_w': 'fearneutralconnsim',
-        'glasserconnectivitysim': 'glasser-connectivity_sim.df',
+        'px_w': 'glasserwellidsproximity',
+        'px_g': 'glasserparcelsproximity',
+        'pxlw': 'glasserwellidslogproximity',
+        'pxlg': 'glasserparcelslogproximity',
+        'hcpniftismoothconnparbyglassersim': 'hcp_niftismooth_conn_parby-glasser_sim.df',
         'hcpniftismoothconnsim': 'hcp_niftismooth_conn_sim.df',
         'indiglasserconnsim': 'indi-glasser-conn_sim.df',
         'indiconnsim': 'indi-connectivity_sim.df',
@@ -275,7 +280,12 @@ def comp_from_signature(signature, filename=False):
         'neutralconnsim': 'neutral_conn_sim.df',
         'fearneutralglassersim': 'fear-neutral_glasser_sim.df',
         'fearneutralconnsim': 'fear-neutral_conn_sim.df',
+        'glasserwellidsproximity': 'glasser-wellids-proximity',
+        'glasserparcelsproximity': 'glasser-parcels-proximity',
+        'glasserwellidslogproximity': 'glasser-wellids-log-proximity',
+        'glasserparcelslogproximity': 'glasser-parcels-log-proximity',
     }
+
     if filename:
         return comp_map[comp_map[signature.lower()]]
     return comp_map[signature.lower()]
@@ -564,9 +574,10 @@ def build_descriptor(comp, splitby, mask, normalization, batch):
     """ Generate a shorthand descriptor for the group a result belongs to. """
 
     # From actual file, or from path to result, boil down comparator to its abbreviation
+    # TODO: Make this algorithmic, or at least support unknown temporarily.
     comp_map = {
-        'glasser-connectivity_sim.df': 'hcpg',
-        'glasserconnectivitysim': 'hcpg',
+        'hcp_niftismooth_conn_parby-glasser_sim.df': 'hcpg',
+        'hcpniftismoothconnparbyglassersim': 'hcpg',
         'hcp_niftismooth_conn_sim.df': 'hcpw',
         'hcpniftismoothconnsim': 'hcpw',
         'indi-glasser-conn_sim.df': 'nkig',
@@ -585,6 +596,10 @@ def build_descriptor(comp, splitby, mask, normalization, batch):
         'fearneutralglassersim': 'fn_g',
         'fear-neutral_conn_sim.df': 'fn_w',
         'fearneutralconnsim': 'fn_w',
+        'glasserwellidsproximity': 'px_w',
+        'glasserparcelsproximity': 'px_g',
+        'glasserwellidslogproximity': 'pxlw',
+        'glasserparcelslogproximity': 'pxlg',
     }
 
     # Make short string for split seed and normalization
@@ -987,6 +1002,36 @@ def assess_everything(self, plot_descriptor, data_root="/data"):
     i += 1
 
     progress_recorder.set_progress(99, 100, "Step 3/3. Plotting finished")
+
+
+@shared_task(bind=True)
+def just_genes(self, plot_descriptor, data_root="/data"):
+    """ 1. Collect all results available (from database, not filesystem), and their individual stats.
+        2. Read or calculate group statistics on the set of results.
+        3. Build figures.
+        4. Generate text reports, including figures.
+
+    :param self: interact with celery via decorator
+    :param plot_descriptor: Abbreviated string, like 'hcpww16ss' describing underlying data
+    :param data_root: default root path to find all results
+    """
+
+    progress_recorder = ProgressRecorder(self)
+    print("In just_genes, about to start.")
+    print("In just_genes, calculating individual stats.")
+    rdict, rdf = calculate_individual_stats(
+        plot_descriptor, progress_recorder, progress_from=0, progress_to=5, data_root=data_root
+    )
+    print("In just_genes, calculating group stats.")
+    rdf = calculate_group_stats(
+        rdict, rdf, progress_recorder, progress_from=5, progress_to=10, data_root=data_root
+    )
+    progress_recorder.set_progress(10, 100, "Just writing gene lists")
+    print("In just_genes, working on gene descriptions.")
+    gene_description = write_gene_lists(rdict, rdf, progress_recorder, data_root="/data")
+    with open(os.path.join(data_root, "plots", "{}_genes.html".format(plot_descriptor.lower())), 'w') as f:
+        f.write("<h1>Probe/Gene Descriptions</h1>\n")
+        f.write(gene_description)
 
 
 @shared_task(bind=True)
