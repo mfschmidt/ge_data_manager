@@ -128,11 +128,11 @@ def rank_genes_respecting_shuffles(real_files, shuffle_files, shuffle_name):
     reals = ranked_probes(real_files, "reals", None).sort_index()
     shuffles = ranked_probes(shuffle_files, "shufs", None).sort_index()
 
-    # print("Writing {} reals and {} shuffles, named {} to csv. <genes.py:rank_genes_respecting_shuffles()>".format(
-    #     reals.shape, shuffles.shape, shuffle_name
-    # ))
-    # reals.to_csv("/data/plots/cache/_reals_{}_.csv".format(shuffle_name))
-    # shuffles.to_csv("/data/plots/cache/_shufs_{}_.csv".format(shuffle_name))
+    print("Writing {} reals and {} shuffles, named {} to csv. <genes.py:rank_genes_respecting_shuffles()>".format(
+        reals.shape, shuffles.shape, shuffle_name
+    ))
+    reals.to_csv("/data/plots/cache/_reals_{}_.csv".format(shuffle_name))
+    shuffles.to_csv("/data/plots/cache/_shufs_{}_.csv".format(shuffle_name))
 
     new_df = pd.DataFrame(data=None, index=reals.index)
 
@@ -142,6 +142,7 @@ def rank_genes_respecting_shuffles(real_files, shuffle_files, shuffle_name):
         # dfs_by_split[split] = {}
         # dfs_by_split[split]['reals'] = reals["reals_rank_{:04}".format(split)]
         shuffle_columns = [col for col in shuffles.columns if "shufs_rank_{:04}".format(split) in col]
+        print("  found {} ranks to compare for split {}".format(len(shuffle_columns), split))
         # dfs_by_split[split]['shuffles'] = shuffles[shuffle_columns]
 
         # Values compared here are ranks, 1 being best. So counts are how many times genes scored better

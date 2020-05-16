@@ -235,6 +235,54 @@ function assessEverything(image_id, select_id, r_id) {
     png_http.send();
 }
 
+function assessJustGenes(image_id, select_id, r_id) {
+    // Calculate the image id string from forms, then use it to load plot images
+    let select_element = document.getElementById(select_id);
+    select_element.innerText = r_id + 'peak';
+    console.log("assessing everything, select_id = " + select_id + "; containing '" + select_element.innerText + "'.");
+    let image_element = document.getElementById(image_id);
+
+    if(shouldBailOnBuilding(image_element, select_element)) {
+        return;
+    }
+
+    console.log("Checking for " + select_element.innerText + " image for " + image_id + ".");
+    let img_file = select_element.innerText.toLowerCase() + "_mantel.png";
+
+    let img_url = "/static/gedata/plots/" + img_file;
+
+
+    // The first ajax request determines whether our desired plot already exists or not.
+    let png_http = new XMLHttpRequest();
+    png_http.onreadystatechange = function () {
+        if (png_http.readyState === 4) {
+            console.log("Building " + select_element.innerText + ".");
+            let refreshUrl = "/gedata/REST/refresh/" + r_id + 'peak' + "_justgenes";
+
+            // The ajax request initiates analysis and starts the spinner.
+            let request = new XMLHttpRequest();
+            request.onreadystatechange = function () {
+                if (request.readyState === 4 && request.status === 200) {
+                    let responseJsonObj = JSON.parse(this.responseText);
+                    if (responseJsonObj.task_id !== "None") {
+                        console.log("Got id: " + responseJsonObj.task_id);
+                        let progressUrl = "/celery-progress/" + responseJsonObj.task_id + "/";
+                        CelerySpinner.initSpinner(progressUrl, {
+                            onSuccess: console.log("assessJustGenes success"), // window.location.reload(),
+                            spinnerId: image_id,
+                        });
+                    }
+                }
+            };
+            request.open("GET", refreshUrl, true);
+            request.send();
+            console.log("Beginning to build just genes for " + select_element.innerText + " at " + image_id);
+        }
+    };
+    png_http.open('HEAD', img_url, true);
+    png_http.send();
+}
+
 function loadPlot(image_element, image_url) {
     let w = Math.round(document.documentElement.clientWidth * 0.45);
     image_element.style.color = '#ffffff';
