@@ -57,7 +57,10 @@ class InventoryView(generic.ListView):
     template_name = 'gedata/inventory.html'
 
     def get_context_data(self, **kwargs):
-        base_str_n = '<p>{n_none:,} ({n_agno:,}+{n_dist:,}+{n_edge:,}+{n_be04:,}+{n_be08:,}+{n_be16:,}) '
+        base_str_n = "<ul><li>{n_none:,} real</li>"
+        for permutation in ["agno", "dist", "edge", "be04", "be08", "be16", ]:
+            base_str_n += "<li>{n_" + permutation + ":,} " + permutation + "-</li>"
+        base_str_n += "</ul>"
 
         def span_str(r_id, metric, ext, icon, threshold=""):
             """ Return the html <span ...><a href=...><i ...></i></a></span> for a particular item. """

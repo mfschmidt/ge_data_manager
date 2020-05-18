@@ -131,8 +131,8 @@ def rank_genes_respecting_shuffles(real_files, shuffle_files, shuffle_name):
     print("Writing {} reals and {} shuffles, named {} to csv. <genes.py:rank_genes_respecting_shuffles()>".format(
         reals.shape, shuffles.shape, shuffle_name
     ))
-    reals.to_csv("/data/plots/cache/_reals_{}_.csv".format(shuffle_name))
-    shuffles.to_csv("/data/plots/cache/_shufs_{}_.csv".format(shuffle_name))
+    reals.to_csv("/data/plots/cache/_ranked_reals_{}_.csv".format(shuffle_name))
+    shuffles.to_csv("/data/plots/cache/_ranked_shufs_{}_.csv".format(shuffle_name))
 
     new_df = pd.DataFrame(data=None, index=reals.index)
 
@@ -146,7 +146,7 @@ def rank_genes_respecting_shuffles(real_files, shuffle_files, shuffle_name):
         # dfs_by_split[split]['shuffles'] = shuffles[shuffle_columns]
 
         # Values compared here are ranks, 1 being best. So counts are how many times genes scored better
-        # in shuffled data than in real data.
+        # in shuffled data than in each split's real data.
         new_df['{}-over-real_{:03}_count'.format(shuffle_name, split)] = shuffles[shuffle_columns].lt(
             reals["reals_rank_{:04}".format(split)], axis='index'
         ).sum(axis='columns')
@@ -170,8 +170,13 @@ def rank_genes_respecting_shuffles(real_files, shuffle_files, shuffle_name):
     # Count how many shuffled rankings, for each gene, are better than the real data.
     hits = shuffles[[col for col in shuffles.columns if "shufs_rank" in col]].lt(reals['reals_mean'], axis=0)
     new_df['n_' + shuffle_name + '_gt-realmean'] = hits.sum(axis=1)
-    new_df['p_by-count_for-' + shuffle_name] = new_df['n_' + shuffle_name + '_gt-realmean'] / len(hits.columns)
+    new_df['p_by-ave-count_for-' + shuffle_name] = new_df['n_' + shuffle_name + '_gt-realmean'] / len(hits.columns)
     new_df['delta_for-' + shuffle_name] = shuffles['shufs_mean'] - reals['reals_mean']
+
+    # Count within-split outperformance
+    cols_to_sum = [col for col in new_df.columns if col.startswith("{}-over-real_".format(shuffle_name))]
+    new_df['p_by-ind-count_for-' + shuffle_name] = new_df[cols_to_sum].sum(axis='columns') / len(shuffle_files)
+    print("  counted {} real and {} shuffle files".format(len(real_files), len(shuffle_files)))
 
     # new_df.to_csv("/data/plots/cache/_hits_" + shuffle_name + "_.csv")
 
@@ -214,7 +219,8 @@ def describe_genes(rdf, rdict, progress_recorder):
 
     progress_recorder.set_progress(92, 100, "Calculating p-values per gene")
     # Calculate delta and p for each gene by counting how many times its shuffled rank outperforms its real rank.
-    p_lines = []
+    ave_p_lines = []
+    ind_p_lines = []
     d_lines = []
     for shf in list(set(rdf[rdf['shuffle'] != 'none']['shuffle'])):
         shuffles = rdf[rdf['shuffle'] == shf]
@@ -223,25 +229,42 @@ def describe_genes(rdf, rdict, progress_recorder):
             all_ranked = pd.concat([all_ranked, tmpdf], axis=1)
 
             # Extract p-values.
-            low_p_indices = all_ranked['probe_id'].isin(tmpdf[tmpdf['p_by-count_for-' + shf] < 0.05].index)
-            top_by_p = all_ranked[low_p_indices]
-            print("{} items in top_by_p (real outperforms shuffled @ p<0.05)".format(len(top_by_p)))
+            low_ave_p_indices = all_ranked['probe_id'].isin(tmpdf[tmpdf['p_by-ave-count_for-' + shf] < 0.05].index)
+            top_by_ave_p = all_ranked[low_ave_p_indices]
+            print("{} items in top_by_ave_p (real outperforms shuffled @ p<0.05)".format(len(top_by_ave_p)))
+
+            ave_p_lines.append("{}: {:,} {} {}-shuffled data {} (p<0.05) ({:,} if p<0.01). {} {:,} genes is {:,}".format(
+                shf,
+                len(tmpdf[tmpdf['p_by-ave-count_for-' + shf] < 0.05].index),
+                "genes perform better in",
+                shf, "than the average real ranking",
+                len(tmpdf[tmpdf['p_by-ave-count_for-' + shf] < 0.01].index),
+                "The average ranking of these",
+                len(tmpdf[tmpdf['p_by-ave-count_for-' + shf] < 0.05].index),
+                0 if len(top_by_ave_p) < 1 else int(top_by_ave_p['raw_rank'].mean()),
+            ))
+
+            # Extract p-values.
+            low_ind_p_indices = all_ranked['probe_id'].isin(tmpdf[tmpdf['p_by-ind-count_for-' + shf] < 0.05].index)
+            top_by_ind_p = all_ranked[low_ind_p_indices]
+            print("{} items in top_by_ind_p (real outperforms shuffled @ p<0.05)".format(len(top_by_ind_p)))
+
+            ind_p_lines.append("{}: {:,} {} {}-shuffled data {} (p<0.05) ({:,} if p<0.01). {} {:,} genes is {:,}".format(
+                shf,
+                len(tmpdf[tmpdf['p_by-ind-count_for-' + shf] < 0.05].index),
+                "genes perform better in",
+                shf, "than each shuffle's source re-sampling",
+                len(tmpdf[tmpdf['p_by-ind-count_for-' + shf] < 0.01].index),
+                "each split's real ranking of these",
+                len(tmpdf[tmpdf['p_by-ind-count_for-' + shf] < 0.05].index),
+                0 if len(top_by_ave_p) < 1 else int(top_by_ave_p['raw_rank'].mean()),
+            ))
 
             # Extract deltas.
             high_delta_indices = all_ranked['probe_id'].isin(tmpdf[tmpdf['delta_for-' + shf] > 1000].index)
             top_by_delta = all_ranked[high_delta_indices]
             print("{} items in top_by_delta (real ranks >1000 places better than shuffled)".format(len(top_by_delta)))
 
-            p_lines.append("{}: {:,} {} {}-shuffled data (p<0.05) ({:,} if p<0.01). {} {:,} genes is {:,}".format(
-                shf,
-                len(tmpdf[tmpdf['p_by-count_for-' + shf] < 0.05].index),
-                "genes perform better in actual than",
-                shf,
-                len(tmpdf[tmpdf['p_by-count_for-' + shf] < 0.01].index),
-                "The average ranking of these",
-                len(tmpdf[tmpdf['p_by-count_for-' + shf] < 0.05].index),
-                0 if len(top_by_p) < 1 else int(top_by_p['raw_rank'].mean()),
-            ))
             d_lines.append("{}: {:,} {} {}-shuffled data. ({:,} > 2000). {} {:,} genes is {:,}".format(
                 shf,
                 len(tmpdf[tmpdf['delta_for-' + shf] > 1000].index),
@@ -252,18 +275,21 @@ def describe_genes(rdf, rdict, progress_recorder):
                 len(tmpdf[tmpdf['delta_for-' + shf] > 1000].index),
                 0 if len(top_by_delta) < 1 else int(top_by_delta['raw_rank'].mean()),
             ))
+
         else:
             crap_out_line = "{}: {} actual and {} {}-shuffled results, no comparisons available.".format(
                 shf, len(actuals), len(shuffles), shf
             )
-            p_lines.append(crap_out_line)
+            ave_p_lines.append(crap_out_line)
+            ind_p_lines.append(crap_out_line)
             d_lines.append(crap_out_line)
 
     output.append("<p>{}</p>".format(" ".join([
-        "Some genes survive optimization longer in real data than shuffled.",
-        "<ul><li>", "</li><li>".join(p_lines), "</li></ul>",
-        "<ul><li>", "</li><li>".join(d_lines), "</li></ul>",
-        "That doesn't mean they performed well, just better in actual than shuffled.",
+        "Relevant genes should perform better in real data than shuffled, but some don't.",
+        "<ul>p-values by average real ranking<li>", "</li><li>".join(ave_p_lines), "</li></ul>",
+        "<ul>p-values by individual real rankings<li>", "</li><li>".join(ind_p_lines), "</li></ul>",
+        "<ul>delta values<li>", "</li><li>".join(d_lines), "</li></ul>",
+        "That doesn't mean they performed well, necessarily, just better in shuffled than real.",
         "See {}_ranked_full.csv for quantitative details.".format(rdict['descriptor']),
     ])))
     # This is unnecessary as df_gene_ps is no longer created.

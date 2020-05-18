@@ -8,7 +8,7 @@
 
 <h2>SRS-normalized</h2>
 
-<h3>50 split-quarters (by wellid)</h3>
+<h3>32 split-quarters, 50 permutations (by wellid)</h3>
     <table class="inventory_table">
         <!-- Table Header -->
         <tr>
@@ -36,7 +36,7 @@
         </tr>
     </table>
 
-<h3>32 split-quarters (by parcel)</h3>
+<h3>32 split-quarters, 50 permutations (by parcel)</h3>
     <table class="inventory_table">
         <!-- Table Header -->
         <tr>
@@ -58,13 +58,13 @@
             <th rowspan="1">parcel</th>
             <th>hcp</th>
             <td id="hcpgg00ss4" class="data_cell osdc_active">{{ hcpgg00ss4 |safe }}</td>
-            <td id="hcpgg16ss4" class="data_cell osdc_active osdc_primary">{{ hcpgg16ss4 |safe }}</td>
+            <td id="hcpgg16ss4" class="data_cell osdc_active">{{ hcpgg16ss4 |safe }}</td>
             <td id="hcpgg32ss4" class="data_cell osdc_active">{{ hcpgg32ss4 |safe }}</td>
             <td id="hcpgg64ss4" class="data_cell osdc_active">{{ hcpgg64ss4 |safe }}</td>
         </tr>
     </table>
 
-<h3>Fear - Neutral connectivity split quarters</h3>
+<h3>32 Fear - Neutral connectivity split quarters, 50 permutations</h3>
     <table class="inventory_table">
         <!-- Table Header -->
         <tr>
@@ -85,16 +85,17 @@
             <th rowspan="1">wellid</th>
             <th rowspan="1">wellid</th>
             <th>fear-neutral</th>
-            <td id="fn_ww00ss4" class="data_cell osdc_neglected">{{ fn_ww00ss4 |safe }}</td>
-            <td id="fn_ww16ss4" class="data_cell osdc_neglected">{{ fn_ww16ss4 |safe }}</td>
-            <td id="fn_ww32ss4" class="data_cell osdc_neglected">{{ fn_ww32ss4 |safe }}</td>
-            <td id="fn_ww64ss4" class="data_cell osdc_neglected">{{ fn_ww64ss4 |safe }}</td>
+            <td id="fn_ww00ss4" class="data_cell osdc_active">{{ fn_ww00ss4 |safe }}</td>
+            <td id="fn_ww16ss4" class="data_cell osdc_active">{{ fn_ww16ss4 |safe }}</td>
+            <td id="fn_ww32ss4" class="data_cell osdc_active">{{ fn_ww32ss4 |safe }}</td>
+            <td id="fn_ww64ss4" class="data_cell osdc_active">{{ fn_ww64ss4 |safe }}</td>
         </tr>
     </table>
 
+    <!--
 <h3>16 split halves</h3>
-    <table class="inventory_table">
-        <!-- Table Header -->
+    <table class="inventory_table">-->
+        <!-- Table Header
         <tr>
             <th>parcel</th>
             <th>split</th>
@@ -107,8 +108,8 @@
             <th>&lt; 16mm</th>
             <th>&lt; 32mm</th>
             <th>&lt; 64mm</th>
-        </tr>
-        <!-- Table Body -->
+        </tr>-->
+        <!-- Table Body
         <tr>
             <th rowspan="1">wellid</th>
             <th rowspan="1">wellid</th>
@@ -118,11 +119,11 @@
             <td id="hcpww32ss2" class="data_cell osdc_active">{{ hcpww32ss2 |safe }}</td>
             <td id="hcpww64ss2" class="data_cell osdc_active">{{ hcpww64ss2 |safe }}</td>
         </tr>
-    </table>
+    </table>-->
 
-<h2>Raw (from AHBA)</h2>
-    <table class="inventory_table">
-        <!-- Table Header -->
+<!--<h2>Raw (from AHBA)</h2>
+    <table class="inventory_table">-->
+        <!-- Table Header
         <tr>
             <th>parcel</th>
             <th>split</th>
@@ -135,8 +136,8 @@
             <th>&lt; 16mm</th>
             <th>&lt; 32mm</th>
             <th>&lt; 64mm</th>
-        </tr>
-        <!-- Table Body -->
+        </tr>-->
+        <!-- Table Body
         <tr>
             <th rowspan="4">wellid</th>
             <th rowspan="2">wellid</th>
@@ -198,15 +199,15 @@
             <td id="nkigg16s_2" class="data_cell  osdc_neglected">{{ nkigg16s_2 |safe }}</td>
             <td id="nkigg32s_2" class="data_cell  osdc_neglected">{{ nkigg32s_2 |safe }}</td>
             <td id="nkigg64s_2" class="data_cell  osdc_neglected">{{ nkigg64s_2 |safe }}</td>
-        </tr>
-    </table>
+        </tr>-->
+    <!--</table>-->
     <p>Cells with <span class="osdc_complete">white backgrounds</span> are complete.</p>
     <p><span class="osdc_active">Pale green</span> backgrounds indicate sets currently active on OSDC.</p>
     <p><span class="osdc_neglected">Pale red</span> backgrounds indicate neglected sets.</p>
 
-<h2>Fear, Neutral, and Fear - Neutral connectivity (by raw expression similarity)</h2>
-    <table class="inventory_table">
-        <!-- Table Header -->
+<!--<h2>Fear, Neutral, and Fear - Neutral connectivity (by raw expression similarity)</h2>
+    <table class="inventory_table">-->
+        <!-- Table Header
         <tr>
             <th>parcel</th>
             <th>split</th>
@@ -217,8 +218,8 @@
             <th colspan="3"></th>
             <th>none</th>
             <th>&lt; 16mm</th>
-        </tr>
-        <!-- Table Body -->
+        </tr>-->
+        <!-- Table Body
         <tr>
             <th rowspan="3">glasser</th>
             <th rowspan="3">glasser</th>
@@ -236,9 +237,10 @@
             <td id="n__gg00s_2" class="data_cell osdc_neglected">{{ n__gg00s_2 |safe }}</td>
             <td id="n__gg16s_2" class="data_cell osdc_neglected">{{ n__gg16s_2 |safe }}</td>
         </tr>
-    </table>
+    </table>-->
     <!-- The button has been replaced by just calculating it all in the django view
     <button id="inventory_table_refresh_button" class="btn footer_button" onclick="fillInventoryTable();"><i class="fas fa-sync"></i> fill table</button>
     -->
+
 
 {% endblock %}
