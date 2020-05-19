@@ -843,9 +843,9 @@ def calculate_group_stats(
                     algorithms.kendall_tau([x.path, x.real_tsv_from_shuffle]), axis=1
                 )
 
+        print("Pickling {}".format(post_file))
+        rdf.to_pickle(post_file)
     progress_recorder.set_progress(progress_to, 100, "Step 2/3<br />Similarity calculated")
-    print("Pickling {}".format(post_file))
-    rdf.to_pickle(post_file)
 
     return rdf
 
@@ -945,10 +945,12 @@ def assess_everything(self, plot_descriptor, data_root="/data"):
     """ 1. Find all result files.
            Caches a json file for each result, and a summary dataframe, greatly speeding the process on subsequent runs.
     """
+    dt_begin = datetime.now()
     rdict, rdf = calculate_individual_stats(
         plot_descriptor, progress_recorder, progress_from=0, progress_to=99, data_root=data_root
     )
-    print("{} records for full analysis.".format(len(rdf)))
+    dt_down01 = datetime.now()
+    print("{:,} records for full analysis. [{}]".format(len(rdf), str(dt_down01 - dt_begin)))
 
     """ 2. Calculate grouped stats, overlap within each group of tsv files.
            This, too, caches the resultant calculations.
@@ -956,6 +958,8 @@ def assess_everything(self, plot_descriptor, data_root="/data"):
     rdf = calculate_group_stats(
         rdict, rdf, progress_recorder, progress_from=0, progress_to=99, data_root=data_root
     )
+    dt_down02 = datetime.now()
+    print("{:,} group stats. [{}]".format(len(rdf), str(dt_down02 - dt_down01)))
 
     i = 0  # i is the index into how many plots and reports to build, for reporting progress
     n = 6
@@ -969,28 +973,46 @@ def assess_everything(self, plot_descriptor, data_root="/data"):
     f_2, axes = plot_fig_2(rdf, title=plot_title, fig_size=(12, 6), y_min=-0.15, y_max=0.50)
     f_2.savefig(os.path.join(data_root, "plots", "{}_fig_2.png".format(plot_descriptor.lower())))
     i += 1
+    dt_down03 = datetime.now()
+    print("Figure 2 generated in [{}]".format(len(rdf), str(dt_down03 - dt_down02)))
 
     progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3<br />Plotting figure 3")
     f_3, axes = plot_fig_3(rdf, title=plot_title, fig_size=(6, 5), y_min=-0.1, y_max=0.50)
     f_3.savefig(os.path.join(data_root, "plots", "{}_fig_3.png".format(plot_descriptor.lower())))
     i += 1
+    dt_down04 = datetime.now()
+    print("Figure 3 generated in [{}]".format(len(rdf), str(dt_down04 - dt_down03)))
 
     progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3<br />Plotting figure 4")
     f_4, axes = plot_fig_4(rdf, title=plot_title, y_min=0.0, y_max=0.80, fig_size=(13, 5),)
     f_4.savefig(os.path.join(data_root, "plots", "{}_fig_4.png".format(plot_descriptor.lower())))
     i += 1
+    dt_down05 = datetime.now()
+    print("Figure 4 generated in [{}]".format(len(rdf), str(dt_down05 - dt_down04)))
+
+    # TODO: Add plot for some result over all four distance masks.
+    dt_down06 = datetime.now()
+    print("Nothing generated in [{}]".format(len(rdf), str(dt_down06 - dt_down05)))
 
     """ 4. Describe results in text form. """
     progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3<br />Writing result text")
     mantel_description = describe_mantel(rdf, descriptor=plot_descriptor.lower(), title=plot_title, )
     i += 1
+    dt_down07 = datetime.now()
+    print("Mantel result text generated in [{}]".format(len(rdf), str(dt_down07 - dt_down06)))
 
     progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3<br />Writing gene lists")
     gene_description = write_gene_lists(rdict, rdf, progress_recorder, data_root="/data")
     i += 1
+    dt_down08 = datetime.now()
+    print("Gene lists generated in [{}]".format(len(rdf), str(dt_down08 - dt_down07)))
 
     progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3<br />Writing overlap description")
     overlap_description = describe_overlap(rdf, descriptor=plot_descriptor.lower(), title=plot_title, )
+    dt_down09 = datetime.now()
+    print("Overlap descriptions generated in [{}]".format(len(rdf), str(dt_down09 - dt_down08)))
+
+    # TODO: Add csv files for ermineJ-ready scored gene files.
 
     with open(os.path.join(data_root, "plots", "{}_report.html".format(plot_descriptor.lower())), 'w') as f:
         f.write("<h1>Mantel Correlations</h1>\n")
@@ -1002,6 +1024,9 @@ def assess_everything(self, plot_descriptor, data_root="/data"):
     i += 1
 
     progress_recorder.set_progress(99, 100, "Step 3/3. Plotting finished")
+    print("Completely finished in [{}] ({} to {})".format(
+        str(datetime.now() - dt_begin), str(dt_begin), str(datetime.now())
+    ))
 
 
 @shared_task(bind=True)
