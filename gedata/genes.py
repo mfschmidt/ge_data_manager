@@ -9,7 +9,10 @@ from pygest import algorithms
 from pygest.rawdata import miscellaneous
 from pygest.convenience import create_symbol_to_id_map, create_id_to_symbol_map, get_ranks_from_file
 
+from .decorators import print_duration
 
+
+@print_duration
 def pervasive_probes(tsvs, top):
     """ Go through the files provided, at the threshold specified, and report probes in all files. """
 
@@ -29,6 +32,7 @@ def pervasive_probes(tsvs, top):
     return winners
 
 
+@print_duration
 def ranked_probes(tsvs, rank_type, top):
     """ Go through the files provided in tsvs, at the threshold specified in top, and report probes in all files.
 
@@ -85,12 +89,13 @@ def ranked_probes(tsvs, rank_type, top):
     return dfr.sort_values(rank_type + '_mean', ascending=True)
 
 
+@print_duration
 def describe_three_relevant_overlaps(relevant_results, phase, threshold):
     """ Filter results by the arguments, and report percent similarity and consistent top genes.
     """
 
     print("=== {} ===".format(phase))
-    unshuffled_results = relevant_results[relevant_results['shuffle'] == 'none']
+    unshuffled_results = relevant_results[relevant_results['shuf'] == 'none']
     print("  {:,} out of {:,} results are unshuffled.".format(len(unshuffled_results), len(relevant_results)))
 
     for which_phase in ["train", "test", ]:
@@ -118,9 +123,10 @@ def describe_three_relevant_overlaps(relevant_results, phase, threshold):
     return unshuffled_results
 
 
+@print_duration
 def rank_genes_respecting_shuffles(real_files, shuffle_files, shuffle_name):
     """ Given gene rankings from actual data and gene rankings from shuffled data,
-        calculate how likely each gene is to have outperformed the shuffle in actual data.
+        calculate how likely each gene is to have oushuffletperformed the shuffle in actual data.
     """
 
     # Rearrange results to use ranking, ordered by probe_id index
@@ -143,7 +149,7 @@ def rank_genes_respecting_shuffles(real_files, shuffle_files, shuffle_name):
         # dfs_by_split[split]['reals'] = reals["reals_rank_{:04}".format(split)]
         shuffle_columns = [col for col in shuffles.columns if "shufs_rank_{:04}".format(split) in col]
         print("  found {} ranks to compare for split {}".format(len(shuffle_columns), split))
-        # dfs_by_split[split]['shuffles'] = shuffles[shuffle_columns]
+        # dfs_by_split[split]['shufs'] = shuffles[shuffle_columns]
 
         # Values compared here are ranks, 1 being best. So counts are how many times genes scored better
         # in shuffled data than in each split's real data.
@@ -183,6 +189,7 @@ def rank_genes_respecting_shuffles(real_files, shuffle_files, shuffle_name):
     return new_df
 
 
+@print_duration
 def describe_genes(rdf, rdict, progress_recorder):
     """ Create a description of the top genes. """
 
@@ -204,10 +211,10 @@ def describe_genes(rdf, rdict, progress_recorder):
     output = ["<p>Comparison of Mantel correlations between the test half (using probes discovered in the train half) vs connectivity similarity.</p>",
               "<ol>"]
     # Calculate p with a t-test between real and shuffled.
-    actuals = rdf[rdf['shuffle'] == 'none']
-    for shf in list(set(rdf[rdf['shuffle'] != 'none']['shuffle'])):
+    actuals = rdf[rdf['shuf'] == 'none']
+    for shf in list(set(rdf[rdf['shuf'] != 'none']['shuf'])):
         # 'test_score' is in the test set, and is most appropriate and conservative; could do 'train_score', too
-        shuffles = rdf[rdf['shuffle'] == shf]
+        shuffles = rdf[rdf['shuf'] == shf]
         if len(shuffles) > 0 and len(actuals) > 0:
             tt, pt = ttest_ind(actuals['test_score'].values, shuffles['test_score'].values)
             tr, pr = ranksums(actuals['test_score'].values, shuffles['test_score'].values)
@@ -222,8 +229,8 @@ def describe_genes(rdf, rdict, progress_recorder):
     ave_p_lines = []
     ind_p_lines = []
     d_lines = []
-    for shf in list(set(rdf[rdf['shuffle'] != 'none']['shuffle'])):
-        shuffles = rdf[rdf['shuffle'] == shf]
+    for shf in list(set(rdf[rdf['shuf'] != 'none']['shuf'])):
+        shuffles = rdf[rdf['shuf'] == shf]
         if len(shuffles) > 0 and len(actuals) > 0:
             tmpdf = rank_genes_respecting_shuffles(list(actuals['path']), list(shuffles['path']), shf).sort_index()
             all_ranked = pd.concat([all_ranked, tmpdf], axis=1)

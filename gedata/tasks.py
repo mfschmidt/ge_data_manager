@@ -9,6 +9,7 @@ import pytz
 from django.utils import timezone as django_timezone
 
 import os
+import glob
 import re
 import pickle
 import numpy as np
@@ -26,6 +27,8 @@ from .plots import plot_all_train_vs_test, plot_performance_over_thresholds, plo
 from .plots import plot_fig_2, plot_fig_3, plot_fig_4
 from .plots import describe_overlap, describe_mantel
 from .genes import describe_genes
+
+from .decorators import print_duration
 
 
 class NullHandler(logging.Handler):
@@ -91,161 +94,146 @@ def tz_aware_file_mtime(path):
     )
 
 
-def derivative_path(shuffle_path):
-    """ from a given path to a shuffled result, return the path to the real result it corresponds with. """
-    if "derivatives" in shuffle_path:
-        return shuffle_path
-
-    new_path = shuffle_path
-    shuffles = [
-        "edgeshuffles", "distshuffles", "edge04shuffles", "edge08shuffles", "edge16shuffles", "shuffles",
-    ]
-    # "shuffles" MUST be last in this list, or it will match prior shuffle types and partially replace them.
-    for s_to_replace in shuffles:
-        new_path = new_path.replace(s_to_replace, "derivatives")
-    return new_path[: -15] + ".tsv"
-
-
-@shared_task
-def clear_jobs():
-    PushResult.objects.all().delete()
-
-
 @shared_task(bind=True)
-def collect_jobs(self, data_path="/data", rebuild=False):
-    """ Traverse the output and populate the database with completed results.
+def gather_results(self, data_path="/data"):
+    """ Quickly find available files, and queue any heavy processing elsewhere.
 
     :param self: available through "bind=True", allows a reference to the celery task this function becomes a part of.
     :param data_path: default /data, base path to all of the results
-    :param rebuild: set to True to clear the entire database and build results from scratch, otherwise just updates
     """
 
     progress_recorder = ProgressRecorder(self)
-
-    if ResultSummary.objects.count() > 0:
-        last_result_datetime = ResultSummary.objects.latest('summary_date').summary_date
-    else:
-        last_result_datetime = ResultSummary.empty().summary_date
-
-    results = []
-    i = 0
-    n = 0
+    progress_recorder.set_progress(0, 100, "Looking for files")
 
     # Get a list of files to parse.
-    shuffles = [
-        'derivatives', 'shuffles', 'distshuffles', 'edgeshuffles',
-        'edge04shuffles', 'edge08shuffles', 'edge16shuffles',
-    ]
-    for shuffle in shuffles:
-        d = os.path.join(data_path, shuffle)
-        if os.path.isdir(d):
-            for root, dirs, files in os.walk(d, topdown=True):
-                for f in files:
-                    if (f[(-4):] == "json") and (not "." in f[:-5]):
-                        if rebuild or (tz_aware_file_mtime(os.path.join(root, f)) > last_result_datetime):
-                            result = {
-                                'data_dir': data_path,
-                                'shuffle': shuffle,
-                                'path': root,
-                                'json_file': f,
-                                'tsv_file': f.replace("json", "tsv"),
-                                'log_file': f.replace("json", "log"),
-                            }
-                            results.append(result)
-                            n += 1
-                            progress_recorder.set_progress(i, n)
+    glob_pattern = os.path.join(data_path, "derivatives", "*", "*", "*", "*.tsv")
+    print("Starting to glob files ('{}')".format(glob_pattern))
+    sda = os.listdir(os.path.join(data_path, "derivatives"))[0]
+    sdb = os.listdir(os.path.join(data_path, "derivatives", sda))[0]
+    print(os.path.join(data_path, "derivatives", sda, sdb))
+    print(os.listdir(os.path.join(data_path, "derivatives", sda, sdb)))
+    files = glob.glob(glob_pattern)
+    print("File glob complete; discovered {:,} results".format(len(files)))
+    progress_recorder.set_progress(0, len(files), "Checking files against DB")
 
-    print("{:,} results from {}...".format(len(results), data_path))
+    dupe_count = 0
+    new_count = 0
+    # import random
+    # for i, path in enumerate(random.sample(files, 500)):
+    for i, path in enumerate(files):
+        if PushResult.objects.filter(tsv_path=path).exists():
+            dupe_count += 1
+        else:
+            new_count += 1
+            f = path.split(os.sep)[-1]
+            rel_path = path[(len(data_path) + 1):(len(path) - len(f) - 1)]
+            result = {
+                'data_dir': data_path,
+                'rel_path': rel_path,
+                'path': os.path.join(data_path, rel_path),
+                'tsv_file': f,
+                'json_file': f.replace(".tsv", ".json"),
+                'log_file': f.replace(".tsv", ".log"),
+            }
 
-    # Gather information about each result.
-    for i, result in enumerate(results):
-        # First, parse out the BIDS key-value pairs from the path.
-        bids_pairs = []
-        bids_dict = {'root': result['path'], 'name': result['json_file']}
-        fs_parts = os.path.join(result['path'], result['json_file'])[: -5:].split(os.sep)
-        for fs_part in fs_parts:
-            if '-' in fs_part:
-                pairs = fs_part.split("_")
-                for pair in pairs:
-                    if '-' in pair:
-                        p = pair.split("-")
-                        bids_pairs.append((p[0], p[1]))
-                    else:
-                        # There should never be an 'extra' but we catch it to debug problems.
-                        bids_pairs.append(('extra', pair))
-        for bp in bids_pairs:
-            bids_dict[bp[0]] = bp[1]
-        result.update(bids_dict)
+            # Gather information about each result.
+            for bids_pair in re.findall("[^\W_]+-[^\W_]*", os.path.join(result.get('path', ''), result.get('tsv_file', ''))):
+                bids_key, bids_value = bids_pair.split("-")
+                result[bids_key] = bids_value
+            if "mask" in result and result.get("mask", "") == "none": result["mask"] = "00"
 
-        # Second, parse the key-value pairs from the json file containing processing information.
-        json_dict = json_contents(os.path.join(result['path'], result['json_file']))
-        result.update(json_dict)
+            # Second, parse the key-value pairs from the json file containing processing information.
+            result.update(json_contents(os.path.join(result['path'], result['json_file'])))
 
-        split_key = "batch-test" if "batch-test" in result['path'] else "batch-train"
+            split_key = "batch-test" if "batch-test" in result['path'] else "batch-train"
+            split = extract_seed(os.path.join(result['path'], result['tsv_file']), split_key)
+            resample = "whole"
+            if 200 <= split <= 299:
+                resample = "split-half"
+            elif 400 <= split <= 499:
+                resample = "split-quarter"
 
-        # Finally, put it all into a model for storage in the database.
-        r = PushResult(
-            descriptor=build_descriptor(
-                result.get("comp", ""), result.get("splby", ""), result.get("mask", ""),
-                result.get("norm", ""), result.get("batch", ""),
-            ),
-            json_path=os.path.join(result['path'], result['json_file']),
-            tsv_path=os.path.join(result['path'], result['json_file'].replace("json", "tsv")),
-            log_path=os.path.join(result['path'], result['json_file'].replace("json", "log")),
-            # For dates, we assume EDT (-0400) as most runs were in EDT. For those in EST, the hour makes no real difference.
-            start_date=datetime.strptime(result.get("began", "1900-01-01 00:00:00") + "-0400", "%Y-%m-%d %H:%M:%S%z"),
-            end_date=datetime.strptime(result.get("completed", "1900-01-01 00:00:00") + "-0400", "%Y-%m-%d %H:%M:%S%z"),
-            host=result.get("host", ""),
-            command=result.get("command", ""),
-            version=result.get("pygest version", ""),
-            duration=seconds_elapsed(result.get("elapsed", "")),
-            shuffle=result.get("shuffle", ""),
-            sub=result.get("sub", ""),
-            hem=result.get("hem", " ").upper()[0],
-            samp=result.get("samp", ""),
-            prob=result.get("prob", ""),
-            parby=result.get("parby", ""),
-            splby=result.get("splby", ""),
-            batch=result.get("batch", ""),
-            tgt=result.get("tgt", ""),
-            algo=result.get("algo", ""),
-            norm=result.get("norm", ""),
-            comp=result.get("comp", ""),
-            mask=result.get("mask", ""),
-            adj=result.get("adj", ""),
-            seed=int(result.get("seed", "0")),
-            split=extract_seed(os.path.join(result['path'], result['json_file'].replace("json", "tsv")), split_key),
-            columns=0,
-            rows=0,
-        )
-        r.save()
-        progress_recorder.set_progress(i, n)
+            # Finally, put it all into a model for storage in the database.
+            r = PushResult(
+                sourcedata=build_descriptor(
+                    result.get("comp", ""), result.get("splby", ""), result.get("mask", ""),
+                    result.get("norm", ""), split, level="long",
+                ),
+                descriptor=build_descriptor(
+                    result.get("comp", ""), result.get("splby", ""), result.get("mask", ""),
+                    result.get("norm", ""), split, level="short",
+                ),
+                resample=resample,
+                json_path=os.path.join(result['path'], result['json_file']),
+                tsv_path=os.path.join(result['path'], result['tsv_file']),
+                log_path=os.path.join(result['path'], result['log_file']),
+                # For dates, we assume EDT (-0400) as most runs were in EDT. For those in EST, the hour makes no real difference.
+                start_date=datetime.strptime(result.get("began", "1900-01-01 00:00:00") + "-0400", "%Y-%m-%d %H:%M:%S%z"),
+                end_date=datetime.strptime(result.get("completed", "1900-01-01 00:00:00") + "-0400", "%Y-%m-%d %H:%M:%S%z"),
+                host=result.get("host", ""),
+                command=result.get("command", ""),
+                version=result.get("pygest version", ""),
+                duration=seconds_elapsed(result.get("elapsed", "")),
+                sub=result.get("sub", ""),
+                hem=result.get("hem", " ").upper()[0],
+                samp=result.get("samp", ""),
+                prob=result.get("prob", ""),
+                parby=result.get("parby", ""),
+                splby=result.get("splby", ""),
+                batch=result.get("batch", ""),
+                tgt=result.get("tgt", ""),
+                algo=result.get("algo", ""),
+                shuf=result.get("shuf", ""),
+                norm=result.get("norm", ""),
+                comp=result.get("comp", ""),
+                mask=result.get("mask", ""),
+                adj=result.get("adj", ""),
+                seed=int(result.get("seed", 0)),
+                split=split,
+                columns=0,
+                rows=0,
+            )
+            r.save()
+        progress_recorder.set_progress(i, len(files), "Summarizing new files")
+
+    print("Processed {:,} files; found {:,} new results and {:,} were already in the database (now {:,}).".format(
+        len(files), new_count, dupe_count, PushResult.objects.count(),
+    ))
+    # print(PushResult.objects.values('descriptor').annotate(count=Count('descriptor')))
 
     if PushResult.objects.count() > 0:
+        print("Saving a summary, dated {}.".format(str(django_timezone.now())))
+        print("There are {} PushResults in the database.".format(PushResult.objects.count()))
         s = ResultSummary(
             summary_date=django_timezone.now(),
             num_results=PushResult.objects.count(),
-            num_actuals=PushResult.objects.filter(shuffle='derivatives').count(),
-            num_shuffles=PushResult.objects.filter(shuffle='shuffles').count(),
-            num_distshuffles=PushResult.objects.filter(shuffle='distshuffles').count(),
-            num_edgeshuffles=PushResult.objects.filter(shuffle='edgeshuffles').count(),
-            num_edge04shuffles=PushResult.objects.filter(shuffle='edge04shuffles').count(),
-            num_edge08shuffles=PushResult.objects.filter(shuffle='edge08shuffles').count(),
-            num_edge16shuffles=PushResult.objects.filter(shuffle='edge16shuffles').count(),
+            num_actuals=PushResult.objects.filter(shuf='none').count(),
+            num_shuffles=0,
             num_splits=0,
         )
+        s.num_shuffles = s.num_results - s.num_actuals
+        print("Summary: ", s.to_json())
         s.save()
+    else:
+        print("No PushResults, not saving a summary.")
 
 
-shuffle_dir_map = {
-    'none': 'derivatives',
-    'edge': 'edgeshuffles',
-    'be04': 'edge04shuffles',
-    'be08': 'edge08shuffles',
-    'be16': 'edge16shuffles',
-    'dist': 'distshuffles',
-    'agno': 'shuffles',
-}
+@shared_task(bind=True)
+def clear_jobs(self):
+    """ Delete all results from the database, not the filesystem, and create a new summary indicating no records.
+
+    :param self: available through "bind=True", allows a reference to the celery task this function becomes a part of.
+    """
+    progress_recorder = ProgressRecorder(self)
+    progress_recorder.set_progress(0, 100, "Deleting file records (not files)")
+    PushResult.objects.all().delete()
+    progress_recorder.set_progress(50, 100, "Updating summaries")
+    s = ResultSummary(
+        summary_date=django_timezone.now(),
+        num_results=0, num_actuals=0, num_shuffles=0, num_splits=0,
+    )
+    s.save()
+    progress_recorder.set_progress(100, 100, "Cleared")
 
 
 def comp_from_signature(signature, filename=False):
@@ -254,7 +242,6 @@ def comp_from_signature(signature, filename=False):
     :param filename: Set filename=True to get the comparator filename rather than its BIDS string representation.
     :return:
     """
-    # TODO: Make this algorithmic, or at least support unknown temporarily.
     comp_map = {
         'hcpg': 'hcpniftismoothconnparbyglassersim',
         'hcpw': 'hcpniftismoothconnsim',
@@ -508,31 +495,16 @@ def results_as_dict(tsv_file, base_path, probe_sig_threshold=None, use_cache=Tru
     """
 
     # These calculations can be expensive when run a lot. Load a cached copy if possible.
-    analyzed_path = tsv_file.replace(".tsv", ".top-{}.v3.json".format(
+    analyzed_path = tsv_file.replace(".tsv", ".top-{}.v4.json".format(
         "peak" if probe_sig_threshold is None else "{:04}".format(probe_sig_threshold)
     ))
     if use_cache and os.path.isfile(analyzed_path):
         saved_dict = json.load(open(analyzed_path, 'r'))
         return saved_dict
 
-    # There's no cached copy; go ahead and calculate everything.
-    if "/shuffles/" in tsv_file:
-        shuffle = 'agno'
-    elif "/distshuffles/" in tsv_file:
-        shuffle = 'dist'
-    elif "/edgeshuffles/" in tsv_file:
-        shuffle = 'edge'
-    elif "/edge04shuffles/" in tsv_file:
-        shuffle = 'be04'
-    elif "/edge08shuffles/" in tsv_file:
-        shuffle = 'be08'
-    elif "/edge16shuffles/" in tsv_file:
-        shuffle = 'be16'
-    else:
-        shuffle = 'none'
-
     mask = bids_val('mask', tsv_file)
     norm = bids_val('norm', tsv_file)
+    shuf = bids_val('shuf', tsv_file)
 
     result_dict = algorithms.run_results(tsv_file, probe_sig_threshold)
     result_dict.update({
@@ -544,7 +516,7 @@ def results_as_dict(tsv_file, base_path, probe_sig_threshold=None, use_cache=Tru
         'parby': 'glasser' if 'parby-glasser' in tsv_file else 'wellid',
         'mask': mask,
         'norm': norm,
-        'shuffle': shuffle,
+        'shuf': shuf,
         # Neither path nor calculation, the threshold we use for calculations
         'threshold': "peak" if probe_sig_threshold is None else "{:04}".format(probe_sig_threshold),
         # Calculations on the data within the tsv file - think about what we want to maximize, beyond Mantel.
@@ -561,7 +533,7 @@ def results_as_dict(tsv_file, base_path, probe_sig_threshold=None, use_cache=Tru
         'train_vs_test_overlap': train_vs_test_overlap(tsv_file, probe_significance_threshold=probe_sig_threshold),
         'split': extract_seed(tsv_file, "batch-train"),
         'seed': extract_seed(tsv_file, "_seed-"),
-        'real_tsv_from_shuffle': derivative_path(tsv_file),
+        'real_tsv_from_shuffle': tsv_file.replace("shuf-" + shuf, "shuf-none"),
     })
 
     # Cache results to prevent repeated recalculation of the same thing.
@@ -570,57 +542,66 @@ def results_as_dict(tsv_file, base_path, probe_sig_threshold=None, use_cache=Tru
     return result_dict
 
 
-def build_descriptor(comp, splitby, mask, normalization, batch):
+def build_descriptor(comp, splitby, mask, normalization, split, level="short"):
     """ Generate a shorthand descriptor for the group a result belongs to. """
 
     # From actual file, or from path to result, boil down comparator to its abbreviation
-    # TODO: Make this algorithmic, or at least support unknown temporarily.
     comp_map = {
-        'hcp_niftismooth_conn_parby-glasser_sim.df': 'hcpg',
-        'hcpniftismoothconnparbyglassersim': 'hcpg',
-        'hcp_niftismooth_conn_sim.df': 'hcpw',
-        'hcpniftismoothconnsim': 'hcpw',
-        'indi-glasser-conn_sim.df': 'nkig',
-        'indiglasserconnsim': 'nkig',
-        'indi-connectivity_sim.df': 'nkiw',
-        'indiconnsim': 'nkiw',
-        'fear_glasser_sim.df': 'f__g',
-        'fearglassersim': 'f__g',
-        'fear_conn_sim.df': 'f__w',
-        'fearconnsim': 'f__w',
-        'neutral_glasser_sim.df': 'n__g',
-        'neutralglassersim': 'n__g',
-        'neutral_conn_sim.df': 'n__w',
-        'neutralconnsim': 'n__w',
-        'fear-neutral_glasser_sim.df': 'fn_g',
-        'fearneutralglassersim': 'fn_g',
-        'fear-neutral_conn_sim.df': 'fn_w',
-        'fearneutralconnsim': 'fn_w',
-        'glasserwellidsproximity': 'px_w',
-        'glasserparcelsproximity': 'px_g',
-        'glasserwellidslogproximity': 'pxlw',
-        'glasserparcelslogproximity': 'pxlg',
+        'hcp_niftismooth_conn_parby-glasser_sim.df': ('hcpg', "HCP [rest] (glasser parcels)"),
+        'hcpniftismoothconnparbyglassersim': ('hcpg', "HCP [rest] (glasser parcels)"),
+        'hcp_niftismooth_conn_sim.df': ('hcpw', "HCP [rest] (wellids)"),
+        'hcpniftismoothconnsim': ('hcpw', "HCP [rest] (wellids)"),
+        'indi-glasser-conn_sim.df': ('nkig', "NKI [rest] (glasser parcels)"),
+        'indiglasserconnsim': ('nkig', "NKI [rest] (glasser parcels)"),
+        'indi-connectivity_sim.df': ('nkiw', "NKI [rest] (wellids)"),
+        'indiconnsim': ('nkiw', "NKI [rest] (wellids)"),
+        'fear_glasser_sim.df': ('f__g', "HCP [task: fear] (glasser parcels)"),
+        'fearglassersim': ('f__g', "HCP [task: fear] (glasser parcels)"),
+        'fear_conn_sim.df': ('f__w', "HCP [task: fear] (wellids)"),
+        'fearconnsim': ('f__w', "HCP [task: fear] (wellids)"),
+        'neutral_glasser_sim.df': ('n__g', "HCP [task: neutral] (glasser parcels)"),
+        'neutralglassersim': ('n__g', "HCP [task: neutral] (glasser parcels)"),
+        'neutral_conn_sim.df': ('n__w', "HCP [task: neutral] (wellids)"),
+        'neutralconnsim': ('n__w', "HCP [task: neutral] (wellids)"),
+        'fear-neutral_glasser_sim.df': ('fn_g', "HCP [task: fear-neutral] (glasser parcels)"),
+        'fearneutralglassersim': ('fn_g', "HCP [task: fear-neutral] (glasser parcels)"),
+        'fear-neutral_conn_sim.df': ('fn_w', "HCP [task: fear-neutral] (wellids)"),
+        'fearneutralconnsim': ('fn_w', "HCP [task: fear-neutral] (wellids)"),
+        'glasserwellidsproximity': ('px_w', "Proximity (wellids)"),
+        'glasserparcelsproximity': ('px_g', "Proximity (glasser parcels)"),
+        'glasserwellidslogproximity': ('pxlw', "log Proximity (wellids)"),
+        'glasserparcelslogproximity': ('pxlg', "log Proximity (glasser parcels)"),
     }
 
     # Make short string for split seed and normalization
-    split = int(batch[-5:])
+    split = int(split)
     if 200 <= split < 300:
         xv = "2"
+        xvlong = "halves"
     elif 400 <= split < 500:
         xv = "4"
+        xvlong = "quarters"
     else:
         xv = "_"
+        xvlong = "undefined"
     norm = "s" if normalization == "srs" else "_"
 
     # Build and return the descriptor
-    return "{}{}{:0>2}{}{}{}".format(
-        comp_map[comp],
-        splitby[0],
-        0 if mask == "none" else int(mask),
-        's',
-        norm,
-        xv,
-    )
+    if level == "short":
+        return "{}{}{:0>2}{}{}{}".format(
+            comp_map[comp][0],
+            splitby[0],
+            0 if mask == "none" else int(mask),
+            's',
+            norm,
+            xv,
+        )
+    elif level == "long":
+        return "{}, {}-normalized, {}".format(
+            comp_map[comp][1], normalization, xvlong,
+        )
+    else:
+        return "Undefined"
 
 
 def interpret_descriptor(descriptor):
@@ -628,7 +609,7 @@ def interpret_descriptor(descriptor):
     comp = comp_from_signature(descriptor[:4])
     parby = "glasser" if descriptor[3].lower() == "g" else "wellid"
     splby = "glasser" if descriptor[4].lower() == "g" else "wellid"
-    mask = 'none' if descriptor[5:7] == "00" else descriptor[5:7]
+    mask = descriptor[5:7]
     algo = 'once' if descriptor[7] == "o" else "smrt"
     norm = 'srs' if ((len(descriptor) > 8) and (descriptor[8] == "s")) else "none"
     xval = descriptor[9] if len(descriptor) > 9 else '0'
@@ -676,7 +657,7 @@ def interpret_descriptor(descriptor):
 
 def calc_ttests(row, df):
     """ for a given dataframe row, if it's a real result, return its t-test t-value vs all shuffles in df. """
-    if row.shuffle == 'none':
+    if row.shuf == 'none':
         return stats.ttest_1samp(
             df[(df['threshold'] == row.threshold)]['train_score'],
             row.train_score,
@@ -687,7 +668,7 @@ def calc_ttests(row, df):
 
 def calc_real_v_shuffle_overlaps(row, df):
     """ for a given dataframe row, if it's a real result, return its overlap pctage vs all shuffles in df. """
-    if row.shuffle == 'none':
+    if row.shuf == 'none':
         overlaps = []
         for shuffled_tsv in df[(df['threshold'] == row.threshold)]['path']:
             top_threshold = row.threshold
@@ -701,7 +682,7 @@ def calc_real_v_shuffle_overlaps(row, df):
 
 def calc_total_overlap(row, df):
     """ This doesn't really work, yet, as experimentation is being done for what it should mean. """
-    if row.shuffle == 'none':
+    if row.shu == 'none':
         overlaps = []
         for shuffled_tsv in df[(df['threshold'] == row.threshold)]['path']:
             overlaps.append(algorithms.pct_similarity([row.path, shuffled_tsv], top=row.threshold))
@@ -710,6 +691,7 @@ def calc_total_overlap(row, df):
         return 0.0
 
 
+@print_duration
 def calculate_individual_stats(
         descriptor, progress_recorder, progress_from=0, progress_to=99, data_root="/data", use_cache=True
 ):
@@ -717,7 +699,7 @@ def calculate_individual_stats(
 
     rdict = interpret_descriptor(descriptor)
     progress_recorder.set_progress(progress_from, progress_to, "Step 1/3<br />Finding results")
-    print("Found {:,} results ({} {} {} {} {} {} {} {}) @{}".format(
+    print("Found {:,} results in database ({} {} {} {} {} {} {} {}) @{}".format(
         rdict['n'], "glasser", "fornito",
         rdict['algo'], rdict['comp'], rdict['parby'], rdict['splby'], rdict['mask'], rdict['norm'],
         'peak' if rdict['threshold'] is None else rdict['threshold'],
@@ -726,12 +708,13 @@ def calculate_individual_stats(
     cache_file = os.path.join(data_root, "plots", "cache", "{}_summary_individual.df".format(rdict['descriptor']))
     if use_cache and os.path.isfile(cache_file):
         """ Load results from a cached file, if possible"""
-        with open(cache_file, "rb") as f:
-            df = pickle.load(f)
+        print("Loading individual data from cache, {}".format(cache_file))
+        df = pickle.load(open(cache_file, "rb"))
     else:
         """ Calculate results for individual tsv files. """
         relevant_results = []
         for i, path in enumerate(rdict['query_set'].values('tsv_path')):
+            print("Calculating stats for #{}. {}".format(i, path['tsv_path']))
             if os.path.isfile(path['tsv_path']):
                 relevant_results.append(
                     results_as_dict(path['tsv_path'], base_path=data_root, probe_sig_threshold=rdict['threshold'])
@@ -757,6 +740,7 @@ def calculate_individual_stats(
     return rdict, df
 
 
+@print_duration
 def calculate_group_stats(
         rdict, rdf, progress_recorder, progress_from=0, progress_to=99, data_root="/data", use_cache=True
 ):
@@ -766,16 +750,16 @@ def calculate_group_stats(
     post_file = os.path.join(data_root, "plots", "cache", "{}_summary_group.df".format(rdict['descriptor']))
     if use_cache and os.path.isfile(post_file):
         """ Load results from a cached file, if possible"""
-        with open(post_file, 'rb') as f:
-            rdf = pickle.load(f)
+        print("Loading individual data from cache, {}".format(post_file))
+        rdf = pickle.load(open(post_file, 'rb'))
     else:
         """ Calculate similarity within split-halves and within shuffle-seeds. """
-        n = len(set(rdf['shuffle']))
-        for i, shuffle in enumerate(list(set(rdf['shuffle']))):
+        n = len(set(rdf['shuf']))
+        for i, shuffle in enumerate(list(set(rdf['shuf']))):
             """ This explores the idea of viewing similarity between same-split-seed runs and same-shuffle-seed runs
                 vs all shuffled runs of the type. All three of these are "internal" or "intra-list" overlap.
             """
-            shuffle_mask = rdf['shuffle'] == shuffle
+            shuffle_mask = rdf['shuf'] == shuffle
             local_df = rdf.loc[shuffle_mask, :]
             local_n = len(local_df)
             print("Calculating percent overlaps and Kendall taus for {} {}-shuffles".format(local_n, shuffle))
@@ -850,6 +834,7 @@ def calculate_group_stats(
     return rdf
 
 
+@print_duration
 def write_gene_lists(rdict, rdf, progress_recorder, data_root="/data"):
     """ Rank genes and write them out as two csvs. """
     df_ranked_full, gene_description = describe_genes(rdf, rdict, progress_recorder)
@@ -1013,6 +998,7 @@ def assess_everything(self, plot_descriptor, data_root="/data"):
     print("Overlap descriptions generated in [{}]".format(len(rdf), str(dt_down09 - dt_down08)))
 
     # TODO: Add csv files for ermineJ-ready scored gene files.
+    pass
 
     with open(os.path.join(data_root, "plots", "{}_report.html".format(plot_descriptor.lower())), 'w') as f:
         f.write("<h1>Mantel Correlations</h1>\n")
@@ -1150,8 +1136,8 @@ def assess_overlap(self, plot_descriptor, data_root="/data"):
         rdf['seed'] = rdf['path'].apply(extract_seed, args=("_seed-",))
 
         """ Calculate similarity within split-halves and within shuffle-seeds. """
-        for shuffle in list(set(rdf['shuffle'])):
-            shuffle_mask = rdf['shuffle'] == shuffle
+        for shuffle in list(set(rdf['shuf'])):
+            shuffle_mask = rdf['shuf'] == shuffle
             # We can only do this in training data, unless we want to double the workload above for test, too.
             rdf.loc[shuffle_mask, 'train_overlap'] = algorithms.pct_similarity_list(
                 list(rdf.loc[shuffle_mask, 'path']), top=rdict['threshold']
@@ -1172,7 +1158,7 @@ def assess_overlap(self, plot_descriptor, data_root="/data"):
                 )
 
             """ For each result in actual split-half train data, compare it to its shuffles. """
-            rdf['real_tsv_from_shuffle'] = rdf['path'].apply(derivative_path)
+            rdf['real_tsv_from_shuffle'] = rdf['path'].replace("shuf-" + shuffle, "shuf-none")
             rdf.loc[shuffle_mask, 'real_v_shuffle_overlap'] = rdf.loc[shuffle_mask, :].apply(
                 lambda x: algorithms.pct_similarity([x.path, x.real_tsv_from_shuffle], top=rdict['threshold']), axis=1)
 
@@ -1276,10 +1262,10 @@ def assess_performance(self, plot_descriptor, data_root="/data"):
             progress_recorder.set_progress(90, 100, "Generating overlap lists")
             rdf['split'] = rdf['path'].apply(extract_seed, args=("batch-train", ))
             splits = list(set(rdf['split']))
-            shuffles = list(set(rdf['shuffle']))
+            shuffles = list(set(rdf['shuf']))
             calcs = len(splits) * len(shuffles)
             for k, shuffle in enumerate(shuffles):
-                shuffle_mask = rdf['shuffle'] == shuffle
+                shuffle_mask = rdf['shuf'] == shuffle
                 for l, split in enumerate(splits):
                     progress_recorder.set_progress(
                         (rdict['n'] * len(thresholds)) + int(((k * len(splits) + l) / calcs) * (rdict['n'] * len(thresholds) / 2)),
@@ -1291,10 +1277,10 @@ def assess_performance(self, plot_descriptor, data_root="/data"):
                     # Generate a list of lists for each file's single 'train_overlap' cell in our dataframe.
                     # At this point, rdf is typically a (num thresholds *) 784-row dataframe of each result.tsv path and its scores.
                     # We apply these functions to only the 'none'-shuffled rows, but pass them the shuffled rows for comparison
-                    rdf["t_mantel_" + shuffle] = rdf[rdf['shuffle'] == 'none'].apply(
+                    rdf["t_mantel_" + shuffle] = rdf[rdf['shuf'] == 'none'].apply(
                         calc_ttests, axis=1, df=rdf[shuffle_mask & split_mask]
                     )
-                    rdf["overlap_real_vs_" + shuffle] = rdf[rdf['shuffle'] == 'none'].apply(
+                    rdf["overlap_real_vs_" + shuffle] = rdf[rdf['shuf'] == 'none'].apply(
                         calc_real_v_shuffle_overlaps, axis=1, df=rdf[shuffle_mask & split_mask]
                     )
                     # rdf["tau_real_vs_" + shuffle] = rdf[rdf['shuffle'] == 'none'].apply(
@@ -1309,7 +1295,7 @@ def assess_performance(self, plot_descriptor, data_root="/data"):
         # Plot performance of thresholds on correlations.
 
         f_full_perf, a_full_perf = plot_performance_over_thresholds(
-            rdf[(rdf['phase'] == rdict['phase']) & (rdf['shuffle'] == 'none')],
+            rdf[(rdf['phase'] == rdict['phase']) & (rdf['shuf'] == 'none')],
         )
         # f_full_perf.savefig(os.path.join(data_root, "plots", "{}_performance.png".format(plot_descriptor[: -4])))
         f_full_perf.savefig(os.path.join(data_root, "plots", "{}_performance.png".format(plot_descriptor)))

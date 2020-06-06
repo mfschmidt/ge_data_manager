@@ -35,15 +35,15 @@ def calc_hilo(min_val, max_val, df, cols_to_test):
 
 def box_and_swarm(figure, placement, label, variable, data, high_score=1.0, orientation="v",
                   lim=None, ps=True, cols=4, push_ordinate_to=None):
-    """ Create an axes object with a swarm plot draw over a box plot of the same data. """
+    """ Create an axes object with a swarm plot drawn over a box plot of the same data. """
 
     shuffle_order = ['none', 'be04', 'agno']
     shuffle_color_boxes = sns.color_palette(['gray', 'lightcoral', 'lightblue'])
     shuffle_color_points = sns.color_palette(['black', 'red', 'blue'])
     annot_columns = [
-        {'shuffle': 'none', 'xo': 0.0, 'xp': 0.0},
-        {'shuffle': 'be04', 'xo': 1.0, 'xp': 0.5},
-        {'shuffle': 'agno', 'xo': 2.0, 'xp': 1.0},
+        {'shuf': 'none', 'xo': 0.0, 'xp': 0.0},
+        {'shuf': 'be04', 'xo': 1.0, 'xp': 0.5},
+        {'shuf': 'agno', 'xo': 2.0, 'xp': 1.0},
     ]
     if cols == 3:
         shuffle_order = shuffle_order[1:]
@@ -59,16 +59,16 @@ def box_and_swarm(figure, placement, label, variable, data, high_score=1.0, orie
 
     ax = figure.add_axes(placement, label=label)
     if orientation == "v":
-        sns.swarmplot(data=data, x='shuffle', y=variable,
+        sns.swarmplot(data=data, x='shuf', y=variable,
                       order=shuffle_order, palette=shuffle_color_points, size=3.0, ax=ax)
-        sns.boxplot(data=data, x='shuffle', y=variable, order=shuffle_order, palette=shuffle_color_boxes, ax=ax)
+        sns.boxplot(data=data, x='shuf', y=variable, order=shuffle_order, palette=shuffle_color_boxes, ax=ax)
         ax.set_ylabel(None)
         ax.set_xlabel(label)
         if lim is not None:
             ax.set_ylim(lim)
     else:
-        sns.swarmplot(data=data, x=variable, y='shuffle', order=shuffle_order, palette=shuffle_color_points, ax=ax)
-        sns.boxplot(data=data, x=variable, y='shuffle', order=shuffle_order, palette=shuffle_color_boxes, ax=ax)
+        sns.swarmplot(data=data, x=variable, y='shuf', order=shuffle_order, palette=shuffle_color_points, ax=ax)
+        sns.boxplot(data=data, x=variable, y='shuf', order=shuffle_order, palette=shuffle_color_boxes, ax=ax)
         ax.set_xlabel(None)
         ax.set_ylabel(label)
         if lim is not None:
@@ -77,13 +77,13 @@ def box_and_swarm(figure, placement, label, variable, data, high_score=1.0, orie
     """ Calculate p-values for each column in the above plots, and annotate accordingly. """
     if ps & (orientation == "v"):
         gap = 0.06
-        actual_results = data[data['shuffle'] == 'none'][variable].values
+        actual_results = data[data['shuf'] == 'none'][variable].values
         try:
             global_max_y = max(data[variable].values)
         except ValueError:
             global_max_y = high_score
         for i, col in enumerate(annot_columns):
-            shuffle_results = data[data['shuffle'] == col['shuffle']]
+            shuffle_results = data[data['shuf'] == col['shuf']]
             try:
                 # max_y = max(data[data['phase'] == 'train'][y].values)
                 local_max_y = max(shuffle_results[variable].values)
@@ -109,7 +109,7 @@ def box_and_swarm(figure, placement, label, variable, data, high_score=1.0, orie
                 ax.text(gap + (i * 0.01), y_pline + 0.01, p_annotation, ha='left', va='bottom')
     elif orientation == "h":
         for i, col in enumerate(annot_columns):
-            shuffle_results = data[data['shuffle'] == col['shuffle']]
+            shuffle_results = data[data['shuf'] == col['shuf']]
             try:
                 local_min_x = min(shuffle_results[variable].values)
             except ValueError:
@@ -144,13 +144,13 @@ def plot_all_train_vs_test(df, title="Title", fig_size=(8, 8), y_min=None, y_max
     )
 
     """ Plot the first pane, rising lines representing rising Mantel correlations as probes are dropped. """
-    a = df.loc[df['shuffle'] == 'none', 'path']
-    b = df.loc[df['shuffle'] == 'be04', 'path']
-    c = df.loc[df['shuffle'] == 'be08', 'path']
-    d = df.loc[df['shuffle'] == 'be16', 'path']
-    e = df.loc[df['shuffle'] == 'edge', 'path']
-    f = df.loc[df['shuffle'] == 'dist', 'path']
-    g = df.loc[df['shuffle'] == 'agno', 'path']
+    a = df.loc[df['shuf'] == 'none', 'path']
+    b = df.loc[df['shuf'] == 'be04', 'path']
+    c = df.loc[df['shuf'] == 'be08', 'path']
+    d = df.loc[df['shuf'] == 'be16', 'path']
+    e = df.loc[df['shuf'] == 'edge', 'path']
+    f = df.loc[df['shuf'] == 'dist', 'path']
+    g = df.loc[df['shuf'] == 'agno', 'path']
     fig, ax_curve = plot.push_plot([
         {'files': list(g), 'linestyle': ':', 'color': 'green'},
         {'files': list(f), 'linestyle': ':', 'color': 'red'},
@@ -160,7 +160,7 @@ def plot_all_train_vs_test(df, title="Title", fig_size=(8, 8), y_min=None, y_max
         {'files': list(b), 'linestyle': ':', 'color': 'orchid'},
         {'files': list(a), 'linestyle': '-', 'color': 'black'}, ],
         # title="Split-half train vs test results",
-        label_keys=['shuffle'],
+        label_keys=['shuf'],
         fig_size=fig_size,
         title="",
         plot_overlaps=False,
@@ -264,15 +264,15 @@ def plot_fig_2(df, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
     )
 
     """ Plot the first pane, rising lines representing rising Mantel correlations as probes are dropped. """
-    a = df.loc[df['shuffle'] == 'none', 'path']
-    b = df.loc[df['shuffle'] == 'be04', 'path']
-    c = df.loc[df['shuffle'] == 'agno', 'path']
+    a = df.loc[df['shuf'] == 'none', 'path']
+    b = df.loc[df['shuf'] == 'be04', 'path']
+    c = df.loc[df['shuf'] == 'agno', 'path']
     fig, ax_curve = plot.push_plot([
         {'files': list(c), 'linestyle': ':', 'color': 'blue'},
         {'files': list(b), 'linestyle': ':', 'color': 'red'},
         {'files': list(a), 'linestyle': '-', 'color': 'black'}, ],
         # title="Split-half train vs test results",
-        label_keys=['shuffle', ],
+        label_keys=['shuf', ],
         fig_size=fig_size,
         title="",
         plot_overlaps=False,
@@ -313,9 +313,53 @@ def plot_fig_2(df, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
 
 
 def plot_fig_3(df, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
-    """ Plot everything from initial distributions, through training curves, to training outcomes.
-        Then the results of using discovered genes in train and test sets both complete and masked.
-        Then even report overlap internal to each cluster of differing gene lists.
+    """ Plot Mantel correlation achieved in training by real and shuffled data.
+        Then plot same values when trained features are applied to independent test data.
+
+        :param pandas.DataFrame df:
+        :param fig_size: A tuple of inches across x inches high
+        :param y_min: Hard code the bottom of the y-axis
+        :param y_max: Hard code the top of the y-axis
+    """
+
+    lowest_possible_score, highest_possible_score = calc_hilo(
+        y_min, y_max, df, ['best', 'train_score', 'test_score', 'masked_train_score', 'masked_test_score', ]
+    )
+
+    fig = plt.figure(figsize=fig_size)
+
+    margin = 0.05
+    ax_height = 0.85
+    ax_width = 0.42
+
+    """ Train box and swarm plots """
+    ax_a = box_and_swarm(
+        fig, [margin, margin * 2, ax_width, ax_height],
+        'Train unmasked', 'train_score', df, high_score=highest_possible_score,
+    )
+    # The top of the plot must be at least 0.25 higher than the highest value to make room for p-values.
+    ax_a.set_ylim(bottom=lowest_possible_score, top=highest_possible_score + 0.25)
+    ax_a.yaxis.tick_right()
+    ax_a.set_yticklabels([])
+    ax_a.set_ylabel('Mantel Correlation')
+
+    """ Test box and swarm plots """
+    ax_b = box_and_swarm(
+        fig, [1.0 - margin - ax_width, margin * 2, ax_width, ax_height],
+        'Test unmasked', 'test_score', df, high_score=highest_possible_score, lim=ax_a.get_ylim()
+    )
+    ax_b.yaxis.tick_left()
+    # ax_b.set_ylabel('Mantel Correlation')
+
+    fig.text(margin + 0.01, 1.0 - margin - 0.01, "A", ha='left', va='top', fontsize=14)
+    fig.text(1.0 - margin - ax_width + 0.01, 1.0 - margin - 0.01, "B", ha='left', va='top', fontsize=14)
+
+    return fig, (ax_a, ax_b)
+
+
+def plot_fig_3_over_masks(df, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
+    """ Plot Mantel correlation achieved in training by real and shuffled data, over all distance masks.
+        Then plot same values when trained features are applied to independent test data, over all distance masks.
 
         :param pandas.DataFrame df:
         :param fig_size: A tuple of inches across x inches high
@@ -373,18 +417,18 @@ def describe_mantel(df, descriptor="", title="Title"):
              "C) Higher correlations are attained in real gene expression data than in any shuffled version of it." + \
              "</p>",
     ]
-    for shuffle in ['none', 'be04', 'be08', 'be16', 'edge', 'dist', 'agno', ]:
-        highlighter = ("<mark>", "</mark>") if shuffle == "none" else ("", "")
-        masked_df = df[df['shuffle'] == shuffle]
+    for shuf in ['none', 'be04', 'be08', 'be16', 'edge', 'dist', 'agno', ]:
+        highlighter = ("<mark>", "</mark>") if shuf == "none" else ("", "")
+        masked_df = df[df['shuf'] == shuf]
         if len(masked_df) > 0:
             d.append("<p>Mantel peaks with {}-shuffled training sets peaked with {} probes remaining.".format(
-                shuffle, mean_and_sd(masked_df['top_n'])
+                shuf, mean_and_sd(masked_df['top_n'])
             ))
             d.append("{}-shuffled Mantel correlations rose from {} to a peak of {}{}{}.</p>".format(
-                shuffle, mean_and_sd(masked_df['initial']), highlighter[0], mean_and_sd(masked_df['best']), highlighter[1]
+                shuf, mean_and_sd(masked_df['initial']), highlighter[0], mean_and_sd(masked_df['best']), highlighter[1]
             ))
         else:
-            d.append("<p>No {}-shuffles available.".format(shuffle))
+            d.append("<p>No {}-shuffles available.".format(shuf))
     d.append("<h3><span class=\"heavy\">Using probes discovered in training to filter original split-half data, and re-Mantel:</span></h3>")
     d.append("<p><img src=\"./{}_fig_3.png\" alt=\"Figure 3. Mantel Optimization\" width=\"384\"></p>".format(descriptor))
     d.append("<p><strong>Figure 3. Gene performance.</strong> " + \
@@ -395,11 +439,11 @@ def describe_mantel(df, descriptor="", title="Title"):
              "data, the left-out samples from splitting halves. Patterns are similar to training data, but " + \
              "genes discovered in real training data fall slightly in independent test data." + \
              "</p>")
-    for shuffle in ['none', 'be04', 'be08', 'be16', 'edge', 'dist', 'agno', ]:
-        highlighter = ("<mark>", "</mark>") if shuffle == "none" else ("", "")
-        masked_df = df[df['shuffle'] == shuffle]
+    for shuf in ['none', 'be04', 'be08', 'be16', 'edge', 'dist', 'agno', ]:
+        highlighter = ("<mark>", "</mark>") if shuf == "none" else ("", "")
+        masked_df = df[df['shuf'] == shuf]
         if len(masked_df) > 0:
-            d.append("<p>Real Mantel correlations with probes discovered in {}-shuffled training sets.".format(shuffle))
+            d.append("<p>Real Mantel correlations with probes discovered in {}-shuffled training sets.".format(shuf))
             d.append("In unmasked train half: {}.".format( mean_and_sd(masked_df['train_score'])))
             d.append("In masked train half: {}.".format(mean_and_sd(masked_df['masked_train_score'])))
             d.append("In unmasked test half: {}{}{}.".format(
@@ -407,7 +451,7 @@ def describe_mantel(df, descriptor="", title="Title"):
             ))
             d.append("In masked test half: {}.</p>".format(mean_and_sd(masked_df['masked_test_score'])))
         else:
-            d.append("No {}-shuffles available.".format(shuffle))
+            d.append("No {}-shuffles available.".format(shuf))
     return "\n".join(d)
 
 
@@ -441,7 +485,7 @@ def plot_overlap(df, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
 
     """ Internal overlap plots """
     fig.text(x_left, 1.0 - (2 * margin) + 0.01, "Overlap between actual training data and shuffles", ha='left', va='bottom', fontsize=12)
-    df.loc[df['shuffle'] == 'none', 'real_v_shuffle_overlap'] = df.loc[df['shuffle'] == 'none', 'overlap_by_seed']
+    df.loc[df['shuf'] == 'none', 'real_v_shuffle_overlap'] = df.loc[df['shuf'] == 'none', 'overlap_by_seed']
     ax = box_and_swarm(
         fig, [x_left, bottom, box_width, box_height],
         'train vs shuffles', 'real_v_shuffle_overlap', df, orientation="v", ps=True
@@ -476,12 +520,12 @@ def plot_fig_4(df, title="Title", fig_size=(8, 5), y_min=None, y_max=None):
     # For 'real_v_shuffle_overlap', all unshuffled values are 1.0 because each result matches itself.
     # It needs to be replaced with its internal intra-group overlap for a visual baseline,
     # even though it's not within-split and shouldn't be compared quantitatively against shuffles.
-    df.loc[df['shuffle'] == 'none', 'real_v_shuffle_overlap'] = df.loc[df['shuffle'] == 'none', 'overlap_by_seed']
-    df.loc[df['shuffle'] == 'none', 'real_v_shuffle_ktau'] = df.loc[df['shuffle'] == 'none', 'ktau_by_seed']
+    df.loc[df['shuf'] == 'none', 'real_v_shuffle_overlap'] = df.loc[df['shuf'] == 'none', 'overlap_by_seed']
+    df.loc[df['shuf'] == 'none', 'real_v_shuffle_ktau'] = df.loc[df['shuf'] == 'none', 'ktau_by_seed']
     # In only the unshuffled runs, fill in the zeroes (or NaNs) with intra-group data. Unshuffled runs have no seeds.
     # Shuffled runs already have correct calculated overlaps.
-    df.loc[df['shuffle'] == 'none', 'overlap_by_seed'] = df.loc[df['shuffle'] == 'none', 'overlap_by_seed']
-    df.loc[df['shuffle'] == 'none', 'ktau_by_seed'] = df.loc[df['shuffle'] == 'none', 'ktau_by_seed']
+    df.loc[df['shuf'] == 'none', 'overlap_by_seed'] = df.loc[df['shuf'] == 'none', 'overlap_by_seed']
+    df.loc[df['shuf'] == 'none', 'ktau_by_seed'] = df.loc[df['shuf'] == 'none', 'ktau_by_seed']
 
     ax_a = box_and_swarm(
         fig, [margin, margin * 2, ax_width, ax_height],
@@ -491,7 +535,7 @@ def plot_fig_4(df, title="Title", fig_size=(8, 5), y_min=None, y_max=None):
 
     ax_b = box_and_swarm(
         fig, [margin + ax_width + gap, margin * 2, ax_width, ax_height],
-        'train vs shuffles', 'real_v_shuffle_overlap', df[df['shuffle'] != 'none'], orientation="v", ps=False
+        'train vs shuffles', 'real_v_shuffle_overlap', df[df['shuf'] != 'none'], orientation="v", ps=False
     )
     ax_b.set_ylim(ax_a.get_ylim())
 
@@ -503,7 +547,7 @@ def plot_fig_4(df, title="Title", fig_size=(8, 5), y_min=None, y_max=None):
 
     ax_d = box_and_swarm(
         fig, [1.0 - margin - ax_width, margin * 2, ax_width, ax_height],
-        'train vs shuffles', 'real_v_shuffle_ktau', df[df['shuffle'] != 'none'], orientation="v", ps=False
+        'train vs shuffles', 'real_v_shuffle_ktau', df[df['shuf'] != 'none'], orientation="v", ps=False
     )
     ax_d.set_ylim(ax_a.get_ylim())
 
@@ -552,48 +596,48 @@ def describe_overlap(df, descriptor="", title="Title"):
             "</p>",
         "<h3><span class=\"heavy\">Internal altogether (not plotted):</span></h3><p>",
     ]
-    for shuffle in ['none', 'be04', 'be08', 'be16', 'edge', 'dist', 'agno', ]:
-        if len(df[df['shuffle'] == shuffle]) > 0:
+    for shuf in ['none', 'be04', 'be08', 'be16', 'edge', 'dist', 'agno', ]:
+        if len(df[df['shuf'] == shuf]) > 0:
             d.append("Overlap within {}-shuffled: {}.<br />".format(
-                shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['train_overlap'])
+                shuf, mean_and_sd(df[df['shuf'] == shuf]['train_overlap'])
             ))
             d.append("Kendall tau (trimmed) within {}-shuffled: {}.<br />".format(
-                shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['train_ktau'])
+                shuf, mean_and_sd(df[df['shuf'] == shuf]['train_ktau'])
             ))
     d.append("</p>")
     d.append("<h3><span class=\"heavy\">Internal within a shuffle seed, across splits:</span></h3><p>")
-    for shuffle in ['none', 'be04', 'be08', 'be16', 'edge', 'dist', 'agno', ]:
-        if len(df[df['shuffle'] == shuffle]) > 0:
+    for shuf in ['none', 'be04', 'be08', 'be16', 'edge', 'dist', 'agno', ]:
+        if len(df[df['shuf'] == shuf]) > 0:
             d.append("Overlap within {}-shuffled, within shuffle seed: {}.<br />".format(
-                shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['overlap_by_seed'])
+                shuf, mean_and_sd(df[df['shuf'] == shuf]['overlap_by_seed'])
             ))
             d.append("Kendall tau (trimmed) within {}-shuffled, within shuffle seed: {}.<br />".format(
-                shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['ktau_by_seed'])
+                shuf, mean_and_sd(df[df['shuf'] == shuf]['ktau_by_seed'])
             ))
     d.append("</p>")
     d.append("<h3><span class=\"heavy\">Internal within a split, across shuffle seeds (feeds figure 4 B):</span></h3><p>")
-    for shuffle in ['none', 'be04', 'be08', 'be16', 'edge', 'dist', 'agno', ]:
-        if len(df[df['shuffle'] == shuffle]) > 0:
+    for shuf in ['none', 'be04', 'be08', 'be16', 'edge', 'dist', 'agno', ]:
+        if len(df[df['shuf'] == shuf]) > 0:
             d.append("Overlap within {}-shuffled, within split batch: {}.<br />".format(
-                shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['overlap_by_split'])
+                shuf, mean_and_sd(df[df['shuf'] == shuf]['overlap_by_split'])
             ))
             d.append("Kendall tau (trimmed) within {}-shuffled, within split batch: {}.<br />".format(
-                shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['ktau_by_split'])
+                shuf, mean_and_sd(df[df['shuf'] == shuf]['ktau_by_split'])
             ))
     d.append("</p>")
     d.append("<h3><span class=\"heavy\">Real vs shuffled similarity:</span></h3><p>")
-    for shuffle in ['none', 'be04', 'be08', 'be16', 'edge', 'dist', 'agno', ]:
-        if len(df[df['shuffle'] == shuffle]) > 0:
+    for shuf in ['none', 'be04', 'be08', 'be16', 'edge', 'dist', 'agno', ]:
+        if len(df[df['shuf'] == shuf]) > 0:
             d.append("Overlap between un-shuffled and {}-shuffled: {}.<br />".format(
-                shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['real_v_shuffle_overlap'])
+                shuf, mean_and_sd(df[df['shuf'] == shuf]['real_v_shuffle_overlap'])
             ))
             d.append("Kendall tau (trimmed) between un-shuffled and {}-shuffled: {}.<br />".format(
-                shuffle, mean_and_sd(df[df['shuffle'] == shuffle]['real_v_shuffle_ktau'])
+                shuf, mean_and_sd(df[df['shuf'] == shuf]['real_v_shuffle_ktau'])
             ))
     d.append("</p>")
     d.append("<h3><span class=\"heavy\">Train vs test:</span></h3>")
     d.append("<p>Overlap between top train-discovered probes and what would have been discovered in the other half: ")
-    d.append("    {}.</p>".format(mean_and_sd(df[df['shuffle'] == 'none']['train_vs_test_overlap'])))
+    d.append("    {}.</p>".format(mean_and_sd(df[df['shuf'] == 'none']['train_vs_test_overlap'])))
     return "\n".join(d)
 
 
