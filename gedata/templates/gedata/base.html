@@ -35,7 +35,10 @@
                 <a id="nav_home" class="nav-link" href="{% url 'gedata:index' %}">Home <span class="sr-only"></span></a>
             </li>
             <li class="nav-item">
-                <a id="nav_inventory" class="nav-link" href="{% url 'gedata:inventory' %}">Inventory</a>
+                <a id="nav_oldinventory" class="nav-link" href="{% url 'gedata:oldinventory' %}">Old Inventory</a>
+            </li>
+            <li class="nav-item">
+                <a id="nav_newinventory" class="nav-link" href="{% url 'gedata:newinventory' %}">New Inventory</a>
             </li>
             <li class="nav-item">
                 <a id="nav_mantels" class="nav-link" href="{% url 'gedata:resultset' metric='mantel' %}">Mantels</a>
@@ -78,23 +81,31 @@
 <div class="container">
 
 {% block footer %}
-    <nav class="navbar" id="bottom_status_bar">
+    <div id="bottom_status_bar">
         <div id="static_progress_bar" style="display: block;">
-            <table class="footer_summary"><tr><td colspan="3">
-                <span id="latest_result_summary"><!-- updated by js --></span>
-            </td><td colspan="1">
-                <button id="progress-bar-sync-trigger" class="btn footer_button" onclick="startResultMining('update_jobs');"><i class="fas fa-sync"></i> update</button>
-            </td><td colspan="1">
-                <button id="progress-bar-redo-trigger" class="btn footer_button" onclick="startResultMining('collect_jobs');"><i class="fas fa-redo"></i> rebuild</button>
-            </td></tr></table>
+            <span id="latest_result_summary" class="float_left"><!-- updated by js --></span>
+            <span class="float_right">
+                <!--
+                <button id="progress-bar-sync-trigger" class="btn footer_button" onclick="startResultMining('update_jobs');">
+                    <i class="fas fa-sync"></i> update</button>
+                <button id="progress-bar-redo-trigger" class="btn footer_button" onclick="startResultMining('collect_jobs');">
+                    <i class="fas fa-redo"></i> rebuild</button>
+                -->
+                <button id="progress-bar-sync-trigger" class="btn footer_button" onclick="startResultMining('global_refresh');">
+                    <i class="fas fa-sync"></i></button>
+                <button id="progress-bar-sync-trigger" class="btn footer_button" onclick="startResultMining('global_clear');">
+                    <i class="fas fa-trash"></i></button>
+            </span>
         </div>
         <div id="celery_progress_bar" class="progress-wrapper" style="display: none;">
             <!--<span id="results_ok_check"><i class="fas fa-check"></i></span>-->
-            <div id="progress-bar-message"></div>
-            <div id="progress-bar" class="progress-bar" style="background-color: blue; width: 0; margin-top: 1em;">&nbsp;</div>
-            <div id="progress-bar-peak-total" style="display: none;">0</div>
+            <span id="progress-bar-message"></span>
+            <span id="progress-bar-background">
+                <div id="progress-bar" class="progress-bar"></div>
+            </span>
+            <span id="progress-bar-peak-total" style="display: none;">0</span>
         </div>
-    </nav>
+    </div>
 {% endblock %}
 
 </div>
