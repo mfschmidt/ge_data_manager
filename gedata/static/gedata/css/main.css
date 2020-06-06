@@ -157,9 +157,19 @@ div.descriptor p,ul {
   width: 90%;
 }
 
-td {
-  width: 10%;
+td, th {
+    text-align: left;
+    vertical-align: top;
+    border-left: solid 1px;
 }
+th {
+    background-color: lightgray;
+}
+th span a {
+    padding: 3px;
+}
+
+
 
 /* Footer two-cell table */
 table.footer_summary td {
@@ -192,6 +202,14 @@ table.inventory_table td.osdc_primary {
 .osdc_neglected {
     background-color: #fff0f0;
 }
+.float_left {
+    display: block;
+    float: left;
+}
+.float_right {
+    display: block;
+    float: right;
+}
 
 /* Comparison and Performance menus */
 table.menu_table {
@@ -206,6 +224,37 @@ table.menu_table td {
 
 #celery_progress_bar {
     left: 10px;
+}
+.progress-wrapper div {
+    display: block;
+    padding: 4px;
+}
+#progress-bar {
+    text-align: center;
+}
+#progress-bar-message {
+    float: left;
+    margin: 1%;
+    width: 23%;
+    text-align: left;
+}
+#progress-bar-background {
+    border: solid black 1px;
+    background-color: white;
+    float: right;
+    width: 73%;
+}
+.progress_bar_error {
+    background-color: #dc4f63;
+    color: black;
+}
+.progress_bar_success {
+    background-color: #76ce60;
+    color: black;
+}
+.progress_bar_active {
+    background-color: #68a9ef;
+    color: black;
 }
 
 .pct_text {
@@ -227,6 +276,19 @@ button.footer_button {
 }
 
 button.footer_button:hover {
+    background-color: navy;
+    color: aliceblue;
+}
+
+button.td_button {
+    background-color: aliceblue;
+    border: 1px solid navy;
+    border-radius: 2px;
+    transition-duration: 0.4s;
+    -webkit-transition-duration: 0.4s;
+}
+
+button.td_button:hover {
     background-color: navy;
     color: aliceblue;
 }
