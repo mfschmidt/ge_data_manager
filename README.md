@@ -58,3 +58,9 @@ If you created a new superuser, you can log in at http://localhost:8000/admin/ t
 
 If you'd like to monitor celery tasks as they run, you can change the worker's command in docker-compose.yml to `--loglevel=debug`. This will emit more detailed logs from the worker container.
 
+If you make significant changes to the models, you may need to manually migrate those changes to the db structure.
+You can accomplish this as follows:
+
+    docker-compose run web bash
+    python manage.py makemigrations
+    python manage.py migrate
