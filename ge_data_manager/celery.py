@@ -77,21 +77,23 @@ def celery_id_from_name(job_name):
     """
     return None
 
-def celery_plots_in_progress():
+
+def celery_tasks_in_progress():
     try:
         task_dict = app.control.inspect().active()
     except ConnectionResetError:
         task_dict = app.control.inspect().active()
 
-    plots = []
+    tasks = []
 
     if task_dict is None:
-        return plots
+        return tasks
 
     if len(task_dict) > 0:
         for k in task_dict.keys():
             for d in task_dict[k]:
+                print("  running task named {}".format(d['name']))
                 if 'build_plot' in d['name']:
-                    plots.append("train_test_{}.png".format(d['args'][2:10].lower()))
+                    tasks.append("train_test_{}.png".format(d['args'][2:10].lower()))
 
-    return plots
+    return tasks
