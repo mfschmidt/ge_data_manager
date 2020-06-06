@@ -56,23 +56,32 @@ function caption(figure) {
     }
 }
 
-function startResultMining(job_name) {
-    document.getElementById("celery_progress_bar").style.display = "block";
-    document.getElementById("static_progress_bar").style.display = "none";
-    let refreshUrl = "/gedata/REST/refresh/" + job_name;
+/**
+ *
+ * @param url - The url to GET asynchronously
+ * @param callBack - The function to return the response to
+ */
+function asyncGetJson(url, callBack) {
     let request = new XMLHttpRequest();
     request.onreadystatechange = function () {
         if (request.readyState === 4 && request.status === 200) {
-            let responseJsonObj = JSON.parse(request.responseText);
-            console.log("Got id: " + responseJsonObj.task_id);
-            let progressUrl = "/celery-progress/" + responseJsonObj.task_id + "/";
-            CeleryProgressBar.initProgressBar(progressUrl, {
-                onSuccess: stopCeleryProcessPolling
-            });
+            callBack(JSON.parse(request.responseText));
         }
     };
-    request.open("GET", refreshUrl, true);
+    request.open("GET", url, true);
     request.send();
+}
+
+function startResultMining(job_name) {
+    document.getElementById("celery_progress_bar").style.display = "block";
+    document.getElementById("static_progress_bar").style.display = "none";
+    asyncGetJson("/gedata/REST/refresh/" + job_name, function(responseJsonObj) {
+        console.log("Got id: " + responseJsonObj.task_id);
+        let progressUrl = "/celery-progress/" + responseJsonObj.task_id + "/";
+        CeleryProgressBar.initProgressBar(progressUrl, {
+            onSuccess: stopCeleryProcessPolling
+        });
+    });
     console.log("Beginning celery polling for " + job_name + ".");
 }
 
@@ -137,26 +146,19 @@ function assessMetric(image_id, select_id, metric) {
             }
             if (png_http.status === 404) {
                 console.log(select_element.innerText + " does not exist. Building it from scratch.");
-                let refreshUrl = "/gedata/REST/refresh/" + img_file;
 
                 // The second ajax request initiates image creation and starts the spinner.
-                let request = new XMLHttpRequest();
-                request.onreadystatechange = function () {
-                    if (request.readyState === 4 && request.status === 200) {
-                        let responseJsonObj = JSON.parse(this.responseText);
-                        if (responseJsonObj.task_id !== "None") {
-                            console.log("Got id: " + responseJsonObj.task_id);
-                            let progressUrl = "/celery-progress/" + responseJsonObj.task_id + "/";
-                            CelerySpinner.initSpinner(progressUrl, {
-                                onSuccess: loadPlot,
-                                spinnerId: image_id,
-                                dataForLater: img_url
-                            });
-                        }
+                asyncGetJson("/gedata/REST/refresh/" + img_file, function(responseJsonObj) {
+                    if (responseJsonObj.task_id !== "None") {
+                        console.log("Got id: " + responseJsonObj.task_id);
+                        let progressUrl = "/celery-progress/" + responseJsonObj.task_id + "/";
+                        CelerySpinner.initSpinner(progressUrl, {
+                            onSuccess: loadPlot,
+                            spinnerId: image_id,
+                            dataForLater: img_url
+                        });
                     }
-                };
-                request.open("GET", refreshUrl, true);
-                request.send();
+                });
                 console.log("Beginning to build " + metric + " plot for " + select_element.innerText + " at " + image_id);
             }
         }
@@ -165,123 +167,53 @@ function assessMetric(image_id, select_id, metric) {
     png_http.send();
 }
 
-function removeEverything(image_id, r_id) {
+function removeEverything(r_id) {
     // The first ajax request determines whether our desired plot already exists or not.
-    let request = new XMLHttpRequest();
-    let refreshUrl = "/gedata/REST/refresh/" + r_id + "peak" + "_clearmacro";
-    request.onreadystatechange = function () {
-        if (request.readyState === 4 && request.status === 200) {
-            let responseJsonObj = JSON.parse(this.responseText);
-            if (responseJsonObj.task_id !== "None") {
-                console.log("Got id: " + responseJsonObj.task_id);
-                let progressUrl = "/celery-progress/" + responseJsonObj.task_id + "/";
-                CelerySpinner.initSpinner(progressUrl, {
-                    onSuccess: console.log("removeEverything success"), // window.location.reload(),
-                    spinnerId: image_id,
-                });
-            }
+    asyncGetJson("/gedata/REST/refresh/" + r_id + "peak" + "_clearmacro", function(responseJsonObj) {
+        if (responseJsonObj.task_id !== "None") {
+            console.log("Got id: " + responseJsonObj.task_id);
+            let progressUrl = "/celery-progress/" + responseJsonObj.task_id + "/";
+            CelerySpinner.initSpinner(progressUrl, {
+                onSuccess: console.log("removeEverything success"), // window.location.reload(),
+                spinnerId: "spinner_" + r_id,
+            });
         }
-    };
-    request.open("GET", refreshUrl, true);
-    request.send();
-    console.log("Removing all cache files for " + r_id + " at " + image_id);
+    });
+    console.log("Removing all cache files for " + r_id);
 }
 
-function assessEverything(image_id, select_id, r_id) {
-    // Calculate the image id string from forms, then use it to load plot images
-    let select_element = document.getElementById(select_id);
-    select_element.innerText = r_id + 'peak';
-    console.log("assessing everything, select_id = " + select_id + "; containing '" + select_element.innerText + "'.");
-    let image_element = document.getElementById(image_id);
+function assessEverything(r_id) {
+    console.log("assessing everything, r_id = " + r_id + ".");
 
-    if(shouldBailOnBuilding(image_element, select_element)) {
-        return;
-    }
-
-    console.log("Checking for " + select_element.innerText + " image for " + image_id + ".");
-    let img_file = select_element.innerText.toLowerCase() + "_mantel.png";
-
-    let img_url = "/static/gedata/plots/" + img_file;
-
-
-    // The first ajax request determines whether our desired plot already exists or not.
-    let png_http = new XMLHttpRequest();
-    png_http.onreadystatechange = function () {
-        if (png_http.readyState === 4) {
-            console.log("Building " + select_element.innerText + ".");
-            let refreshUrl = "/gedata/REST/refresh/" + r_id + 'peak' + "_everything";
-
-            // The ajax request initiates analysis and starts the spinner.
-            let request = new XMLHttpRequest();
-            request.onreadystatechange = function () {
-                if (request.readyState === 4 && request.status === 200) {
-                    let responseJsonObj = JSON.parse(this.responseText);
-                    if (responseJsonObj.task_id !== "None") {
-                        console.log("Got id: " + responseJsonObj.task_id);
-                        let progressUrl = "/celery-progress/" + responseJsonObj.task_id + "/";
-                        CelerySpinner.initSpinner(progressUrl, {
-                            onSuccess: console.log("assessEverything success"), // window.location.reload(),
-                            spinnerId: image_id,
-                        });
-                    }
-                }
-            };
-            request.open("GET", refreshUrl, true);
-            request.send();
-            console.log("Beginning to build everything for " + select_element.innerText + " at " + image_id);
+    asyncGetJson("/gedata/REST/refresh/" + r_id + 'peak' + "_everything", function(responseJsonObj) {
+        if (responseJsonObj.task_id !== "None") {
+            console.log("Got id: " + responseJsonObj.task_id);
+            let progressUrl = "/celery-progress/" + responseJsonObj.task_id + "/";
+            CelerySpinner.initSpinner(progressUrl, {
+                onSuccess: console.log("assessEverything(" + r_id + ") success"), // window.location.reload(),
+                spinnerId: "spinner_" + r_id,
+            });
         }
-    };
-    png_http.open('HEAD', img_url, true);
-    png_http.send();
+    });
+    console.log("Beginning to build everything for " + r_id);
 }
 
-function assessJustGenes(image_id, select_id, r_id) {
-    // Calculate the image id string from forms, then use it to load plot images
-    let select_element = document.getElementById(select_id);
-    select_element.innerText = r_id + 'peak';
-    console.log("assessing everything, select_id = " + select_id + "; containing '" + select_element.innerText + "'.");
-    let image_element = document.getElementById(image_id);
+function assessJustGenes(r_id) {
+    console.log("assessing genes, r_id = " + r_id + ".");
 
-    if(shouldBailOnBuilding(image_element, select_element)) {
-        return;
-    }
-
-    console.log("Checking for " + select_element.innerText + " image for " + image_id + ".");
-    let img_file = select_element.innerText.toLowerCase() + "_mantel.png";
-
-    let img_url = "/static/gedata/plots/" + img_file;
-
-
-    // The first ajax request determines whether our desired plot already exists or not.
-    let png_http = new XMLHttpRequest();
-    png_http.onreadystatechange = function () {
-        if (png_http.readyState === 4) {
-            console.log("Building " + select_element.innerText + ".");
-            let refreshUrl = "/gedata/REST/refresh/" + r_id + 'peak' + "_justgenes";
-
-            // The ajax request initiates analysis and starts the spinner.
-            let request = new XMLHttpRequest();
-            request.onreadystatechange = function () {
-                if (request.readyState === 4 && request.status === 200) {
-                    let responseJsonObj = JSON.parse(this.responseText);
-                    if (responseJsonObj.task_id !== "None") {
-                        console.log("Got id: " + responseJsonObj.task_id);
-                        let progressUrl = "/celery-progress/" + responseJsonObj.task_id + "/";
-                        CelerySpinner.initSpinner(progressUrl, {
-                            onSuccess: console.log("assessJustGenes success"), // window.location.reload(),
-                            spinnerId: image_id,
-                        });
-                    }
-                }
-            };
-            request.open("GET", refreshUrl, true);
-            request.send();
-            console.log("Beginning to build just genes for " + select_element.innerText + " at " + image_id);
+    asyncGetJson("/gedata/REST/refresh/" + r_id + 'peak' + "_justgenes", function(responseJsonObj) {
+        if (responseJsonObj.task_id !== "None") {
+            console.log("Got id: " + responseJsonObj.task_id);
+            let progressUrl = "/celery-progress/" + responseJsonObj.task_id + "/";
+            CelerySpinner.initSpinner(progressUrl, {
+                onSuccess: console.log("assessJustGenes(" + r_id + ") success"), // window.location.reload(),
+                spinnerId: "spinner_" + r_id,
+            });
         }
-    };
-    png_http.open('HEAD', img_url, true);
-    png_http.send();
+    });
+    console.log("Beginning to build everything for " + r_id);
 }
+
 
 function loadPlot(image_element, image_url) {
     let w = Math.round(document.documentElement.clientWidth * 0.45);
@@ -411,26 +343,13 @@ function image_id_from_selections(side) {
 }
 
 function latestUpdateState(elementId) {
-    let request = new XMLHttpRequest();
-    request.onreadystatechange = function () {
-        if (request.readyState === 4 && request.status === 200) {
-            let responseJsonObj = JSON.parse(this.responseText);
-            let response = "";
-            response += responseJsonObj.num_results + " total results: ";
-            response += responseJsonObj.num_actuals + " actuals, ";
-            response += responseJsonObj.num_shuffles + "+";
-            response += responseJsonObj.num_distshuffles + "+";
-            response += responseJsonObj.num_edgeshuffles + "+";
-            response += responseJsonObj.num_edge04shuffles + "+";
-            response += responseJsonObj.num_edge08shuffles + "+";
-            response += responseJsonObj.num_edge16shuffles + " permutations";
-            response += "<br />";
-            response += "last refreshed " + responseJsonObj.summary_date;
-            document.getElementById(elementId).innerHTML = response;
-        }
-    };
-    request.open("GET", "/gedata/REST/latest/", true);
-    request.send();
+    asyncGetJson("/gedata/REST/latest/", function(responseJsonObj) {
+        document.getElementById(elementId).innerHTML = responseJsonObj.num_results + " total results: "
+            + responseJsonObj.num_actuals + " actuals, "
+            + responseJsonObj.num_shuffles + " permutations"
+            + "<br />"
+            + "<cite>last refreshed " + responseJsonObj.summary_date + "</cite>";
+    });
 }
 
 function initUi() {
@@ -440,44 +359,21 @@ function initUi() {
     latestUpdateState("latest_result_summary");
 
     // For the compare.html and comparison.html views:
-    //assessMetric('left_image', 'left_set_string', 'mantel');
-    //assessMetric('right_image', 'right_set_string', 'mantel');
     if( document.title === "Result set comparisons" ) {
         console.log( "    adding event listeners to form elements.")
-        //document.getElementById("id_left_comp").addEventListener('change', assessMetric('left_image', 'left_set_string', 'mantel'));
-        //document.getElementById("id_left_parcel").addEventListener('change', assessMetric('left_image', 'left_set_string', 'mantel'));
-        //document.getElementById("id_left_split").addEventListener('change', assessMetric('left_image', 'left_set_string', 'mantel'));
-        //document.getElementById("id_left_train_mask").addEventListener('change', assessMetric('left_image', 'left_set_string', 'mantel'));
-        //document.getElementById("id_left_algo").addEventListener('change', assessMetric('left_image', 'left_set_string', 'mantel'));
-        //document.getElementById("id_right_comp").addEventListener('change', assessMetric('right_image', 'right_set_string', 'mantel'));
-        //document.getElementById("id_right_parcel").addEventListener('change', assessMetric('right_image', 'right_set_string', 'mantel'));
-        //document.getElementById("id_right_split").addEventListener('change', assessMetric('right_image', 'right_set_string', 'mantel'));
-        //document.getElementById("id_right_train_mask").addEventListener('change', assessMetric('right_image', 'right_set_string', 'mantel'));
-        //document.getElementById("id_right_algo").addEventListener('change', assessMetric('right_image', 'right_set_string', 'mantel'));
     } else if ( document.title === "Compare result sets" ) {
         document.getElementById("id_left_set").addEventListener('change', assessMetric('left_image', 'id_left_set', 'mantel'));
         document.getElementById("id_right_set").addEventListener('change', assessMetric('right_image', 'id_right_set', 'mantel'));
     }
 
     // This is supposed to manage highlighting the active menu item, but doesn't work. One day I'll debug it.
-
     let navItems = document.getElementsByClassName("nav-item");
     for( i = 0; i < navItems.length; i++ ) {
-        navItems[i].addEventListener('click', function(){
-            navChildren = document.getElementsByClassName("nav-item active");
-            for( j = 0; j < navChildren.length; j++ ) {
-                navChildren[j].classList.remove("active");
-                console.log("Removing active from " + navChildren[j].id)
-            }
-            this.classList.add("active");
-            console.log("Adding active to " + navChildren[j].id)
-
-        });
+        navItems[i].classList.remove("active");
     }
-    // $(".nav-item .nav-link").on("click", function(){
-    //     $(".nav-item").find(".active").removeClass("active");
-    //     $(this).addClass("active");
-    // });
+    // 'this' is the window object, which doesn't need an "active" class added to it.
+    // This code should match the loaded page with the <a> element within the navitem to add "active" to.
+    // this.classList.add("active");
 
     console.log("  completed initing GE Data Manager UI (in main.js)");
 }
@@ -567,17 +463,11 @@ function fillInventoryTable() {
 
                             if (document.getElementById(idString)) {
                                 // The ajax request asks django to query the database for it.
-                                let request = new XMLHttpRequest();
-                                request.onreadystatechange = function () {
-                                    if (request.readyState === 4 && request.status === 200) {
-                                        let responseJsonObj = JSON.parse(this.responseText);
-                                        if (responseJsonObj.signature === idString) {
-                                            inventory_td_contents(responseJsonObj);
-                                        }
+                                asyncGetJson("/gedata/REST/inventory/" + idString, function(responseJsonObj) {
+                                    if (responseJsonObj.signature === idString) {
+                                        inventory_td_contents(responseJsonObj);
                                     }
-                                };
-                                request.open("GET", "/gedata/REST/inventory/" + idString, true);
-                                request.send();
+                                });
                             }
                         }
                     }
