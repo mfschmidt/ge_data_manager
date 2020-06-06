@@ -8,6 +8,7 @@ class PushResult(models.Model):
     """ Each run of PyGEST has many features. They are recorded in the PushResult class. """
 
     # Index for rapid searching of inventory
+    sourcedata = models.CharField(db_index=True, max_length = 128, default="")
     descriptor = models.CharField(db_index=True, max_length = 16, default="")
 
     # File information
@@ -25,7 +26,8 @@ class PushResult(models.Model):
     duration = models.IntegerField()
 
     # Data preparation and execution details
-    shuffle = models.CharField(db_index=True, max_length = 16)  # 'derivatives', 'shuffles', 'edge08shuffles', etc.
+    shuf = models.CharField(db_index=True, max_length = 16)  # 'none', 'agno', 'be04', 'dist', etc.
+    resample = models.CharField(max_length = 16)  # 'whole', 'split-half', 'split-quarter'
     sub = models.CharField(max_length = 32)
     hem = models.CharField(max_length = 1)
     samp = models.CharField(max_length = 16)
@@ -48,13 +50,13 @@ class PushResult(models.Model):
 
     # Representations
     def __str__(self):
-        if self.shuffle == "derivatives":
-            return "{}-{} -x- {} to {} via {}".format(
-                self.parby, self.splby, self.comp, self.tgt, self.algo
+        if self.shuf == "none":
+            return "{}-{} -x- {} to {} via {}, {}, {}mm".format(
+                self.parby, self.splby, self.comp, self.tgt, self.algo, self.batch, self.mask
             )
         else:
-            return "{}: {}-{} -x- {} to {} via {}, seed={}".format(
-                self.shuffle, self.parby, self.splby, self.comp, self.tgt, self.algo, self.seed,
+            return "{}: {}-{} -x- {} to {} via {}, {}, {}mm, seed={}".format(
+                self.shuf, self.parby, self.splby, self.comp, self.tgt, self.algo, self.batch, self.mask, self.seed,
             )
 
 
@@ -76,11 +78,6 @@ class ResultSummary(models.Model):
     num_results = models.IntegerField(default=0)
     num_actuals = models.IntegerField(default=0)
     num_shuffles = models.IntegerField(default=0)
-    num_distshuffles = models.IntegerField(default=0)
-    num_edgeshuffles = models.IntegerField(default=0)
-    num_edge04shuffles = models.IntegerField(default=0)
-    num_edge08shuffles = models.IntegerField(default=0)
-    num_edge16shuffles = models.IntegerField(default=0)
     num_splits = models.IntegerField(default=0)
 
     # @classmethod decorator allows this method to be called on the class, without an instance
@@ -91,11 +88,6 @@ class ResultSummary(models.Model):
             num_results = 0,
             num_actuals = 0,
             num_shuffles = 0,
-            num_distshuffles = 0,
-            num_edgeshuffles = 0,
-            num_edge04shuffles = 0,
-            num_edge08shuffles = 0,
-            num_edge16shuffles = 0,
             num_splits = 0,
         )
 
@@ -105,11 +97,6 @@ class ResultSummary(models.Model):
         json += "    \"{}\":\"{:,}\",\n".format("num_results", self.num_results)
         json += "    \"{}\":\"{:,}\",\n".format("num_actuals", self.num_actuals)
         json += "    \"{}\":\"{:,}\",\n".format("num_shuffles", self.num_shuffles)
-        json += "    \"{}\":\"{:,}\",\n".format("num_distshuffles", self.num_distshuffles)
-        json += "    \"{}\":\"{:,}\",\n".format("num_edgeshuffles", self.num_edgeshuffles)
-        json += "    \"{}\":\"{:,}\",\n".format("num_edge04shuffles", self.num_edge04shuffles)
-        json += "    \"{}\":\"{:,}\",\n".format("num_edge08shuffles", self.num_edge08shuffles)
-        json += "    \"{}\":\"{:,}\",\n".format("num_edge16shuffles", self.num_edge16shuffles)
         json += "    \"{}\":\"{:,}\"\n".format("num_splits", self.num_splits)
         json += "}"
         return json
