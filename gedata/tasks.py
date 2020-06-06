@@ -505,6 +505,7 @@ def results_as_dict(tsv_file, base_path, probe_sig_threshold=None, use_cache=Tru
     mask = bids_val('mask', tsv_file)
     norm = bids_val('norm', tsv_file)
     shuf = bids_val('shuf', tsv_file)
+    seed = extract_seed(tsv_file, "_seed-")
 
     result_dict = algorithms.run_results(tsv_file, probe_sig_threshold)
     result_dict.update({
@@ -532,8 +533,8 @@ def results_as_dict(tsv_file, base_path, probe_sig_threshold=None, use_cache=Tru
             tsv_file, base_path, own_expr=False, mask=mask, probe_significance_threshold=probe_sig_threshold),
         'train_vs_test_overlap': train_vs_test_overlap(tsv_file, probe_significance_threshold=probe_sig_threshold),
         'split': extract_seed(tsv_file, "batch-train"),
-        'seed': extract_seed(tsv_file, "_seed-"),
-        'real_tsv_from_shuffle': tsv_file.replace("shuf-" + shuf, "shuf-none"),
+        'seed': seed,
+        'real_tsv_from_shuffle': tsv_file.replace("shuf-" + shuf, "shuf-none").replace("_seed-{:05d}".format(seed), ""),
     })
 
     # Cache results to prevent repeated recalculation of the same thing.
