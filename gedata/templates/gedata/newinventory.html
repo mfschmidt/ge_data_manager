@@ -1,0 +1,67 @@
+{% extends 'gedata/base.html' %}
+
+{% block content %}
+
+{% regroup object_list by sourcedata as sourcedata_list %}
+
+{% for sourcedata in sourcedata_list %}
+    <h2>{{ sourcedata.grouper }}</h2>
+    <table style="border: solid gray 1px; width: 100%;">
+    {% regroup sourcedata.list by resample as resample_list %}
+    {% for resample in resample_list %}
+        <tr>
+        {% regroup sourcedata.list by mask as mask_list %}
+        {% for mask in mask_list %}
+            <th style="min-width: 16%;">
+                <span style="float: left;">
+                    {% if mask.grouper == "00" %}Unmasked{% else %}{{ mask.grouper }}mm mask{% endif %}
+                </span>
+            <br />
+                <span style="float: right;">
+                    <a href="#"><i class='fas fa-dna fa-sm'></i></a>
+                    <a href="#"><i class='fas fa-abacus fa-sm'></i></a>
+                    <a href="#"><i class='fas fa-file-invoice fa-sm'></i></a>
+                </span>
+            </th>
+        {% endfor %}
+    {% endfor %}
+    {% for resample in resample_list %}
+        <tr>
+        {% regroup sourcedata.list by mask as mask_list %}
+        {% for mask in mask_list %}
+            <td><ul>
+            {% regroup mask.list by shuf as shuf_list %}
+            {% for shuf in shuf_list %}
+                <li>
+                    {{ shuf.list|length }} {{ shuf.grouper }}{{ shuf.list|length|pluralize }}
+                </li>
+            {% endfor %}
+            </ul></td>
+        {% endfor %}
+        </tr>
+    {% endfor %}
+    {% for resample in resample_list %}
+        <tr>
+        {% regroup sourcedata.list by mask as mask_list %}
+        {% for mask in mask_list %}
+            <td style="text-align: right;">
+                <span style="float: left;" id="spinner_{{ mask.list.0.descriptor }}">
+                </span>
+                <span style="float: right;">
+                    <!-- descriptor needs to be like 'hcpww16ss4' -->
+                    <button class="btn td_button" onclick="assessEverything('{{ mask.list.0.descriptor }}');">
+                        <i class='fas fa-running fa-sm'></i>
+                    </button>
+                    <button class="btn td_button" onclick="removeEverything('{{ mask.list.0.descriptor }}');">
+                        <i class='fas fa-trash fa-sm' style="color: red;"></i>
+                    </button>
+                </span>
+                <br />
+            </td>
+        {% endfor %}
+        </tr>
+    {% endfor %}
+    </table>
+{% endfor %}
+
+{% endblock %}
