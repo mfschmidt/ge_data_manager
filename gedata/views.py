@@ -6,9 +6,9 @@ from django.http import HttpResponse
 from django.shortcuts import render
 from django.views import generic
 
-from ge_data_manager.celery import celery_id_from_name, celery_plots_in_progress
+from ge_data_manager.celery import celery_id_from_name, celery_tasks_in_progress
 
-from .tasks import clear_jobs, collect_jobs, interpret_descriptor, comp_from_signature
+from .tasks import clear_jobs, interpret_descriptor, gather_results
 from .tasks import assess_mantel, assess_overlap, assess_performance, assess_everything, just_genes
 from .tasks import clear_macro_caches, clear_micro_caches
 from .models import PushResult, ResultSummary
@@ -50,17 +50,27 @@ class ResultsView(generic.ListView):
         return context
 
     def get_queryset(self):
-        return PushResult.objects.filter(shuffle='derivatives')
+        return PushResult.objects.filter(shuf='none')
+
+
+class NewInventoryView(generic.ListView):
+    model = PushResult
+    template_name = "gedata/newinventory.html"
+
+    # Order by reverse comp (hcp, then fn), reverse pby&sby (ww, gg), reverse split (4*, then 2*)
+    # Just coincidentally, -shuf works for ('none', 'dist', 'be04', 'agno') but may break later and require more code.
+    ordering = ['-comp', 'resample', '-splby', 'mask', '-shuf', 'split', 'seed']
+
+    # Returns self.object_list to the template.
+
 
 class InventoryView(generic.ListView):
     model = PushResult
     template_name = 'gedata/inventory.html'
 
+    # Override django view function, return context for display
     def get_context_data(self, **kwargs):
-        base_str_n = "<ul><li>{n_none:,} real</li>"
-        for permutation in ["agno", "dist", "edge", "be04", "be08", "be16", ]:
-            base_str_n += "<li>{n_" + permutation + ":,} " + permutation + "-</li>"
-        base_str_n += "</ul>"
+        base_str_n = "{n_none:,} real, {n_shuf:,} permutations"
 
         def span_str(r_id, metric, ext, icon, threshold=""):
             """ Return the html <span ...><a href=...><i ...></i></a></span> for a particular item. """
@@ -108,7 +118,7 @@ class InventoryView(generic.ListView):
                                 elif xv == '4':
                                     min_split = 400
                                     max_split = 499
-                                rid = "{}{}{}{}{}{}{}".format(c, p, s, m, 's', nrm, xv)
+                                rid = "{}{}{}{}{}{}{}".format(image_c, p, s, m, 's', nrm, xv)
                                 final_queryset = initial_queryset.filter(
                                     descriptor=rid,
                                 )
@@ -126,29 +136,22 @@ class InventoryView(generic.ListView):
                                 buttons = " ".join([
                                     "<span id=\"inventory_string\" style=\"display: none;\"></span>",
                                     "<button class=\"btn\" onclick=\"{}\">{}</button>".format(
-                                        "assessEverything('image_{}', 'inventory_string', '{}');".format(rid, rid),
+                                        "assessEverything('{}');".format(rid),
                                         "<i class='fas fa-abacus'></i>",
                                     ),
                                     "<button class=\"btn\" onclick=\"{}\">{}</button>".format(
-                                        "assessJustGenes('image_{}', 'inventory_string', '{}');".format(rid, rid),
+                                        "assessJustGenes('{}');".format(rid),
                                         "<i class='fas fa-dna'></i>",
                                     ),
                                     "<button class=\"btn\" onclick=\"{}\">{}</button>".format(
-                                        "removeEverything('image_{}', '{}');".format(rid, rid),
+                                        "removeEverything('{}');".format(rid, rid),
                                         "<i class='fas fa-trash'></i>",
                                     ),
-                                    "<div id=\"image_{}\"><span class=\"leave_blank\"></span></div>".format(rid),
+                                    "<div id=\"spinner_{}\"><span class=\"leave_blank\"></span></div>".format(rid),
                                 ])
+                                n_none = len(final_queryset.filter(shuf="none"))
                                 context[rid] = " ".join([
-                                    base_str_n.format(
-                                        n_none=len(final_queryset.filter(shuffle="derivatives")),
-                                        n_agno=len(final_queryset.filter(shuffle="shuffles")),
-                                        n_dist=len(final_queryset.filter(shuffle="distshuffles")),
-                                        n_edge=len(final_queryset.filter(shuffle="edgeshuffles")),
-                                        n_be04=len(final_queryset.filter(shuffle="edge04shuffles")),
-                                        n_be08=len(final_queryset.filter(shuffle="edge08shuffles")),
-                                        n_be16=len(final_queryset.filter(shuffle="edge16shuffles")),
-                                    ),
+                                    base_str_n.format(n_none=n_none, n_shuf=len(final_queryset) - n_none,),
                                     span_str(rid, "performance", "png", "fa-chart-line"), "<br />",
                                     span_strings, "<br />",
                                     "<div style=\"text-align: right;\">", buttons, "</div>"
@@ -159,20 +162,21 @@ class InventoryView(generic.ListView):
         return context
 
     def get_queryset(self):
-        return PushResult.objects.filter(shuffle='derivatives')
+        return PushResult.objects.filter(shuf='none')
+
 
 def rest_inventory(request, signature):
     """ From an inventory id, like 'hcpww00s', return four-part inventory json. """
 
     comp, parby, splby, mask, algo, phase, opposite_phase, relevant_results_queryset = interpret_descriptor(signature)
     sign_string = "\"{}\":\"{}\"".format("signature", signature)
-    none_string = "\"{}\":\"{}\"".format("none", len(relevant_results_queryset.filter(shuffle="derivatives")))
-    agno_string = "\"{}\":\"{}\"".format("agno", len(relevant_results_queryset.filter(shuffle="shuffles")))
-    dist_string = "\"{}\":\"{}\"".format("dist", len(relevant_results_queryset.filter(shuffle="distshuffles")))
-    edge_string = "\"{}\":\"{}\"".format("edge", len(relevant_results_queryset.filter(shuffle="edgeshuffles")))
-    be04_string = "\"{}\":\"{}\"".format("be04", len(relevant_results_queryset.filter(shuffle="edge04shuffles")))
-    be08_string = "\"{}\":\"{}\"".format("be08", len(relevant_results_queryset.filter(shuffle="edge08shuffles")))
-    be16_string = "\"{}\":\"{}\"".format("be16", len(relevant_results_queryset.filter(shuffle="edge16shuffles")))
+    none_string = "\"{}\":\"{}\"".format("none", len(relevant_results_queryset.filter(shuf="none")))
+    agno_string = "\"{}\":\"{}\"".format("agno", len(relevant_results_queryset.filter(shuf="agno")))
+    dist_string = "\"{}\":\"{}\"".format("dist", len(relevant_results_queryset.filter(shuf="dist")))
+    edge_string = "\"{}\":\"{}\"".format("edge", len(relevant_results_queryset.filter(shuf="edge")))
+    be04_string = "\"{}\":\"{}\"".format("be04", len(relevant_results_queryset.filter(shuf="be04")))
+    be08_string = "\"{}\":\"{}\"".format("be08", len(relevant_results_queryset.filter(shuf="be08")))
+    be16_string = "\"{}\":\"{}\"".format("be16", len(relevant_results_queryset.filter(shuf="be16")))
     return HttpResponse(
         "{\n    " + ",\n    ".join(
             [sign_string, none_string, agno_string, dist_string, edge_string, be04_string, be08_string, be16_string, ]
@@ -186,92 +190,52 @@ def rest_refresh(request, job_name):
     """
 
     jobs_id = celery_id_from_name(job_name)
-    plots_in_progress = celery_plots_in_progress()
+    tasks_in_progress = celery_tasks_in_progress()
+    task_handle = job_name.rsplit("_", 1)[1]
 
-    # print("  in rest_refresh, job is {}, id is {}.".format(job_name, jobs_id))
+    print("  in rest_refresh, job is {}, id is {}.".format(job_name, jobs_id))
 
-    if job_name in ["collect_jobs", "update_jobs", ]:
+    def handle_task(fn):
+        if task_handle in tasks_in_progress:
+            print("DUPE: (job_name: {}, task_handle: {}) requested, but is already being worked on.".format(
+                job_name, task_handle
+            ))
+            return jobs_id
+        else:
+            print("NEW: rest_refresh got job '{}', no id returned. New assessment.".format(job_name))
+            for plot in tasks_in_progress:
+                print("     already building {}".format(plot))
+            celery_result = fn.delay(job_name.rsplit('_', 1)[0].lower(), data_root="/data")
+            print("     new id for '{}' is '{}'.".format(job_name, celery_result.task_id))
+            return celery_result.task_id
+
+
+    if job_name == "global_refresh":
         if jobs_id is None:
-            print("NEW: rest_refresh got job '{}', no id returned. Re-building results database.".format(job_name))
-            if job_name == "collect_jobs":
-                clear_jobs()
-                celery_result = collect_jobs.delay("/data", rebuild=True)
-            else:
-                celery_result = collect_jobs.delay("/data", rebuild=False)
+            print("NEW: Starting a refresh of all data")
+            celery_result = gather_results.delay("/data")
+            print("     Submitted gather and populate of results (id={}).".format(celery_result.task_id))
             jobs_id = celery_result.task_id
-            print("     new id for '{}' is '{}'.".format(job_name, jobs_id))
-    elif "justgenes" in job_name.rsplit('_', 1)[1]:
-        if job_name in plots_in_progress:
-            print("DUPE: {} requested, but is already being worked on.".format(job_name))
-        else:
-            print("NEW: rest_refresh got job '{}', no id returned. Just redo the genes.".format(job_name))
-            for plot in plots_in_progress:
-                print("     already building {}".format(plot))
-            celery_result = just_genes.delay(job_name.rsplit('_', 1)[0].lower(), data_root="/data")
+    elif job_name == "global_clear":
+        if jobs_id is None:
+            print("NEW: Starting a clear of all data")
+            celery_result = clear_jobs.delay()
+            print("     Submitted result clear-out (id={}).".format(celery_result.task_id))
             jobs_id = celery_result.task_id
-            print("     new id for '{}' is '{}'.".format(job_name, jobs_id))
-    elif "mantel" in job_name.rsplit('_', 1)[1]:
-        if job_name in plots_in_progress:
-            print("DUPE: {} requested, but is already being worked on.".format(job_name))
-        else:
-            print("NEW: rest_refresh got job '{}', no id returned. New Mantel assessment.".format(job_name))
-            for plot in plots_in_progress:
-                print("     already building {}".format(plot))
-            celery_result = assess_mantel.delay(job_name.rsplit('_', 1)[0].lower(), data_root="/data")
-            jobs_id = celery_result.task_id
-            print("     new id for '{}' is '{}'.".format(job_name, jobs_id))
-    elif "everything" in job_name.rsplit('_', 1)[1]:
-        if job_name in plots_in_progress:
-            print("DUPE: {} requested, but is already being worked on.".format(job_name))
-        else:
-            print("NEW: rest_refresh got job '{}', no id returned. New assessment of everything.".format(job_name))
-            for plot in plots_in_progress:
-                print("     already building {}".format(plot))
-            celery_result = assess_everything.delay(job_name.rsplit('_', 1)[0].lower(), data_root="/data")
-            jobs_id = celery_result.task_id
-            print("     new id for '{}' is '{}'.".format(job_name, jobs_id))
-    elif "performance" in job_name.rsplit('_', 1)[1]:
-        if job_name in plots_in_progress:
-            print("DUPE: {} requested, but is already being worked on.".format(job_name))
-        else:
-            print("NEW: rest_refresh got job '{}', no id returned. New performance assessment.".format(job_name))
-            for plot in plots_in_progress:
-                print("     already building {}".format(plot))
-            celery_result = assess_performance.delay(job_name.rsplit('_', 1)[0].lower(), data_root="/data")
-            jobs_id = celery_result.task_id
-            print("     new id for '{}' is '{}'.".format(job_name, jobs_id))
-    elif "overlap" in job_name.rsplit('_', 1)[1]:
-        if job_name in plots_in_progress:
-            print("DUPE: {} requested, but is already being worked on.".format(job_name))
-        else:
-            print(
-                "NEW: rest_refresh got job '{}', no id returned. New overlap assessment.".format(job_name))
-            for plot in plots_in_progress:
-                print("     already building {}".format(plot))
-            celery_result = assess_overlap.delay(job_name.rsplit('_', 1)[0].lower(), data_root="/data")
-            jobs_id = celery_result.task_id
-            print("     new id for '{}' is '{}'.".format(job_name, jobs_id))
-    elif "clearmacro" in job_name.rsplit('_', 1)[1]:
-        if job_name in plots_in_progress:
-            print("DUPE: {} requested, but is already being worked on.".format(job_name))
-        else:
-            print("NEW: rest_refresh got job '{}', no id returned. New assessment of everything.".format(job_name))
-            for plot in plots_in_progress:
-                print("     already building {}".format(plot))
-            celery_result = clear_macro_caches.delay(job_name.rsplit('_', 1)[0].lower(), data_root="/data")
-            jobs_id = celery_result.task_id
-            print("     new id for '{}' is '{}'.".format(job_name, jobs_id))
-    elif "clearmicro" in job_name.rsplit('_', 1)[1]:
-        if job_name in plots_in_progress:
-            print("DUPE: {} requested, but is already being worked on.".format(job_name))
-        else:
-            print("NEW: rest_refresh got job '{}', no id returned. New assessment of everything.".format(
-                job_name))
-            for plot in plots_in_progress:
-                print("     already building {}".format(plot))
-            celery_result = clear_micro_caches.delay(job_name.rsplit('_', 1)[0].lower(), data_root="/data")
-            jobs_id = celery_result.task_id
-            print("     new id for '{}' is '{}'.".format(job_name, jobs_id))
+    elif task_handle == "justgenes":
+        jobs_id = handle_task(just_genes)
+    elif task_handle == "mantel":
+        jobs_id = handle_task(assess_mantel)
+    elif task_handle == "everything":
+        jobs_id = handle_task(assess_everything)
+    elif task_handle == "performance":
+        jobs_id = handle_task(assess_performance)
+    elif task_handle == "overlap":
+        jobs_id = handle_task(assess_overlap)
+    elif task_handle == "clearmacro":
+        jobs_id = handle_task(clear_macro_caches)
+    elif task_handle == "clearmicro":
+        jobs_id = handle_task(clear_micro_caches)
     else:
         print("I don't understand job_name '{}'".format(job_name))
 
@@ -282,22 +246,5 @@ def rest_latest(request):
     """ Return json with the latest state of the data. """
 
     r = ResultSummary.empty() if ResultSummary.objects.count() == 0 else ResultSummary.objects.latest('summary_date')
+    print("Asked about the latest status (of {}): ".format(ResultSummary.objects.count()), r.to_json())
     return HttpResponse(r.to_json())
-
-
-def inventory(request):
-    """ Render inventory """
-
-"""
-def summarize_bids(request, bids_key, bids_val):
-    return HttpResponse("<h1>{} = {} results</h1>\n<p>{} results where {} == {}.</p>".format(
-        bids_key, bids_val, 0, bids_key, bids_val
-    ))
-
-def result(request):
-    the_result = PushResult.objects.latest('end_date')
-    return HttpResponse("<h1>A result</h1>\n<p>{}</p>\n<p>{} seconds</p>".format(the_result.json_path, the_result.duration))
-
-def inventory(request):
-    return render(request, "gedata/inventory.html", context={'results_list': PushResult.objects.all()})
-"""
