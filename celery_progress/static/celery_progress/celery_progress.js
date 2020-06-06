@@ -1,19 +1,26 @@
 var CeleryProgressBar = (function () {
 
     function onSuccessDefault(progressBarElement, progressBarMessageElement) {
-        progressBarElement.style.backgroundColor = '#76ce60';
+        progressBarElement.classList.remove("progress_bar_error");
+        progressBarElement.classList.remove("progress_bar_active");
+        progressBarElement.classList.add("progress_bar_success");
         progressBarMessageElement.innerHTML = "Success!";
     }
 
     function onErrorDefault(progressBarElement, progressBarMessageElement) {
-        progressBarElement.style.backgroundColor = '#dc4f63';
-        progressBarMessageElement.innerHTML = "Uh-Oh, something went wrong!";
+        progressBarElement.classList.remove("progress_bar_success");
+        progressBarElement.classList.remove("progress_bar_active");
+        progressBarElement.classList.add("progress_bar_error");
+        progressBarMessageElement.innerHTML = "Uh-Oh! Something went wrong!";
     }
 
     function onProgressDefault(progressBarElement, progressBarMessageElement, progressBarPeakElement, progress) {
-        progressBarElement.style.backgroundColor = '#68a9ef';
+        progressBarElement.classList.remove("progress_bar_error");
+        progressBarElement.classList.remove("progress_bar_success");
+        progressBarElement.classList.add("progress_bar_active");
         progressBarElement.style.width = progress.percent + "%";
-        progressBarMessageElement.innerHTML = progress.current + ' of ' + progress.total + ' processed.';
+        progressBarElement.innerHTML = progress.current + ' of ' + progress.total + ' processed.';
+        progressBarMessageElement.innerHTML = progress.message;
         if (parseInt(progress.total) > parseInt(progressBarPeakElement.innerHTML)) {
             progressBarPeakElement.innerHTML = progress.total;
         }
@@ -24,12 +31,15 @@ var CeleryProgressBar = (function () {
         let progressBarId = options.progressBarId || 'progress-bar';
         let progressBarMessage = options.progressBarMessageId || 'progress-bar-message';
         let progressBarPeakTotal = options.progressBarPeakTotal || 'progress-bar-peak-total';
+
         let progressBarElement = options.progressBarElement || document.getElementById(progressBarId);
         let progressBarMessageElement = options.progressBarMessageElement || document.getElementById(progressBarMessage);
         let progressBarPeakElement = options.progressBarPeakElement || document.getElementById(progressBarPeakTotal);
+
         let onProgress = options.onProgress || onProgressDefault;
         let onSuccess = options.onSuccess || onSuccessDefault;
         let onError = options.onError || onErrorDefault;
+
         let pollInterval = options.pollInterval || 500;
 
         fetch(progressUrl).then(function(response) {
@@ -63,7 +73,7 @@ var CelerySpinner = (function () {
 
     function onSuccessDefault(spinnerElement, dataForLater) {
         spinnerElement.style.color = '#76ce60';
-        html_for_smile = '<div style="text-align: center;"><span class="fa-4x">';
+        html_for_smile = '<div style="text-align: center;"><span class="fa-2x">';
         html_for_smile += '<i class="fa fa-smile"></i>';
         html_for_smile += '</span></div>';
         spinnerElement.innerHTML = html_for_smile;
@@ -71,7 +81,7 @@ var CelerySpinner = (function () {
 
     function onErrorDefault(spinnerElement) {
         spinnerElement.style.color = '#dc4f63';
-        html_for_failure = '<div style="text-align: center;"><span class="fa-4x">';
+        html_for_failure = '<div style="text-align: center;"><span class="fa-2x">';
         html_for_failure += '<i class="fa fa-poo-storm"></i>';
         html_for_failure += '</span></div>';
         spinnerElement.innerHTML = html_for_failure;
@@ -100,8 +110,8 @@ var CelerySpinner = (function () {
         if(alreadyStarted === "False") {
             // Setup that only needs to happen once: (repeated code lives in onProgress/onProgressDefault
             spinnerElement.style.color = '#68a9ef';
-            html_for_spinner = '<div style="text-align: center;"><span class="fa-stack fa-4x">';
-            html_for_spinner += '<i class="fa fa-spinner fa-spin fa-stack-2x"></i>';
+            html_for_spinner = '<div style="text-align: center;"><span class="fa-stack fa-2x">';
+            html_for_spinner += '<i class="fa fa-spinner fa-spin fa-stack-1x"></i>';
             html_for_spinner += '<strong id="' + spinnerInnerId + '" class="fa-stack-1x pct_text"></strong>';
             html_for_spinner += '</span>';
             html_for_spinner += '<p id="' + spinnerMessageId + '"></p></div>';
