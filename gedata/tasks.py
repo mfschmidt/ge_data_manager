@@ -748,18 +748,22 @@ def calculate_group_stats(
     """ Using meta-data from each result, calculate statistics between results and about the entire group. """
 
     progress_recorder.set_progress(progress_from, 100, "Step 2/3<br />1. Within-shuffle overlap")
-    post_file = os.path.join(data_root, "plots", "cache", "{}_summary_group.df".format(rdict['descriptor']))
-    if use_cache and os.path.isfile(post_file):
-        """ Load results from a cached file, if possible"""
-        print("Loading individual data from cache, {}".format(post_file))
-        rdf = pickle.load(open(post_file, 'rb'))
-    else:
-        """ Calculate similarity within split-halves and within shuffle-seeds. """
-        n = len(set(rdf['shuf']))
-        for i, shuffle in enumerate(list(set(rdf['shuf']))):
-            """ This explores the idea of viewing similarity between same-split-seed runs and same-shuffle-seed runs
-                vs all shuffled runs of the type. All three of these are "internal" or "intra-list" overlap.
-            """
+    """ Calculate similarity within split-halves and within shuffle-seeds. """
+    n = len(set(rdf['shuf']))
+    for i, shuffle in enumerate(list(set(rdf['shuf']))):
+        """ This explores the idea of viewing similarity between same-split-seed runs and same-shuffle-seed runs
+            vs all shuffled runs of the type. All three of these are "internal" or "intra-list" overlap.
+        """
+
+        # If these data were cached, load them rather than re-calculate.
+        post_file = os.path.join(data_root, "plots", "cache", "{}_summary_group_{}.df".format(
+            rdict['descriptor'], shuffle
+        ))
+        if use_cache and os.path.isfile(post_file):
+            """ Load results from a cached file, if possible"""
+            print("Loading individual data from cache, {}".format(post_file))
+            rdf = pickle.load(open(post_file, 'rb'))
+        else:
             shuffle_mask = rdf['shuf'] == shuffle
             local_df = rdf.loc[shuffle_mask, :]
             local_n = len(local_df)
@@ -828,8 +832,9 @@ def calculate_group_stats(
                     algorithms.kendall_tau([x.path, x.real_tsv_from_shuffle]), axis=1
                 )
 
-        print("Pickling {}".format(post_file))
-        rdf.to_pickle(post_file)
+            print("Pickling {}".format(post_file))
+            rdf.to_pickle(post_file)
+
     progress_recorder.set_progress(progress_to, 100, "Step 2/3<br />Similarity calculated")
 
     return rdf
@@ -951,6 +956,17 @@ def assess_everything(self, plot_descriptor, data_root="/data"):
     n = 6
 
     """ 3. Plot aggregated data. """
+    plot_title = "Mantels: {}s, split by {}, {}-masked, {}-ranked, {}-normed, by {}, top-{}".format(
+        rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], rdict['norm'], plot_descriptor[:3].upper(),
+        'peak' if rdict['threshold'] is None else rdict['threshold']
+    )
+    progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3<br />Over-Plotting fig 2")
+    f_over, axes = plot_all_train_vs_test(rdf, title=plot_title, fig_size=(12, 6), y_min=-0.15, y_max=0.50)
+    f_over.savefig(os.path.join(data_root, "plots", "{}_f_over-plot-fig-2.png".format(plot_descriptor.lower())))
+    i += 1
+    dt_down03 = datetime.now()
+    print("Figure 2 (overplot) generated in [{}]".format(len(rdf), str(dt_down03 - dt_down02)))
+
     plot_title = "Mantels: {}s, split by {}, {}-masked, {}-ranked, {}-normed, by {}, top-{}".format(
         rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], rdict['norm'], plot_descriptor[:3].upper(),
         'peak' if rdict['threshold'] is None else rdict['threshold']

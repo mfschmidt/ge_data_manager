@@ -150,9 +150,11 @@ def plot_all_train_vs_test(df, title="Title", fig_size=(8, 8), y_min=None, y_max
     d = df.loc[df['shuf'] == 'be16', 'path']
     e = df.loc[df['shuf'] == 'edge', 'path']
     f = df.loc[df['shuf'] == 'dist', 'path']
-    g = df.loc[df['shuf'] == 'agno', 'path']
+    g = df.loc[df['shuf'] == 'smsh', 'path']
+    h = df.loc[df['shuf'] == 'agno', 'path']
     fig, ax_curve = plot.push_plot([
-        {'files': list(g), 'linestyle': ':', 'color': 'green'},
+        {'files': list(h), 'linestyle': ':', 'color': 'green'},
+        {'files': list(g), 'linestyle': ':', 'color': 'blue'},
         {'files': list(f), 'linestyle': ':', 'color': 'red'},
         {'files': list(e), 'linestyle': ':', 'color': 'orchid'},
         {'files': list(d), 'linestyle': ':', 'color': 'orchid'},
