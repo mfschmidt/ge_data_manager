@@ -8,7 +8,7 @@ from django.views import generic
 
 from ge_data_manager.celery import celery_id_from_name, celery_tasks_in_progress
 
-from .tasks import clear_jobs, interpret_descriptor, gather_results
+from .tasks import clear_all_jobs, interpret_descriptor, gather_results
 from .tasks import assess_mantel, assess_overlap, assess_performance, assess_everything, just_genes
 from .tasks import clear_macro_caches, clear_micro_caches
 from .models import PushResult, ResultSummary
@@ -118,7 +118,7 @@ class InventoryView(generic.ListView):
                                 elif xv == '4':
                                     min_split = 400
                                     max_split = 499
-                                rid = "{}{}{}{}{}{}{}".format(image_c, p, s, m, 's', nrm, xv)
+                                rid = "{}{}{}{}{}{}{}".format("image_c", p, s, m, 's', nrm, xv)
                                 final_queryset = initial_queryset.filter(
                                     descriptor=rid,
                                 )
@@ -213,13 +213,13 @@ def rest_refresh(request, job_name):
     if job_name == "global_refresh":
         if jobs_id is None:
             print("NEW: Starting a refresh of all data")
-            celery_result = gather_results.delay("/data")
+            celery_result = gather_results.delay(data_root="/data")
             print("     Submitted gather and populate of results (id={}).".format(celery_result.task_id))
             jobs_id = celery_result.task_id
     elif job_name == "global_clear":
         if jobs_id is None:
             print("NEW: Starting a clear of all data")
-            celery_result = clear_jobs.delay()
+            celery_result = clear_all_jobs.delay()
             print("     Submitted result clear-out (id={}).".format(celery_result.task_id))
             jobs_id = celery_result.task_id
     elif task_handle == "justgenes":
