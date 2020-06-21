@@ -95,23 +95,27 @@ def tz_aware_file_mtime(path):
 
 
 @shared_task(bind=True)
-def gather_results(self, data_path="/data"):
+def gather_results(self, pattern=None, data_root="/data"):
     """ Quickly find available files, and queue any heavy processing elsewhere.
 
     :param self: available through "bind=True", allows a reference to the celery task this function becomes a part of.
-    :param data_path: default /data, base path to all of the results
+    :param pattern: glob pattern to restrict files searched for
+    :param data_root: default /data, base path to all of the results
     """
 
     progress_recorder = ProgressRecorder(self)
     progress_recorder.set_progress(0, 100, "Looking for files")
 
     # Get a list of files to parse.
-    glob_pattern = os.path.join(data_path, "derivatives", "*", "*", "*", "*.tsv")
+    if pattern is None:
+        glob_pattern = os.path.join(data_root, "derivatives", "*", "*", "*", "*.tsv")
+    else:
+        glob_pattern = os.path.join(data_root, pattern)
     print("Starting to glob files ('{}')".format(glob_pattern))
-    sda = os.listdir(os.path.join(data_path, "derivatives"))[0]
-    sdb = os.listdir(os.path.join(data_path, "derivatives", sda))[0]
-    print(os.path.join(data_path, "derivatives", sda, sdb))
-    print(os.listdir(os.path.join(data_path, "derivatives", sda, sdb)))
+    sda = os.listdir(os.path.join(data_root, "derivatives"))[0]
+    sdb = os.listdir(os.path.join(data_root, "derivatives", sda))[0]
+    print(os.path.join(data_root, "derivatives", sda, sdb))
+    print(os.listdir(os.path.join(data_root, "derivatives", sda, sdb)))
     files = glob.glob(glob_pattern)
     print("File glob complete; discovered {:,} results".format(len(files)))
     progress_recorder.set_progress(0, len(files), "Checking files against DB")
@@ -126,11 +130,11 @@ def gather_results(self, data_path="/data"):
         else:
             new_count += 1
             f = path.split(os.sep)[-1]
-            rel_path = path[(len(data_path) + 1):(len(path) - len(f) - 1)]
+            rel_path = path[(len(data_root) + 1):(len(path) - len(f) - 1)]
             result = {
-                'data_dir': data_path,
+                'data_dir': data_root,
                 'rel_path': rel_path,
-                'path': os.path.join(data_path, rel_path),
+                'path': os.path.join(data_root, rel_path),
                 'tsv_file': f,
                 'json_file': f.replace(".tsv", ".json"),
                 'log_file': f.replace(".tsv", ".log"),
@@ -219,7 +223,7 @@ def gather_results(self, data_path="/data"):
 
 
 @shared_task(bind=True)
-def clear_jobs(self):
+def clear_all_jobs(self):
     """ Delete all results from the database, not the filesystem, and create a new summary indicating no records.
 
     :param self: available through "bind=True", allows a reference to the celery task this function becomes a part of.
@@ -232,8 +236,28 @@ def clear_jobs(self):
         summary_date=django_timezone.now(),
         num_results=0, num_actuals=0, num_shuffles=0, num_splits=0,
     )
+    print("Summary: ", s.to_json())
     s.save()
     progress_recorder.set_progress(100, 100, "Cleared")
+
+
+def clear_some_jobs(descriptor=None):
+    """ Delete all results from the database, not the filesystem, and create a new summary indicating no records.
+
+    :param descriptor: id string to specify which group's cache data will be cleared.
+    """
+    rdict = interpret_descriptor(descriptor)
+    rdict['query_set'].delete()
+    s = ResultSummary(
+        summary_date=django_timezone.now(),
+        num_results=PushResult.objects.count(),
+        num_actuals=PushResult.objects.filter(shuf='none').count(),
+        num_shuffles=0,
+        num_splits=0,
+    )
+    s.num_shuffles = s.num_results - s.num_actuals
+    print("Summary: ", s.to_json())
+    s.save()
 
 
 def comp_from_signature(signature, filename=False):
@@ -607,53 +631,51 @@ def build_descriptor(comp, splitby, mask, normalization, split, level="short"):
 
 def interpret_descriptor(descriptor):
     """ Parse the plot descriptor into parts """
-    comp = comp_from_signature(descriptor[:4])
-    parby = "glasser" if descriptor[3].lower() == "g" else "wellid"
-    splby = "glasser" if descriptor[4].lower() == "g" else "wellid"
-    mask = descriptor[5:7]
-    algo = 'once' if descriptor[7] == "o" else "smrt"
-    norm = 'srs' if ((len(descriptor) > 8) and (descriptor[8] == "s")) else "none"
-    xval = descriptor[9] if len(descriptor) > 9 else '0'
-    phase = 'train'
-    opposite_phase = 'test'
+    rdict = {
+        'descriptor': descriptor,
+        'comp': comp_from_signature(descriptor[:4]),
+        'parby': "glasser" if descriptor[3].lower() == "g" else "wellid",
+        'splby': "glasser" if descriptor[4].lower() == "g" else "wellid",
+        'mask': descriptor[5:7],
+        'algo': 'once' if descriptor[7] == "o" else "smrt",
+        'norm': 'srs' if ((len(descriptor) > 8) and (descriptor[8] == "s")) else "none",
+        'xval': descriptor[9] if len(descriptor) > 9 else '0',
+        'phase': 'train',
+        'opposite_phase': 'test',
+    }
 
     try:
-        threshold = int(descriptor[8:])
+        rdict['threshold'] = int(descriptor[8:])
     except ValueError:
         # This catches "peak" or "", both should be fine as None
-        threshold = None
+        rdict['threshold'] = None
 
     # The xval, or cross-validation sample split range indicator,
     # is '2' for splits in the 200's and '4' for splits in the 400s.
     # Splits in the 200's are split-halves; 400's are split-quarters.
     split_min = 0
     split_max = 999
-    if xval == '2':
+    if rdict['xval'] == '2':
         split_min = 200
         split_max = 299
-    if xval == '4':
+    if rdict['xval'] == '4':
         split_min = 400
         split_max = 499
-    relevant_results_queryset = PushResult.objects.filter(
-        samp="glasser", prob="fornito", algo=algo, comp=comp, parby=parby, splby=splby, mask=mask, norm=norm,
-        batch__startswith=phase, split__gte=split_min, split__lte=split_max
+    rdict['query_set'] = PushResult.objects.filter(
+        samp="glasser", prob="fornito", split__gte=split_min, split__lte=split_max,
+        algo=rdict['algo'], comp=rdict['comp'], parby=rdict['parby'], splby=rdict['splby'], mask=rdict['mask'], norm=rdict['norm'],
+        batch__startswith=rdict['phase']
     )
 
-    return {
-        'comp': comp,
-        'parby': parby,
-        'splby': splby,
-        'mask': mask,
-        'algo': algo,
-        'norm': norm,
-        'xval': xval,
-        'phase': phase,
-        'opposite_phase': opposite_phase,
-        'threshold': threshold,
-        'query_set': relevant_results_queryset,
-        'n': relevant_results_queryset.count(),
-        'descriptor': descriptor.lower(),
-    }
+    rdict['n'] = rdict['query_set'].count()
+    rdict['glob_pattern'] = os.path.join(
+        "derivatives", "sub-all_hem-A_samp-glasser_prob-fornito",
+        "parby-{parby}_splby-{splby}_batch-{phase}00{xval}*",
+        "tgt-max_algo-{algo}_shuf-*",
+        "sub-all_comp-{comp}_mask-{mask}_norm-{norm}_adj-none_seed-*.tsv"
+    ).format(**rdict)
+
+    return rdict
 
 
 def calc_ttests(row, df):
@@ -693,10 +715,46 @@ def calc_total_overlap(row, df):
 
 
 @print_duration
+def update_is_necessary(descriptor, data_root="/data"):
+    """ Figure out if there are new files to include, necessitating recalculation and cache updates, or not.
+
+    :param descriptor: An abbreviation indicating which items we are calculating
+    :param str data_root: The PYGEST_DATA base path where all PyGEST data files can be found
+    """
+
+    # Find all results in our database that match our descriptor
+    rdict = interpret_descriptor(descriptor)
+
+    # Find all files in the filesystem that match our descriptor
+    glob_pattern = os.path.join(data_root, rdict['glob_pattern'])
+    print("Starting to glob files ('{}')".format(glob_pattern))
+    files = glob.glob(glob_pattern)
+
+    print("For {}, found {} database entries and {} result files downstream of {}.".format(
+        descriptor, len(rdict['query_set']), len(files), data_root,
+    ))
+
+    print("For descriptor {}, {:,} records in database -vs- {:,} files".format(
+        descriptor, len(rdict['query_set']), len(files)
+    ))
+    return len(rdict['query_set']) < len(files), rdict
+
+
+@print_duration
 def calculate_individual_stats(
         descriptor, progress_recorder, progress_from=0, progress_to=99, data_root="/data", use_cache=True
 ):
     """ Determine the list of results necessary, and build or load a dataframe around them. """
+
+    do_update, rdict = update_is_necessary(descriptor)
+    print("Update necessary? - {}".format(do_update))
+    if do_update:
+        print("   clearing jobs (in calculate_individual_stats, because db out of date)")
+        # clear_some_jobs(descriptor)
+        print("   clearing macros (in calculate_individual_stats, because db out of date)")
+        # clear_macro_cache(descriptor, data_root=data_root)
+        print("   gathering results (in calculate_individual_stats, because db out of date)")
+        # gather_results(pattern=rdict['glob_pattern'], data_root=data_root)
 
     rdict = interpret_descriptor(descriptor)
     progress_recorder.set_progress(progress_from, progress_to, "Step 1/3<br />Finding results")
@@ -774,12 +832,17 @@ def calculate_group_stats(
             """ Calculate overlaps and such, only if there are results available to calculate. """
             if local_n > 0:
                 # Overlap and Kendall tau intra- all members of this shuffle_mask (all 32 'none' shuffles perhaps)
+                before_overlap = datetime.now()
                 rdf.loc[shuffle_mask, 'train_overlap'] = algorithms.pct_similarity_list(
                     list(local_df['path']), top=rdict['threshold']
                 )
+                before_ktau = datetime.now()
                 rdf.loc[shuffle_mask, 'train_ktau'] = algorithms.kendall_tau_list(
                     list(local_df['path']),
                 )
+                after_ktau = datetime.now()
+                print("Overlaps for {} took {}".format(shuffle, str(before_ktau - before_overlap)))
+                print("Kendall taus for {} took {}".format(shuffle, str(after_ktau - before_ktau)))
 
                 progress_recorder.set_progress(
                     (100.0 * i / n) + (progress_delta * 1), 100, "Step 2/3<br />3. {}-shuffle seeds".format(shuffle)
@@ -886,6 +949,29 @@ def clear_macro_caches(self, descriptor, progress_from=0, progress_to=100, data_
     progress_recorder.set_progress(progress_to, progress_to, "Cleared {} files".format(files_removed))
 
 
+def clear_macro_cache(descriptor, data_root="/data"):
+    """ Remove the summary caches in /data/plots/cache/*.df """
+
+    files_removed = 0
+    print("Removing plots from {} and cache files from {}.".format(
+        os.path.join(data_root, "plots"), os.path.join(data_root, "plots", "cache"),
+    ))
+
+    def print_and_remove(path, file):
+        if os.path.isfile(path) and descriptor in file:
+            print("deleting {}".format(file))
+            os.remove(path)
+            return 1
+        else:
+            return 0
+
+    for f in os.listdir(os.path.join(data_root, "plots")):
+        files_removed += print_and_remove(os.path.join(data_root, "plots", f), f)
+
+    for f in os.listdir(os.path.join(data_root, "plots", "cache")):
+        files_removed += print_and_remove(os.path.join(data_root, "plots", "cache", f), f)
+
+
 @shared_task(bind=True)
 def clear_micro_caches(self, descriptor, progress_from=0, progress_to=100):
     """ Determine the list of results necessary, and build or load a dataframe around them. """
@@ -954,6 +1040,7 @@ def assess_everything(self, plot_descriptor, data_root="/data"):
 
     i = 0  # i is the index into how many plots and reports to build, for reporting progress
     n = 6
+    plotted_shuffles = ["none", "be04", "agno", ]
 
     """ 3. Plot aggregated data. """
     plot_title = "Mantels: {}s, split by {}, {}-masked, {}-ranked, {}-normed, by {}, top-{}".format(
@@ -961,7 +1048,7 @@ def assess_everything(self, plot_descriptor, data_root="/data"):
         'peak' if rdict['threshold'] is None else rdict['threshold']
     )
     progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3<br />Over-Plotting fig 2")
-    f_over, axes = plot_all_train_vs_test(rdf, title=plot_title, fig_size=(12, 6), y_min=-0.15, y_max=0.50)
+    f_over, axes = plot_all_train_vs_test(rdf, title=plot_title, fig_size=(14, 14), y_min=-0.15, y_max=0.70)
     f_over.savefig(os.path.join(data_root, "plots", "{}_f_over-plot-fig-2.png".format(plot_descriptor.lower())))
     i += 1
     dt_down03 = datetime.now()
@@ -972,21 +1059,21 @@ def assess_everything(self, plot_descriptor, data_root="/data"):
         'peak' if rdict['threshold'] is None else rdict['threshold']
     )
     progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3<br />Plotting figure 2")
-    f_2, axes = plot_fig_2(rdf, title=plot_title, fig_size=(12, 6), y_min=-0.15, y_max=0.50)
+    f_2, axes = plot_fig_2(rdf, shuffles=plotted_shuffles, title=plot_title, fig_size=(12, 6), y_min=-0.15, y_max=0.50)
     f_2.savefig(os.path.join(data_root, "plots", "{}_fig_2.png".format(plot_descriptor.lower())))
     i += 1
     dt_down03 = datetime.now()
     print("Figure 2 generated in [{}]".format(len(rdf), str(dt_down03 - dt_down02)))
 
     progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3<br />Plotting figure 3")
-    f_3, axes = plot_fig_3(rdf, title=plot_title, fig_size=(6, 5), y_min=-0.1, y_max=0.50)
+    f_3, axes = plot_fig_3(rdf, shuffles=plotted_shuffles, title=plot_title, fig_size=(6, 5), y_min=-0.1, y_max=0.50)
     f_3.savefig(os.path.join(data_root, "plots", "{}_fig_3.png".format(plot_descriptor.lower())))
     i += 1
     dt_down04 = datetime.now()
     print("Figure 3 generated in [{}]".format(len(rdf), str(dt_down04 - dt_down03)))
 
     progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3<br />Plotting figure 4")
-    f_4, axes = plot_fig_4(rdf, title=plot_title, y_min=0.0, y_max=0.80, fig_size=(13, 5),)
+    f_4, axes = plot_fig_4(rdf, shuffles=plotted_shuffles, title=plot_title, y_min=0.0, y_max=0.80, fig_size=(13, 5),)
     f_4.savefig(os.path.join(data_root, "plots", "{}_fig_4.png".format(plot_descriptor.lower())))
     i += 1
     dt_down05 = datetime.now()
