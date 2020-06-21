@@ -33,26 +33,70 @@ def calc_hilo(min_val, max_val, df, cols_to_test):
     return lowest_possible_score, highest_possible_score
 
 
-def box_and_swarm(figure, placement, label, variable, data, high_score=1.0, orientation="v",
-                  lim=None, ps=True, cols=4, push_ordinate_to=None):
+def curve_properties(df, shuffle_name):
+    """ Return appropriate properties for curves and boxplots representing a given shuffle type.
+
+    :param pandas.DataFrame df: A dataframe with a 'path' column holding paths to result files by 'shuf'
+    :param str shuffle_name: The name of the shuffle type key
+    """
+
+    print("DEBUG: df, return value from curve_properties(df, {})".format(shuffle_name))
+    print("df is {}; has {} {}-paths.".format(df.shape, df[df['shuf'] == shuffle_name].shape, shuffle_name))
+
+    print(df.shape)
+
+    pal_dark = sns.color_palette("colorblind")
+    pal_light = [(c[0] + ((1.0 - c[0]) / 2), c[1] + ((1.0 - c[1]) / 2), c[2] + ((1.0 - c[2]) / 2)) for c in pal_dark]
+    # 0: blue, 1: orange, 2: green, 3: red, 4: violet, 5: brown, 5: pink, 6: gray, 7: yellow, 8: aqua
+
+    property_dict = {
+        "files": list(df.loc[df['shuf'] == shuffle_name, 'path']),
+        "shuf": shuffle_name,
+    }
+    if shuffle_name == "none":
+        property_dict.update({"linestyle": "-", "color": "black", "light_color": "gray", })
+    elif shuffle_name == "agno":
+        property_dict.update({"linestyle": ":", "color": pal_dark[6], "light_color": pal_light[6], })
+    elif shuffle_name == "dist":
+        property_dict.update({"linestyle": ":", "color": pal_dark[0], "light_color": pal_light[0], })
+    elif shuffle_name == "smsh":
+        property_dict.update({"linestyle": ":", "color": pal_dark[3], "light_color": pal_light[3], })
+    elif shuffle_name == "edge":
+        property_dict.update({"linestyle": ":", "color": pal_dark[2], "light_color": pal_light[2], })
+    elif shuffle_name.startswith("be"):
+        property_dict.update({"linestyle": ":", "color": pal_dark[4], "light_color": pal_light[4], })
+    else:
+        property_dict.update({"linestyle": ".", "color": "gray", "light_color": "lightgray", })
+
+    print("DEBUG: property_dict, return value from curve_properties(df, {})".format(shuffle_name))
+    print("property_dict has {} files for shuf {}".format(len(property_dict['files']), shuffle_name))
+
+    return property_dict
+
+
+def box_and_swarm(figure, placement, label, variable, data, shuffles, high_score=1.0, orientation="v",
+                  lim=None, ps=True, push_ordinate_to=None):
     """ Create an axes object with a swarm plot drawn over a box plot of the same data. """
 
-    shuffle_order = ['none', 'be04', 'agno']
-    shuffle_color_boxes = sns.color_palette(['gray', 'lightcoral', 'lightblue'])
-    shuffle_color_points = sns.color_palette(['black', 'red', 'blue'])
-    annot_columns = [
-        {'shuf': 'none', 'xo': 0.0, 'xp': 0.0},
-        {'shuf': 'be04', 'xo': 1.0, 'xp': 0.5},
-        {'shuf': 'agno', 'xo': 2.0, 'xp': 1.0},
-    ]
-    if cols == 3:
-        shuffle_order = shuffle_order[1:]
-        shuffle_color_boxes = shuffle_color_boxes[1:]
-        shuffle_color_points = shuffle_color_points[1:]
-    elif cols == 1:
-        shuffle_order = shuffle_order[0:1]
-        shuffle_color_boxes = shuffle_color_boxes[0:1]
-        shuffle_color_points = shuffle_color_points[0:1]
+    # print("DEBUG: shuffles (should be a list of strings):")
+    # print(shuffles)
+
+    annot_columns = []
+    for i, shuf in enumerate(shuffles):
+        prop = curve_properties(data, shuf)
+        prop.update({"xo": float(i), "xp": float(i * 0.5)})
+        # print("    got '{}' property for '{}'".format(type(prop), shuf))
+        annot_columns.append(prop)
+
+    # annot_columns = [
+    #     # dict.update returns None! won't work!
+    #     curve_properties(data, shuf).update({"xo": float(i), "xp": float(i * 0.5)}) for i, shuf in enumerate(shuffles)
+    # ]
+    # print("DEBUG: annot_columns (should be a list of dicts):")
+    # print("{} items in annot_columns list".format(len(annot_columns)))
+
+    shuffle_color_boxes = [d['light_color'] for d in annot_columns]
+    shuffle_color_points = [d['color'] for d in annot_columns]
 
     if push_ordinate_to is not None:
         data[variable] = data[variable] + push_ordinate_to - data[variable].max()
@@ -60,15 +104,15 @@ def box_and_swarm(figure, placement, label, variable, data, high_score=1.0, orie
     ax = figure.add_axes(placement, label=label)
     if orientation == "v":
         sns.swarmplot(data=data, x='shuf', y=variable,
-                      order=shuffle_order, palette=shuffle_color_points, size=3.0, ax=ax)
-        sns.boxplot(data=data, x='shuf', y=variable, order=shuffle_order, palette=shuffle_color_boxes, ax=ax)
+                      order=shuffles, palette=shuffle_color_points, size=3.0, ax=ax)
+        sns.boxplot(data=data, x='shuf', y=variable, order=shuffles, palette=shuffle_color_boxes, ax=ax)
         ax.set_ylabel(None)
         ax.set_xlabel(label)
         if lim is not None:
             ax.set_ylim(lim)
     else:
-        sns.swarmplot(data=data, x=variable, y='shuf', order=shuffle_order, palette=shuffle_color_points, ax=ax)
-        sns.boxplot(data=data, x=variable, y='shuf', order=shuffle_order, palette=shuffle_color_boxes, ax=ax)
+        sns.swarmplot(data=data, x=variable, y='shuf', order=shuffles, palette=shuffle_color_points, ax=ax)
+        sns.boxplot(data=data, x=variable, y='shuf', order=shuffles, palette=shuffle_color_boxes, ax=ax)
         ax.set_xlabel(None)
         ax.set_ylabel(label)
         if lim is not None:
@@ -83,7 +127,7 @@ def box_and_swarm(figure, placement, label, variable, data, high_score=1.0, orie
         except ValueError:
             global_max_y = high_score
         for i, col in enumerate(annot_columns):
-            shuffle_results = data[data['shuf'] == col['shuf']]
+            shuffle_results = data[data['shuf'] == col.get("shuf", "")]
             try:
                 # max_y = max(data[data['phase'] == 'train'][y].values)
                 local_max_y = max(shuffle_results[variable].values)
@@ -127,12 +171,13 @@ def box_and_swarm(figure, placement, label, variable, data, high_score=1.0, orie
     return ax
 
 
-def plot_all_train_vs_test(df, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
+def plot_optimization_curve_with_overlaps(df, shuffles, title="Title", fig_size=(10, 10), y_min=None, y_max=None):
     """ Plot everything from initial distributions, through training curves, to training outcomes.
         Then the results of using discovered genes in train and test sets both complete and masked.
         Then even report overlap internal to each cluster of differing gene lists.
 
         :param pandas.DataFrame df:
+        :param list shuffles: Which shuffles should be included, like ["none", "be04", "agno"]
         :param str title: The title to put on the top of the whole plot
         :param fig_size: A tuple of inches across x inches high
         :param y_min: Hard code the bottom of the y-axis
@@ -143,29 +188,11 @@ def plot_all_train_vs_test(df, title="Title", fig_size=(8, 8), y_min=None, y_max
         y_min, y_max, df, ['best', 'train_score', 'test_score', 'masked_train_score', 'masked_test_score', ]
     )
 
-    """ Plot the first pane, rising lines representing rising Mantel correlations as probes are dropped. """
-    a = df.loc[df['shuf'] == 'none', 'path']
-    b = df.loc[df['shuf'] == 'be04', 'path']
-    c = df.loc[df['shuf'] == 'be08', 'path']
-    d = df.loc[df['shuf'] == 'be16', 'path']
-    e = df.loc[df['shuf'] == 'edge', 'path']
-    f = df.loc[df['shuf'] == 'dist', 'path']
-    g = df.loc[df['shuf'] == 'smsh', 'path']
-    h = df.loc[df['shuf'] == 'agno', 'path']
-    fig, ax_curve = plot.push_plot([
-        {'files': list(h), 'linestyle': ':', 'color': 'green'},
-        {'files': list(g), 'linestyle': ':', 'color': 'blue'},
-        {'files': list(f), 'linestyle': ':', 'color': 'red'},
-        {'files': list(e), 'linestyle': ':', 'color': 'orchid'},
-        {'files': list(d), 'linestyle': ':', 'color': 'orchid'},
-        {'files': list(c), 'linestyle': ':', 'color': 'orchid'},
-        {'files': list(b), 'linestyle': ':', 'color': 'orchid'},
-        {'files': list(a), 'linestyle': '-', 'color': 'black'}, ],
-        # title="Split-half train vs test results",
-        label_keys=['shuf'],
-        fig_size=fig_size,
-        title="",
-        plot_overlaps=False,
+    """ Plot the first panel, rising lines representing rising Mantel correlations as probes are dropped. """
+
+    fig, ax_curve = plot.push_plot(
+        [curve_properties(df, shuf) for shuf in shuffles],
+        label_keys=['shuf'], fig_size=fig_size, title="", plot_overlaps=False,
     )
     # The top of the plot must be at least 0.25 higher than the highest value to make room for p-values.
     ax_curve.set_ylim(bottom=lowest_possible_score, top=highest_possible_score + 0.25)
@@ -186,7 +213,7 @@ def plot_all_train_vs_test(df, title="Title", fig_size=(8, 8), y_min=None, y_max
     curve_width = 1.0 - (4 * margin) - (2 * box_width)
     ax_peaks = box_and_swarm(
         fig, [curve_x, y_base, curve_width, peak_box_height],
-        'Peaks', 'peak', df, orientation="h", lim=ax_curve.get_xlim()
+        'Peaks', 'peak', df, shuffles, orientation="h", lim=ax_curve.get_xlim()
     )
     ax_peaks.set_xticklabels([])
 
@@ -199,14 +226,14 @@ def plot_all_train_vs_test(df, title="Title", fig_size=(8, 8), y_min=None, y_max
     """ Initial box and swarm plots """
     ax_pre = box_and_swarm(
         fig, [x_left, y_base, box_width, row_height],
-        'Complete Mantel', 'initial', df, high_score=highest_possible_score, lim=ax_curve.get_ylim()
+        'Complete Mantel', 'initial', df, shuffles, high_score=highest_possible_score, lim=ax_curve.get_ylim()
     )
     ax_pre.yaxis.tick_right()
     ax_pre.set_yticklabels([])
     ax_pre.set_ylabel('Mantel Correlation')
     ax_post = box_and_swarm(
         fig, [1.0 - box_width - margin, y_base, box_width, row_height],
-        'Peak Mantel', 'best', df, high_score=highest_possible_score, lim=ax_curve.get_ylim()
+        'Peak Mantel', 'best', df, shuffles, high_score=highest_possible_score, lim=ax_curve.get_ylim()
     )
 
     """ Bottom Row """
@@ -218,29 +245,28 @@ def plot_all_train_vs_test(df, title="Title", fig_size=(8, 8), y_min=None, y_max
     """ Train box and swarm plots """
     ax_train_complete = box_and_swarm(
         fig, [x_left + (0 * (margin + box_width)), y_base, box_width, row_height],
-        'Train unmasked', 'train_score', df, high_score=highest_possible_score, lim=ax_curve.get_ylim()
+        'Train unmasked', 'train_score', df, shuffles, high_score=highest_possible_score, lim=ax_curve.get_ylim()
     )
     ax_train_complete.yaxis.tick_right()
     ax_train_complete.set_yticklabels([])
     ax_train_complete.set_ylabel('Mantel Correlation')
     ax_train_masked = box_and_swarm(
         fig, [x_left + (1 * (margin + box_width)), y_base, box_width, row_height],
-        'Train masked', 'masked_train_score', df, high_score=highest_possible_score, lim=ax_curve.get_ylim()
+        'Train masked', 'masked_train_score', df, shuffles, high_score=highest_possible_score, lim=ax_curve.get_ylim()
     )
 
     """ Test box and swarm plots """
     ax_test_complete = box_and_swarm(
         fig, [x_left + (2 * (margin + box_width)), y_base, box_width, row_height],
-        'Test unmasked', 'test_score', df, high_score=highest_possible_score, lim=ax_curve.get_ylim()
+        'Test unmasked', 'test_score', df, shuffles, high_score=highest_possible_score, lim=ax_curve.get_ylim()
     )
     ax_test_complete.yaxis.tick_right()
     ax_test_complete.set_yticklabels([])
     ax_test_complete.set_ylabel('Mantel Correlation')
     ax_test_masked = box_and_swarm(
         fig, [x_left + (3 * (margin + box_width)), y_base, box_width, row_height],
-        'Test masked', 'masked_test_score', df, high_score=highest_possible_score, lim=ax_curve.get_ylim()
+        'Test masked', 'masked_test_score', df, shuffles, high_score=highest_possible_score, lim=ax_curve.get_ylim()
     )
-
 
     fig.text(0.50, 0.99, title, ha='center', va='top', fontsize=14)
 
@@ -249,7 +275,7 @@ def plot_all_train_vs_test(df, title="Title", fig_size=(8, 8), y_min=None, y_max
                  )
 
 
-def plot_fig_2(df, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
+def plot_all_train_vs_test(df, title="Title", fig_size=(10, 10), y_min=None, y_max=None):
     """ Plot everything from initial distributions, through training curves, to training outcomes.
         Then the results of using discovered genes in train and test sets both complete and masked.
         Then even report overlap internal to each cluster of differing gene lists.
@@ -261,18 +287,32 @@ def plot_fig_2(df, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
         :param y_max: Hard code the top of the y-axis
     """
 
+    return plot_optimization_curve_with_overlaps(
+        df, ["agno", "smsh", "dist", "be04", "none", ], title,
+        fig_size=fig_size, y_min=y_min, y_max=y_max
+    )
+
+
+def plot_fig_2(df, shuffles, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
+    """ Plot everything from initial distributions, through training curves, to training outcomes.
+        Then the results of using discovered genes in train and test sets both complete and masked.
+        Then even report overlap internal to each cluster of differing gene lists.
+
+        :param pandas.DataFrame df:
+        :param list shuffles: Which shuffle types to include
+        :param str title: If supplied, override internally generated title
+        :param fig_size: A tuple of inches across x inches high
+        :param y_min: Hard code the bottom of the y-axis
+        :param y_max: Hard code the top of the y-axis
+    """
+
     lowest_possible_score, highest_possible_score = calc_hilo(
         y_min, y_max, df, ['best', 'train_score', 'test_score', 'masked_train_score', 'masked_test_score', ]
     )
 
     """ Plot the first pane, rising lines representing rising Mantel correlations as probes are dropped. """
-    a = df.loc[df['shuf'] == 'none', 'path']
-    b = df.loc[df['shuf'] == 'be04', 'path']
-    c = df.loc[df['shuf'] == 'agno', 'path']
-    fig, ax_curve = plot.push_plot([
-        {'files': list(c), 'linestyle': ':', 'color': 'blue'},
-        {'files': list(b), 'linestyle': ':', 'color': 'red'},
-        {'files': list(a), 'linestyle': '-', 'color': 'black'}, ],
+    fig, ax_curve = plot.push_plot(
+        [curve_properties(df, shuf) for shuf in shuffles],
         # title="Split-half train vs test results",
         label_keys=['shuf', ],
         fig_size=fig_size,
@@ -297,14 +337,14 @@ def plot_fig_2(df, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
     """ Horizontal peak plot """
     ax_peaks = box_and_swarm(
         fig, [margin + 0.01, margin + main_ratio + margin, main_ratio, alt_ratio],
-        'Peaks', 'peak', df, orientation="h", lim=ax_curve.get_xlim()
+        'Peaks', 'peak', df, shuffles, orientation="h", lim=ax_curve.get_xlim()
     )
     ax_peaks.set_xticklabels([])
 
     """ Initial box and swarm plots """
     ax_post = box_and_swarm(
         fig, [margin + main_ratio + margin, margin, alt_ratio, main_ratio],
-        'Peak Mantel', 'best', df, high_score=highest_possible_score, lim=ax_curve.get_ylim()
+        'Peak Mantel', 'best', df, shuffles, high_score=highest_possible_score, lim=ax_curve.get_ylim()
     )
 
     fig.text(margin + (2.0 * main_ratio / 5.0), margin + main_ratio - 0.01, "A", ha='left', va='top', fontsize=14)
@@ -314,11 +354,13 @@ def plot_fig_2(df, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
     return fig, (ax_curve, ax_peaks, ax_post)
 
 
-def plot_fig_3(df, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
+def plot_fig_3(df, shuffles, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
     """ Plot Mantel correlation achieved in training by real and shuffled data.
         Then plot same values when trained features are applied to independent test data.
 
         :param pandas.DataFrame df:
+        :param list shuffles: Which shuffle types to include
+        :param str title: If supplied, override internally generated title
         :param fig_size: A tuple of inches across x inches high
         :param y_min: Hard code the bottom of the y-axis
         :param y_max: Hard code the top of the y-axis
@@ -337,7 +379,7 @@ def plot_fig_3(df, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
     """ Train box and swarm plots """
     ax_a = box_and_swarm(
         fig, [margin, margin * 2, ax_width, ax_height],
-        'Train unmasked', 'train_score', df, high_score=highest_possible_score,
+        'Train unmasked', 'train_score', df, shuffles, high_score=highest_possible_score,
     )
     # The top of the plot must be at least 0.25 higher than the highest value to make room for p-values.
     ax_a.set_ylim(bottom=lowest_possible_score, top=highest_possible_score + 0.25)
@@ -348,7 +390,7 @@ def plot_fig_3(df, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
     """ Test box and swarm plots """
     ax_b = box_and_swarm(
         fig, [1.0 - margin - ax_width, margin * 2, ax_width, ax_height],
-        'Test unmasked', 'test_score', df, high_score=highest_possible_score, lim=ax_a.get_ylim()
+        'Test unmasked', 'test_score', df, shuffles, high_score=highest_possible_score, lim=ax_a.get_ylim()
     )
     ax_b.yaxis.tick_left()
     # ax_b.set_ylabel('Mantel Correlation')
@@ -359,11 +401,13 @@ def plot_fig_3(df, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
     return fig, (ax_a, ax_b)
 
 
-def plot_fig_3_over_masks(df, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
+def plot_fig_3_over_masks(df, shuffles, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
     """ Plot Mantel correlation achieved in training by real and shuffled data, over all distance masks.
         Then plot same values when trained features are applied to independent test data, over all distance masks.
 
         :param pandas.DataFrame df:
+        :param list shuffles: Which shuffle types to include
+        :param str title: If supplied, override internally generated title
         :param fig_size: A tuple of inches across x inches high
         :param y_min: Hard code the bottom of the y-axis
         :param y_max: Hard code the top of the y-axis
@@ -382,7 +426,7 @@ def plot_fig_3_over_masks(df, title="Title", fig_size=(8, 8), y_min=None, y_max=
     """ Train box and swarm plots """
     ax_a = box_and_swarm(
         fig, [margin, margin * 2, ax_width, ax_height],
-        'Train unmasked', 'train_score', df, high_score=highest_possible_score,
+        'Train unmasked', 'train_score', df, shuffles, high_score=highest_possible_score,
     )
     # The top of the plot must be at least 0.25 higher than the highest value to make room for p-values.
     ax_a.set_ylim(bottom=lowest_possible_score, top=highest_possible_score + 0.25)
@@ -393,7 +437,7 @@ def plot_fig_3_over_masks(df, title="Title", fig_size=(8, 8), y_min=None, y_max=
     """ Test box and swarm plots """
     ax_b = box_and_swarm(
         fig, [1.0 - margin - ax_width, margin * 2, ax_width, ax_height],
-        'Test unmasked', 'test_score', df, high_score=highest_possible_score, lim=ax_a.get_ylim()
+        'Test unmasked', 'test_score', df, shuffles, high_score=highest_possible_score, lim=ax_a.get_ylim()
     )
     ax_b.yaxis.tick_left()
     # ax_b.set_ylabel('Mantel Correlation')
@@ -457,12 +501,13 @@ def describe_mantel(df, descriptor="", title="Title"):
     return "\n".join(d)
 
 
-def plot_overlap(df, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
+def plot_overlap(df, shuffles, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
     """ Plot everything from initial distributions, through training curves, to training outcomes.
         Then the results of using discovered genes in train and test sets both complete and masked.
         Then even report overlap internal to each cluster of differing gene lists.
 
         :param pandas.DataFrame df:
+        :param list shuffles: Which shuffle types to include
         :param str title: The title to put on the top of the whole plot
         :param fig_size: A tuple of inches across x inches high
         :param y_min: Hard code the bottom of the y-axis
@@ -490,19 +535,21 @@ def plot_overlap(df, title="Title", fig_size=(8, 8), y_min=None, y_max=None):
     df.loc[df['shuf'] == 'none', 'real_v_shuffle_overlap'] = df.loc[df['shuf'] == 'none', 'overlap_by_seed']
     ax = box_and_swarm(
         fig, [x_left, bottom, box_width, box_height],
-        'train vs shuffles', 'real_v_shuffle_overlap', df, orientation="v", ps=True
+        'train vs shuffles', 'real_v_shuffle_overlap', df, shuffles, orientation="v", ps=True
     )
     ax.set_ylim(bottom=lowest_possible_score, top=highest_possible_score)
 
     return fig, (ax, )
 
 
-def plot_fig_4(df, title="Title", fig_size=(8, 5), y_min=None, y_max=None):
+def plot_fig_4(df, shuffles, title="Title", fig_size=(8, 5), y_min=None, y_max=None):
     """ Plot everything from initial distributions, through training curves, to training outcomes.
         Then the results of using discovered genes in train and test sets both complete and masked.
         Then even report overlap internal to each cluster of differing gene lists.
 
         :param pandas.DataFrame df:
+        :param list shuffles: Which shuffle types to include
+        :param str title: If provided, override internally generated title
         :param fig_size: A tuple of inches across x inches high
         :param y_min: Hard code the bottom of the y-axis
         :param y_max: Hard code the top of the y-axis
@@ -531,25 +578,25 @@ def plot_fig_4(df, title="Title", fig_size=(8, 5), y_min=None, y_max=None):
 
     ax_a = box_and_swarm(
         fig, [margin, margin * 2, ax_width, ax_height],
-        'intra-shuffle-seed similarity', 'overlap_by_seed', df, orientation="v", ps=False
+        'intra-shuffle-seed similarity', 'overlap_by_seed', df, shuffles, orientation="v", ps=False
     )
     ax_a.set_ylim(bottom=lowest_possible_score, top=highest_possible_score)
 
     ax_b = box_and_swarm(
         fig, [margin + ax_width + gap, margin * 2, ax_width, ax_height],
-        'train vs shuffles', 'real_v_shuffle_overlap', df[df['shuf'] != 'none'], orientation="v", ps=False
+        'train vs shuffles', 'real_v_shuffle_overlap', df[df['shuf'] != 'none'], shuffles, orientation="v", ps=False
     )
     ax_b.set_ylim(ax_a.get_ylim())
 
     ax_c = box_and_swarm(
         fig, [1.0 - margin - ax_width - gap - ax_width, margin * 2, ax_width, ax_height],
-        'intra-shuffle-seed similarity', 'ktau_by_seed', df, orientation="v", ps=False
+        'intra-shuffle-seed similarity', 'ktau_by_seed', df, shuffles, orientation="v", ps=False
     )
     ax_c.set_ylim(ax_a.get_ylim())
 
     ax_d = box_and_swarm(
         fig, [1.0 - margin - ax_width, margin * 2, ax_width, ax_height],
-        'train vs shuffles', 'real_v_shuffle_ktau', df[df['shuf'] != 'none'], orientation="v", ps=False
+        'train vs shuffles', 'real_v_shuffle_ktau', df[df['shuf'] != 'none'], shuffles, orientation="v", ps=False
     )
     ax_d.set_ylim(ax_a.get_ylim())
 
