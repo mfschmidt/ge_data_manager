@@ -191,7 +191,7 @@ def plot_optimization_curve_with_overlaps(df, shuffles, title="Title", fig_size=
     """ Plot the first panel, rising lines representing rising Mantel correlations as probes are dropped. """
 
     fig, ax_curve = plot.push_plot(
-        [curve_properties(df, shuf) for shuf in shuffles],
+        [curve_properties(df, shuf) for shuf in shuffles[::-1]],
         label_keys=['shuf'], fig_size=fig_size, title="", plot_overlaps=False,
     )
     # The top of the plot must be at least 0.25 higher than the highest value to make room for p-values.
@@ -288,7 +288,7 @@ def plot_all_train_vs_test(df, title="Title", fig_size=(10, 10), y_min=None, y_m
     """
 
     return plot_optimization_curve_with_overlaps(
-        df, ["agno", "smsh", "dist", "be04", "none", ], title,
+        df, ["none", "smsh", "dist", "be04", "agno", ], title,
         fig_size=fig_size, y_min=y_min, y_max=y_max
     )
 
@@ -312,7 +312,7 @@ def plot_fig_2(df, shuffles, title="Title", fig_size=(8, 8), y_min=None, y_max=N
 
     """ Plot the first pane, rising lines representing rising Mantel correlations as probes are dropped. """
     fig, ax_curve = plot.push_plot(
-        [curve_properties(df, shuf) for shuf in shuffles],
+        [curve_properties(df, shuf) for shuf in shuffles[::-1]],
         # title="Split-half train vs test results",
         label_keys=['shuf', ],
         fig_size=fig_size,
