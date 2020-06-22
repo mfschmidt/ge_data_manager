@@ -902,7 +902,7 @@ def calculate_group_stats(
         if new_group_rdf is None:
             new_group_rdf = local_df
         else:
-            new_group_rdf.concat(local_df, axis='index')
+            new_group_rdf = pd.concat([new_group_rdf, local_df], axis='index')
 
     progress_recorder.set_progress(progress_to, 100, "Step 2/3<br />Similarity calculated")
 
