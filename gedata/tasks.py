@@ -808,6 +808,7 @@ def calculate_group_stats(
     progress_recorder.set_progress(progress_from, 100, "Step 2/3<br />1. Within-shuffle overlap")
     """ Calculate similarity within split-halves and within shuffle-seeds. """
     n = len(set(rdf['shuf']))
+    new_group_rdf = None
     for i, shuffle in enumerate(list(set(rdf['shuf']))):
         """ This explores the idea of viewing similarity between same-split-seed runs and same-shuffle-seed runs
             vs all shuffled runs of the type. All three of these are "internal" or "intra-list" overlap.
@@ -820,7 +821,7 @@ def calculate_group_stats(
         if use_cache and os.path.isfile(post_file):
             """ Load results from a cached file, if possible"""
             print("Loading individual data from cache, {}".format(post_file))
-            rdf = pickle.load(open(post_file, 'rb'))
+            local_df = pickle.load(open(post_file, 'rb'))
         else:
             shuffle_mask = rdf['shuf'] == shuffle
             local_df = rdf.loc[shuffle_mask, :]
@@ -833,11 +834,11 @@ def calculate_group_stats(
             if local_n > 0:
                 # Overlap and Kendall tau intra- all members of this shuffle_mask (all 32 'none' shuffles perhaps)
                 before_overlap = datetime.now()
-                rdf.loc[shuffle_mask, 'train_overlap'] = algorithms.pct_similarity_list(
+                local_df['train_overlap'] = algorithms.pct_similarity_list(
                     list(local_df['path']), top=rdict['threshold']
                 )
                 before_ktau = datetime.now()
-                rdf.loc[shuffle_mask, 'train_ktau'] = algorithms.kendall_tau_list(
+                local_df['train_ktau'] = algorithms.kendall_tau_list(
                     list(local_df['path']),
                 )
                 after_ktau = datetime.now()
@@ -850,17 +851,17 @@ def calculate_group_stats(
                 # For each shuffled result, compare it against same-shuffled results from the same split
                 for split in list(set(local_df['split'])):
                     # These values will all be 'nan' for unshuffled results. There's only one per split.
-                    split_mask = rdf['split'] == split
+                    split_mask = local_df['split'] == split
                     if np.sum(split_mask) > 0:
                         # For a given split (within-split, across-seeds):
                         print("    overlap and ktau of {} {}-split {}-shuffles".format(
                             np.sum(shuffle_mask & split_mask), split, shuffle
                         ))
                         # The following similarities are masked to include only one shuffle type, and one split-half
-                        rdf.loc[shuffle_mask & split_mask, 'overlap_by_split'] = algorithms.pct_similarity_list(
+                        local_df.loc[split_mask, 'overlap_by_split'] = algorithms.pct_similarity_list(
                             list(local_df.loc[split_mask, 'path']), top=rdict['threshold']
                         )
-                        rdf.loc[shuffle_mask & split_mask, 'ktau_by_split'] = algorithms.kendall_tau_list(
+                        local_df.loc[split_mask, 'ktau_by_split'] = algorithms.kendall_tau_list(
                             list(local_df.loc[split_mask, 'path']),
                         )
 
@@ -869,16 +870,16 @@ def calculate_group_stats(
                 )
                 # For each shuffled result, compare it against same-shuffled results from the same shuffle seed
                 for seed in list(set(local_df['seed'])):
-                    seed_mask = rdf['seed'] == seed
+                    seed_mask = local_df['seed'] == seed
                     if np.sum(seed_mask) > 0:
                         # For a given seed (within seed, across splits):
                         print("    overlap and ktau of {} {}-seed {}-shuffles".format(
                             np.sum(shuffle_mask & seed_mask), seed, shuffle
                         ))
-                        rdf.loc[shuffle_mask & seed_mask, 'overlap_by_seed'] = algorithms.pct_similarity_list(
+                        local_df.loc[seed_mask, 'overlap_by_seed'] = algorithms.pct_similarity_list(
                             list(local_df.loc[seed_mask, 'path']), top=rdict['threshold']
                         )
-                        rdf.loc[shuffle_mask & seed_mask, 'ktau_by_seed'] = algorithms.kendall_tau_list(
+                        local_df.loc[seed_mask, 'ktau_by_seed'] = algorithms.kendall_tau_list(
                             list(local_df.loc[seed_mask, 'path']),
                         )
 
@@ -888,19 +889,24 @@ def calculate_group_stats(
                 """ For each result in actual split-half train data, compare it to its shuffles. """
                 # Each unshuffled run will match itself only for these two, resulting in a 1.0 perfect comparison.
                 # So we overwrite them with a better comparison
-                rdf.loc[shuffle_mask, 'real_v_shuffle_overlap'] = local_df.apply(lambda x:
+                local_df['real_v_shuffle_overlap'] = local_df.apply(lambda x:
                     algorithms.pct_similarity([x.path, x.real_tsv_from_shuffle], top=rdict['threshold']), axis=1
                 )
-                rdf.loc[shuffle_mask, 'real_v_shuffle_ktau'] = local_df.apply(lambda x:
+                local_df['real_v_shuffle_ktau'] = local_df.apply(lambda x:
                     algorithms.kendall_tau([x.path, x.real_tsv_from_shuffle]), axis=1
                 )
 
             print("Pickling {}".format(post_file))
-            rdf.to_pickle(post_file)
+            local_df.to_pickle(post_file)
+
+        if new_group_rdf is None:
+            new_group_rdf = local_df
+        else:
+            new_group_rdf.concat(local_df, axis='index')
 
     progress_recorder.set_progress(progress_to, 100, "Step 2/3<br />Similarity calculated")
 
-    return rdf
+    return new_group_rdf
 
 
 @print_duration
