@@ -810,7 +810,7 @@ def calculate_group_stats(
     progress_recorder.set_progress(progress_from, 100, "Step 2/3<br />1. Within-shuffle overlap")
     """ Calculate similarity within split-halves and within shuffle-seeds. """
     n = len(set(rdf['shuf']))
-    new_group_rdf = None
+    local_dfs = []
     for i, shuffle in enumerate(list(set(rdf['shuf']))):
         """ This explores the idea of viewing similarity between same-split-seed runs and same-shuffle-seed runs
             vs all shuffled runs of the type. All three of these are "internal" or "intra-list" overlap.
@@ -901,15 +901,15 @@ def calculate_group_stats(
             print("Pickling {}".format(post_file))
             local_df.to_pickle(post_file)
 
-        if new_group_rdf is None:
-            new_group_rdf = local_df
-        else:
-            new_group_rdf = pd.concat([new_group_rdf, local_df], axis='index')
-            new_group_rdf.to_pickle("/data/plots/cache/group_out_rdf_{}-{}.df".format(i, shuffle))
+        # Whether from cache or calculation, keep a list of each separate shuffle dataframe for later concatenation.
+        local_dfs.append(local_df)
+
+    new_group_rdf = pd.concat(local_dfs, axis='index')
+    new_group_rdf.to_pickle("/data/plots/cache/group_out_rdf.df")
 
     progress_recorder.set_progress(progress_to, 100, "Step 2/3<br />Similarity calculated")
 
-    return new_group_rdf
+    return pd.concat(local_dfs, axis='index')
 
 
 @print_duration
