@@ -805,6 +805,8 @@ def calculate_group_stats(
 ):
     """ Using meta-data from each result, calculate statistics between results and about the entire group. """
 
+    rdf.to_pickle("/data/plots/cache/group_in_rdf.df")
+
     progress_recorder.set_progress(progress_from, 100, "Step 2/3<br />1. Within-shuffle overlap")
     """ Calculate similarity within split-halves and within shuffle-seeds. """
     n = len(set(rdf['shuf']))
@@ -903,6 +905,7 @@ def calculate_group_stats(
             new_group_rdf = local_df
         else:
             new_group_rdf = pd.concat([new_group_rdf, local_df], axis='index')
+            new_group_rdf.to_pickle("/data/plots/cache/group_out_rdf_{}-{}.df".format(i, shuffle))
 
     progress_recorder.set_progress(progress_to, 100, "Step 2/3<br />Similarity calculated")
 

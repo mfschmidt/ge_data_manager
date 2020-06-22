@@ -40,10 +40,10 @@ def curve_properties(df, shuffle_name):
     :param str shuffle_name: The name of the shuffle type key
     """
 
-    print("DEBUG: df, return value from curve_properties(df, {})".format(shuffle_name))
-    print("df is {}; has {} {}-paths.".format(df.shape, df[df['shuf'] == shuffle_name].shape, shuffle_name))
+    # print("DEBUG: df, return value from curve_properties(df, {})".format(shuffle_name))
+    # print("df is {}; has {} {}-paths.".format(df.shape, df[df['shuf'] == shuffle_name].shape, shuffle_name))
 
-    print(df.shape)
+    # print(df.shape)
 
     pal_dark = sns.color_palette("colorblind")
     pal_light = [(c[0] + ((1.0 - c[0]) / 2), c[1] + ((1.0 - c[1]) / 2), c[2] + ((1.0 - c[2]) / 2)) for c in pal_dark]
@@ -68,8 +68,8 @@ def curve_properties(df, shuffle_name):
     else:
         property_dict.update({"linestyle": ".", "color": "gray", "light_color": "lightgray", })
 
-    print("DEBUG: property_dict, return value from curve_properties(df, {})".format(shuffle_name))
-    print("property_dict has {} files for shuf {}".format(len(property_dict['files']), shuffle_name))
+    # print("DEBUG: property_dict, return value from curve_properties(df, {})".format(shuffle_name))
+    # print("property_dict has {} files for shuf {}".format(len(property_dict['files']), shuffle_name))
 
     return property_dict
 
