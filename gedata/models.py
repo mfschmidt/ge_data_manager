@@ -1,7 +1,9 @@
 from __future__ import absolute_import, unicode_literals
 
 from django.db import models
+from django.utils import timezone as django_timezone
 import datetime
+
 
 # Create your models here.
 class PushResult(models.Model):
@@ -82,12 +84,28 @@ class ResultSummary(models.Model):
 
     # @classmethod decorator allows this method to be called on the class, without an instance
     @classmethod
-    def empty(cls):
+    def empty(cls, timestamp=False):
+        if timestamp:
+            summary_date = django_timezone.now()
+        else:
+            summary_date = datetime.datetime.strptime("1900-01-01 00:00:00-0400", "%Y-%m-%d %H:%M:%S%z")
         return cls(
-            summary_date = datetime.datetime.strptime("1900-01-01 00:00:00-0400", "%Y-%m-%d %H:%M:%S%z"),
+            summary_date = summary_date,
             num_results = 0,
             num_actuals = 0,
             num_shuffles = 0,
+            num_splits = 0,
+        )
+
+    @classmethod
+    def current(cls):
+        n_all = PushResult.objects.count()
+        n_real = PushResult.objects.filter(shuf='none').count()
+        return cls(
+            summary_date = django_timezone.now(),
+            num_results = n_all,
+            num_actuals = n_real,
+            num_shuffles = n_all - n_real,
             num_splits = 0,
         )
 

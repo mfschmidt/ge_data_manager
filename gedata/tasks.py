@@ -2,7 +2,6 @@ from __future__ import absolute_import, unicode_literals
 from celery import shared_task
 from celery_progress.backend import ProgressRecorder
 
-import time
 from datetime import datetime
 import pytz
 
@@ -26,7 +25,7 @@ from .models import PushResult, ResultSummary
 from .plots import plot_all_train_vs_test, plot_performance_over_thresholds, plot_overlap
 from .plots import plot_fig_2, plot_fig_3, plot_fig_4
 from .plots import describe_overlap, describe_mantel
-from .genes import describe_genes
+from .genes import describe_genes, write_result_as_entrezid_ranking
 
 from .decorators import print_duration
 
@@ -35,20 +34,6 @@ class NullHandler(logging.Handler):
     def emit(self, record):
         pass
 null_handler = NullHandler()
-
-@shared_task(bind=True)
-def test_task(self, seconds):
-    """ A test task to run for a given number of seconds
-
-    :param self: available through "bind=True", allows a reference to the celery task this function becomes a part of.
-    :param seconds: How many seconds to run
-    """
-
-    progress_recorder = ProgressRecorder(self)
-    for i in range(seconds):
-        time.sleep(1)
-        progress_recorder.set_progress(i + 1, seconds)
-    return 'done'
 
 
 def json_contents(json_file):
@@ -70,7 +55,12 @@ def json_contents(json_file):
 
 
 def seconds_elapsed(elapsed):
-    """ Convert a string from the json file, like "5 days, 2:45:32.987", into integer seconds. """
+    """ Convert a string from the json file, like "5 days, 2:45:32.987", into integer seconds.
+
+    :param elapsed: string scraped from json file
+    :return: seconds represented by the elapsed string, as an integer
+    """
+
     parts = elapsed.split(":")
     if len(parts) != 3:
         return 0
@@ -89,22 +79,21 @@ def seconds_elapsed(elapsed):
 
 
 def tz_aware_file_mtime(path):
+    """ Return New_York time, with timezone, from file's last modified timestamp. """
     return pytz.timezone("America/New_York").localize(
         datetime.fromtimestamp(os.path.getmtime(path))
     )
 
 
-@shared_task(bind=True)
-def gather_results(self, pattern=None, data_root="/data"):
+def gather_results(pattern=None, data_root="/data", pr=None):
     """ Quickly find available files, and queue any heavy processing elsewhere.
 
-    :param self: available through "bind=True", allows a reference to the celery task this function becomes a part of.
     :param pattern: glob pattern to restrict files searched for
     :param data_root: default /data, base path to all of the results
+    :param pr: progress_recorder to report intermediate status.
     """
 
-    progress_recorder = ProgressRecorder(self)
-    progress_recorder.set_progress(0, 100, "Looking for files")
+    if pr: pr.set_progress(0, 100, "Looking for files")
 
     # Get a list of files to parse.
     if pattern is None:
@@ -118,7 +107,7 @@ def gather_results(self, pattern=None, data_root="/data"):
     print(os.listdir(os.path.join(data_root, "derivatives", sda, sdb)))
     files = glob.glob(glob_pattern)
     print("File glob complete; discovered {:,} results".format(len(files)))
-    progress_recorder.set_progress(0, len(files), "Checking files against DB")
+    if pr: pr.set_progress(0, len(files), "Checking filesystem against database")
 
     dupe_count = 0
     new_count = 0
@@ -198,7 +187,7 @@ def gather_results(self, pattern=None, data_root="/data"):
                 rows=0,
             )
             r.save()
-        progress_recorder.set_progress(i, len(files), "Summarizing new files")
+        if pr: pr.set_progress(i, len(files), "Summarizing new files")
 
     print("Processed {:,} files; found {:,} new results and {:,} were already in the database (now {:,}).".format(
         len(files), new_count, dupe_count, PushResult.objects.count(),
@@ -208,18 +197,18 @@ def gather_results(self, pattern=None, data_root="/data"):
     if PushResult.objects.count() > 0:
         print("Saving a summary, dated {}.".format(str(django_timezone.now())))
         print("There are {} PushResults in the database.".format(PushResult.objects.count()))
-        s = ResultSummary(
-            summary_date=django_timezone.now(),
-            num_results=PushResult.objects.count(),
-            num_actuals=PushResult.objects.filter(shuf='none').count(),
-            num_shuffles=0,
-            num_splits=0,
-        )
-        s.num_shuffles = s.num_results - s.num_actuals
+        s = ResultSummary.current()
         print("Summary: ", s.to_json())
         s.save()
     else:
         print("No PushResults, not saving a summary.")
+
+
+@shared_task(bind=True)
+def gather_results_as_task(self, pattern=None, data_root="/data"):
+    """ Celery wrapper for gather_results() """
+    progress_recorder = ProgressRecorder(self)
+    gather_results(pattern=pattern, data_root=data_root, pr=progress_recorder)
 
 
 @shared_task(bind=True)
@@ -232,10 +221,7 @@ def clear_all_jobs(self):
     progress_recorder.set_progress(0, 100, "Deleting file records (not files)")
     PushResult.objects.all().delete()
     progress_recorder.set_progress(50, 100, "Updating summaries")
-    s = ResultSummary(
-        summary_date=django_timezone.now(),
-        num_results=0, num_actuals=0, num_shuffles=0, num_splits=0,
-    )
+    s = ResultSummary.empty(timestamp=True)
     print("Summary: ", s.to_json())
     s.save()
     progress_recorder.set_progress(100, 100, "Cleared")
@@ -248,14 +234,7 @@ def clear_some_jobs(descriptor=None):
     """
     rdict = interpret_descriptor(descriptor)
     rdict['query_set'].delete()
-    s = ResultSummary(
-        summary_date=django_timezone.now(),
-        num_results=PushResult.objects.count(),
-        num_actuals=PushResult.objects.filter(shuf='none').count(),
-        num_shuffles=0,
-        num_splits=0,
-    )
-    s.num_shuffles = s.num_results - s.num_actuals
+    s = ResultSummary.current()
     print("Summary: ", s.to_json())
     s.save()
 
@@ -567,6 +546,123 @@ def results_as_dict(tsv_file, base_path, probe_sig_threshold=None, use_cache=Tru
     return result_dict
 
 
+def ready_erminej(base_path):
+    """ If ermineJ is not available, download and prepare it. """
+
+    import urllib.request as request
+    import gzip
+    import subprocess
+
+
+    # Ensure pre-requisites exist and are accessible
+    ej_path = os.path.join(base_path, "genome", "erminej")
+    os.makedirs(ej_path, exist_ok=True)
+    os.makedirs(os.path.join(ej_path, "data"), exist_ok=True)
+    ontology = {
+        'url': 'http://archive.geneontology.org/latest-termdb/go_daily-termdb.rdf-xml.gz',
+        'file': '2019-07-09-erminej_go.rdf-xml',
+    }
+    annotation = {
+        'url': 'https://gemma.msl.ubc.ca/annots/Generic_human_ncbiIds_noParents.an.txt.gz',
+        'file': '2020-04-22-erminej_human_annotation_entrezid.txt',
+    }
+    software = {
+        'url': 'http://home.pavlab.msl.ubc.ca/ermineJ/distributions/ermineJ-3.1.2-generic-bundle.zip',
+        'file': 'ermineJ-3.1.2-generic-bundle.zip',
+    }
+    for prereq in [ontology, annotation, ]:
+        if not os.path.exists(os.path.join(ej_path, prereq['file'])):
+            print("Downloading fresh {}, it didn't exist.".format(prereq['file']))
+            response = request.urlopen(prereq['url'])
+            with open(os.path.join(ej_path, prereq['file']), "wb") as f:
+                f.write(gzip.decompress(response.read()))
+    if not os.path.exists(os.path.join(ej_path, software['file'])):
+        response = request.urlopen(software['url'])
+        with open(os.path.join(ej_path, software['file']), "wb") as f:
+            data = response.read()
+            f.write(data)
+
+    # Unzip ermineJ software, if necessary
+    if not os.path.exists(os.path.join(ej_path, "ermineJ-3.1.2", "bin", "ermineJ.sh")):
+        print("Unzipping ermineJ software.")
+        p = subprocess.run(
+            ['unzip', '-u', os.path.join(ej_path, software['file']),],
+            cwd=ej_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        if p.returncode != 0:
+            print(p.stdout.decode())
+            print(p.stderr.decode())
+
+        p = subprocess.run(
+            ['chmod', "a+x", os.path.join(ej_path, "ermineJ-3.1.2", "bin", "ermineJ.sh"), ],
+            cwd=ej_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        if p.returncode != 0:
+            print(p.stdout.decode())
+            print(p.stderr.decode())
+
+    return_dict = {
+        "executable": os.path.join(ej_path, "ermineJ-3.1.2", "bin", "ermineJ.sh"),
+        "ontology": os.path.join(ej_path, ontology['file']),
+        "annotation": os.path.join(ej_path, annotation['file']),
+        "data": os.path.join(ej_path, "data"),
+        "ready": True,
+    }
+    for req_path in ["executable", "ontology", "annotation", "data", ]:
+        if not os.path.exists(return_dict[req_path]):
+            return_dict["ready"] = False
+    return return_dict
+
+
+def run_gene_ontology(tsv_file, base_path="/data"):
+    """ Run ermineJ gene ontology on one gene ordering.
+
+    :param tsv_file: full path to a PyGEST result
+    :param base_path: PyGEST data root
+    """
+
+    import subprocess
+
+
+    ej = ready_erminej(base_path)
+
+    go_path = tsv_file.replace(".tsv", ".ejgo")
+
+    rank_file = write_result_as_entrezid_ranking(tsv_file)
+
+    # Only run gene ontology if it does not yet exist.
+    print("initiating ermineJ run on '{}...{}'".format(tsv_file[:30], tsv_file[-30:]))
+    print("  'ready': {}, 'go_path': ...{}".format(ej["ready"], go_path[-36:]))
+    if ej["ready"] and not os.path.isfile(go_path):
+        p = subprocess.run(
+            [
+                ej['executable'],
+                '-d', ej["data"],
+                '--annots', ej['annotation'],
+                '--classFile', ej['ontology'],
+                '--scoreFile', rank_file,
+                '--test', 'GSR',  # Method for computing significance. GSR best for gene scores
+                '--mtc', 'FDR',  # FDR indicates Benjamini-Hochberg corrections for false discovery rate
+                '--reps', 'BEST',  # If a gene has multiple scores in input, use BEST
+                '--genesOut',  # Include gene symbols in output
+                '--minClassSize', '5',  # smallest gene set size to be considered
+                '--maxClassSize', '128',  # largest gene set size to be considered
+                '-aspects', 'BCM',  # Test against all three GO components
+                '-b', 'false',  # Big is not better, rankings are low==good
+                '--logTrans', 'false',  # If we fed p-values, we would set this to true
+                '--output', go_path,
+            ],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+
+        # Write the log file
+        with open(tsv_file.replace(".tsv", ".ejlog"), "w") as f:
+            f.write("STDOUT:\n")
+            f.write(p.stdout.decode())
+            f.write("STDERR:\n")
+            f.write(p.stderr.decode())
+
+
 def build_descriptor(comp, splitby, mask, normalization, split, level="short"):
     """ Generate a shorthand descriptor for the group a result belongs to. """
 
@@ -672,7 +768,7 @@ def interpret_descriptor(descriptor):
         "derivatives", "sub-all_hem-A_samp-glasser_prob-fornito",
         "parby-{parby}_splby-{splby}_batch-{phase}00{xval}*",
         "tgt-max_algo-{algo}_shuf-*",
-        "sub-all_comp-{comp}_mask-{mask}_norm-{norm}_adj-none_seed-*.tsv"
+        "sub-all_comp-{comp}_mask-{mask}_norm-{norm}_adj-none*.tsv"
     ).format(**rdict)
 
     return rdict
@@ -749,12 +845,13 @@ def calculate_individual_stats(
     do_update, rdict = update_is_necessary(descriptor)
     print("Update necessary? - {}".format(do_update))
     if do_update:
+        # Delete relevant database records, then rebuild them with newly discovered files.
         print("   clearing jobs (in calculate_individual_stats, because db out of date)")
-        # clear_some_jobs(descriptor)
+        clear_some_jobs(descriptor)
         print("   clearing macros (in calculate_individual_stats, because db out of date)")
-        # clear_macro_cache(descriptor, data_root=data_root)
+        clear_macro_cache(descriptor, data_root=data_root)
         print("   gathering results (in calculate_individual_stats, because db out of date)")
-        # gather_results(pattern=rdict['glob_pattern'], data_root=data_root)
+        gather_results(pattern=rdict['glob_pattern'], data_root=data_root)
 
     rdict = interpret_descriptor(descriptor)
     progress_recorder.set_progress(progress_from, progress_to, "Step 1/3<br />Finding results")
@@ -778,8 +875,10 @@ def calculate_individual_stats(
                 relevant_results.append(
                     results_as_dict(path['tsv_path'], base_path=data_root, probe_sig_threshold=rdict['threshold'])
                 )
+                run_gene_ontology(path['tsv_path'], base_path=data_root)
             else:
                 print("ERR: DOES NOT EXIST: {}".format(path['tsv_path']))
+
             complete_portion = ((i + 1) / rdict['n']) * (progress_to - progress_from)
             progress_recorder.set_progress(
                 progress_from + complete_portion, 100,
@@ -1184,7 +1283,8 @@ def assess_mantel(self, plot_descriptor, data_root="/data"):
 
     progress_recorder.set_progress(78, 100, "Generating figure 2")
     f_2, axes = plot_fig_2(
-        rdf, title="Mantels: {}s, split by {}, {}-masked, {}-ranked, {}-normed, by {}, top-{}".format(
+        rdf, shuffles=['none', 'dist', 'be04', 'agno', ],
+        title="Mantels: {}s, split by {}, {}-masked, {}-ranked, {}-normed, by {}, top-{}".format(
             rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], rdict['norm'], plot_descriptor[:3].upper(),
             'peak' if rdict['threshold'] is None else rdict['threshold']
         ),
@@ -1194,7 +1294,7 @@ def assess_mantel(self, plot_descriptor, data_root="/data"):
 
     progress_recorder.set_progress(82, 100, "Generating figure 3")
     f_3, axes = plot_fig_3(
-        rdf, title="Mantels: {}s, split by {}, {}-masked, {}-ranked, {}-normed, by {}, top-{}".format(
+        rdf, shuffles=['none', 'dist', 'be04', 'agno', ], title="Mantels: {}s, split by {}, {}-masked, {}-ranked, {}-normed, by {}, top-{}".format(
             rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], rdict['norm'], plot_descriptor[:3].upper(),
             'peak' if rdict['threshold'] is None else rdict['threshold']
         ),
@@ -1280,7 +1380,7 @@ def assess_overlap(self, plot_descriptor, data_root="/data"):
     progress_recorder.set_progress(90, 100, "Generating plot")
     print("Plotting overlaps with {} threshold(s).".format(len(set(rdf['threshold']))))
     f_overlap, axes = plot_overlap(
-        rdf,
+        rdf, shuffles=['none', 'dist', 'be04', 'agno', ],
         title="Overlaps: {}s, split by {}, {}-masked, {}-ranked, by {}, top-{}".format(
             rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], plot_descriptor[:3].upper(),
             'peak' if rdict['threshold'] is None else rdict['threshold']
@@ -1291,7 +1391,8 @@ def assess_overlap(self, plot_descriptor, data_root="/data"):
 
     progress_recorder.set_progress(92, 100, "Generating figure 4")
     f_4, axes = plot_fig_4(
-        rdf, title="Overlaps: {}s, split by {}, {}-masked, {}-ranked, {}-normed, by {}, top-{}".format(
+        rdf, shuffles=['none', 'dist', 'be04', 'agno', ],
+        title="Overlaps: {}s, split by {}, {}-masked, {}-ranked, {}-normed, by {}, top-{}".format(
             rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], rdict['norm'], plot_descriptor[:3].upper(),
             'peak' if rdict['threshold'] is None else rdict['threshold']
         ), y_min=0.0, y_max=1.0,

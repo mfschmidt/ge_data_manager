@@ -7,7 +7,7 @@ import re
 
 from pygest import algorithms
 from pygest.rawdata import miscellaneous
-from pygest.convenience import create_symbol_to_id_map, create_id_to_symbol_map, get_ranks_from_file
+from pygest.convenience import create_symbol_to_id_map, create_id_to_symbol_map, get_ranks_from_file, map_pid_to_eid
 
 from .decorators import print_duration
 
@@ -187,6 +187,22 @@ def rank_genes_respecting_shuffles(real_files, shuffle_files, shuffle_name):
     # new_df.to_csv("/data/plots/cache/_hits_" + shuffle_name + "_.csv")
 
     return new_df
+
+
+def write_result_as_entrezid_ranking(tsv_file):
+    """ Read a tsv file, and write out its results as ranked entrez_ids for ermineJ to use.
+
+    :param tsv_file: The path to a PyGEST results file
+    """
+
+    rank_file = tsv_file.replace(".tsv", ".entrez_rank")
+
+    df = pd.read_csv(tsv_file, sep="\t", index_col=None, header=0)
+    df['rank'] = df.index + 1
+    df['entrez_id'] = df['probe_id'].apply(lambda x: map_pid_to_eid(x, "fornito"))
+    df.sort_index(ascending=True).set_index('entrez_id')[['rank',]].to_csv(rank_file, sep="\t")
+
+    return rank_file
 
 
 @print_duration

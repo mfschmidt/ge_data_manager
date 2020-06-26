@@ -8,7 +8,7 @@ from django.views import generic
 
 from ge_data_manager.celery import celery_id_from_name, celery_tasks_in_progress
 
-from .tasks import clear_all_jobs, interpret_descriptor, gather_results
+from .tasks import clear_all_jobs, interpret_descriptor, gather_results_as_task
 from .tasks import assess_mantel, assess_overlap, assess_performance, assess_everything, just_genes
 from .tasks import clear_macro_caches, clear_micro_caches
 from .models import PushResult, ResultSummary
@@ -20,7 +20,7 @@ def index(request):
 
     context={
         'title': 'Gene Expression Main Page',
-        'latest_result_summary': ResultSummary.empty(),
+        'latest_result_summary': ResultSummary.empty(timestamp=False),
     }
     # if ResultSummary.objects.count() > 0:
     #     context['latest_result_summary'] = ResultSummary.objects.latest('summary_date')
@@ -213,7 +213,7 @@ def rest_refresh(request, job_name):
     if job_name == "global_refresh":
         if jobs_id is None:
             print("NEW: Starting a refresh of all data")
-            celery_result = gather_results.delay(data_root="/data")
+            celery_result = gather_results_as_task.delay(data_root="/data")
             print("     Submitted gather and populate of results (id={}).".format(celery_result.task_id))
             jobs_id = celery_result.task_id
     elif job_name == "global_clear":
@@ -245,6 +245,9 @@ def rest_refresh(request, job_name):
 def rest_latest(request):
     """ Return json with the latest state of the data. """
 
-    r = ResultSummary.empty() if ResultSummary.objects.count() == 0 else ResultSummary.objects.latest('summary_date')
+    if ResultSummary.objects.count() == 0:
+        r = ResultSummary.empty(timestamp=True)
+    else:
+        r = ResultSummary.objects.latest('summary_date')
     print("Asked about the latest status (of {}): ".format(ResultSummary.objects.count()), r.to_json())
     return HttpResponse(r.to_json())
