@@ -14,19 +14,31 @@ Run the following from the linux command line.
 
     git clone https://github.com/mfschmidt/ge_data_manager.git
     cd ge_data_manager
-    
-Either
+   
+### Create a new empty database (should automate this)
+
+    docker run --name some-postgres -e POSTGRES_PASSWORD=postgres -v /home/mike/Projects/ge_data_manager/pgdata:/var/lib/postgresql/data postgres
+
+or
+
+    # sudo -u postgres psql
+    postgres=# CREATE DATABASE _;
+    postgres=# \q;
+
+### Provide ge_data_manager access to your PyGEST data
+
+Either (Any <b>one</b> of these will allow the docker container to find your files.)
 1. Create a link to your data at <code>/var/ge_data/</code> with a command like <code>$ sudo ln -s /home/mike/ge_data /var/ge_data</code>,
 2. Copy all of your data to <code>/var/ge_data/</code>, or
 3. Edit <code>docker-compose.yml</code> to map your own <code>PYGEST_DATA</code> path to <code>/data</code>.
 
-Any <b>one</b> of these will allow the docker container to find your files. Then run the containers.
+Then run the containers.
 
     docker-compose build && docker-compose up
     
-You can now browse to <code>http://localhost:8000</code> to explore ge_data_manager.
+You can now browse to <code> http://localhost:8000 </code> to explore ge_data_manager.
 
-## Additional steps (optional)
+## Optional steps
 
 This will run on 'localhost' or '127.0.0.1' by default, but will be accessible from any address on your network. Working alone behind a firewall, no problem. But if you want to run this site while on a larger network or open to a public internet, you should change two variables in settings.py.
 
@@ -45,6 +57,10 @@ You can add yourself as a superuser, although you don't need it for anything. Th
 Use the name of the <code>gedatamanager_web</code> docker container you just started, and execute an interactive bash shell inside of it.
 
     docker exec -it gedatamanager_web_1 /bin/bash
+    
+or
+    
+    docker-compose run web /bin/bash
 
 And within that shell, in the context of the docker container, you can interact with the django sub-system.
 

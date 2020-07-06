@@ -623,10 +623,9 @@ def run_gene_ontology(tsv_file, base_path="/data"):
 
     import subprocess
 
-
     ej = ready_erminej(base_path)
 
-    go_path = tsv_file.replace(".tsv", ".ejgo")
+    go_path = tsv_file.replace(".tsv", ".ejgo_roc")
 
     rank_file = write_result_as_entrezid_ranking(tsv_file)
 
@@ -641,9 +640,9 @@ def run_gene_ontology(tsv_file, base_path="/data"):
                 '--annots', ej['annotation'],
                 '--classFile', ej['ontology'],
                 '--scoreFile', rank_file,
-                '--test', 'GSR',  # Method for computing significance. GSR best for gene scores
+                '--test', 'ROC',  # Method for computing significance. ROC best for ordinal rankings
                 '--mtc', 'FDR',  # FDR indicates Benjamini-Hochberg corrections for false discovery rate
-                '--reps', 'BEST',  # If a gene has multiple scores in input, use BEST
+                '--reps', 'BEST',  # If a gene has multiple probes/ids in input, use BEST
                 '--genesOut',  # Include gene symbols in output
                 '--minClassSize', '5',  # smallest gene set size to be considered
                 '--maxClassSize', '128',  # largest gene set size to be considered

@@ -19,7 +19,7 @@ def unique_tuples(k, enumerated=False):
     """ Return a list of tuples, containing all values matching the k key, useful for select box widgets """
 
     # Upon initial run, the database may not exist yet and trigger a ProgrammingError when queried.
-    unique_values = [] if PushResult.objects.count() == 0 else PushResult.objects.order_by().values_list(k).distinct()
+    unique_values = []   # if PushResult.objects.count() == 0 else PushResult.objects.order_by().values_list(k).distinct()
 
     vs = (('*', '*', ), )
     for i, v in enumerate(sorted(unique_values)):
