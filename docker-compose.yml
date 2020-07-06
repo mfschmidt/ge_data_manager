@@ -3,32 +3,41 @@ version: '3'
 services:
         db:
                 image: postgres
-                volumes:
-                        - ./pgdata:/var/lib/postgresql/data/
+                environment:
+                        POSTGRES_USER: postgres
+                        POSTGRES_PASSWORD: postgres
+                # volumes:
+                #         - ./pg/data:/var/lib/postgresql/data:z
+                # ports:
+                #         - "5432:5432"
         mq:
                 image: rabbitmq
         web:
-                build: .
-                command: >
-                        /bin/bash -c "rm -f /code/gedata/static/gedata/plots && ln -s /data/plots /code/gedata/static/gedata/plots &&
-                                      python manage.py makemigrations && python manage.py migrate &&
-                                      python manage.py runserver 0.0.0.0:8000"
+                build:
+                        context: .
+                        dockerfile: ./docker_web/Dockerfile
                 volumes:
-                        - /data:/data
-                        - .:/code
+                        - /data:/data:z
                 ports:
                         - "8000:8000"
                 depends_on:
                         - db
                         - mq
-        worker:
-                build: .
                 command: >
-                        /bin/bash -c "rm -f /code/gedata/static/gedata/plots && ln -s /data/plots /code/gedata/static/gedata/plots &&
-                                      celery worker --app ge_data_manager --hostname=mq --broker "amqp://guest@mq" --loglevel=INFO --events"
+                        /bin/bash -c "rm -f /code/gedata/static/gedata/plots &&
+                                ln -s /data/plots /code/gedata/static/gedata/plots &&
+                                python manage.py makemigrations --no-input && python manage.py migrate --no-input &&
+                                python manage.py runserver 0.0.0.0:8000"
+        worker:
+                build:
+                        context: .
+                        dockerfile: ./docker_worker/Dockerfile
                 volumes:
-                        - /data:/data
-                        - .:/code
+                        - /data:/data:z
                 depends_on:
                         - mq
                         - web
+                command: >
+                        /bin/bash -c "rm -f /code/gedata/static/gedata/plots &&
+                                ln -s /data/plots /code/gedata/static/gedata/plots &&
+                                celery worker --app ge_data_manager --hostname=mq --broker "amqp://guest@mq" --loglevel=INFO --events"
