@@ -33,6 +33,8 @@ from .decorators import print_duration
 class NullHandler(logging.Handler):
     def emit(self, record):
         pass
+
+
 null_handler = NullHandler()
 
 
@@ -93,7 +95,8 @@ def gather_results(pattern=None, data_root="/data", pr=None):
     :param pr: progress_recorder to report intermediate status.
     """
 
-    if pr: pr.set_progress(0, 100, "Looking for files")
+    if pr:
+        pr.set_progress(0, 100, "Looking for files")
 
     # Get a list of files to parse.
     if pattern is None:
@@ -107,7 +110,8 @@ def gather_results(pattern=None, data_root="/data", pr=None):
     print(os.listdir(os.path.join(data_root, "derivatives", sda, sdb)))
     files = glob.glob(glob_pattern)
     print("File glob complete; discovered {:,} results".format(len(files)))
-    if pr: pr.set_progress(0, len(files), "Checking filesystem against database")
+    if pr:
+        pr.set_progress(0, len(files), "Checking filesystem against database")
 
     dupe_count = 0
     new_count = 0
@@ -130,10 +134,13 @@ def gather_results(pattern=None, data_root="/data", pr=None):
             }
 
             # Gather information about each result.
-            for bids_pair in re.findall("[^\W_]+-[^\W_]*", os.path.join(result.get('path', ''), result.get('tsv_file', ''))):
+            for bids_pair in re.findall(
+                r"[^\W_]+-[^\W_]*", os.path.join(result.get('path', ''), result.get('tsv_file', ''))
+            ):
                 bids_key, bids_value = bids_pair.split("-")
                 result[bids_key] = bids_value
-            if "mask" in result and result.get("mask", "") == "none": result["mask"] = "00"
+            if "mask" in result and result.get("mask", "") == "none":
+                result["mask"] = "00"
 
             # Second, parse the key-value pairs from the json file containing processing information.
             result.update(json_contents(os.path.join(result['path'], result['json_file'])))
@@ -160,9 +167,13 @@ def gather_results(pattern=None, data_root="/data", pr=None):
                 json_path=os.path.join(result['path'], result['json_file']),
                 tsv_path=os.path.join(result['path'], result['tsv_file']),
                 log_path=os.path.join(result['path'], result['log_file']),
-                # For dates, we assume EDT (-0400) as most runs were in EDT. For those in EST, the hour makes no real difference.
-                start_date=datetime.strptime(result.get("began", "1900-01-01 00:00:00") + "-0400", "%Y-%m-%d %H:%M:%S%z"),
-                end_date=datetime.strptime(result.get("completed", "1900-01-01 00:00:00") + "-0400", "%Y-%m-%d %H:%M:%S%z"),
+                # For dates, we assume EDT (-0400) as most runs were in EDT. If EST, the hour makes no real difference.
+                start_date=datetime.strptime(
+                    result.get("began", "1900-01-01 00:00:00") + "-0400", "%Y-%m-%d %H:%M:%S%z"
+                ),
+                end_date=datetime.strptime(
+                    result.get("completed", "1900-01-01 00:00:00") + "-0400", "%Y-%m-%d %H:%M:%S%z"
+                ),
                 host=result.get("host", ""),
                 command=result.get("command", ""),
                 version=result.get("pygest version", ""),
@@ -187,7 +198,8 @@ def gather_results(pattern=None, data_root="/data", pr=None):
                 rows=0,
             )
             r.save()
-        if pr: pr.set_progress(i, len(files), "Summarizing new files")
+        if pr:
+            pr.set_progress(i, len(files), "Summarizing new files")
 
     print("Processed {:,} files; found {:,} new results and {:,} were already in the database (now {:,}).".format(
         len(files), new_count, dupe_count, PushResult.objects.count(),
@@ -553,7 +565,6 @@ def ready_erminej(base_path):
     import gzip
     import subprocess
 
-
     # Ensure pre-requisites exist and are accessible
     ej_path = os.path.join(base_path, "genome", "erminej")
     os.makedirs(ej_path, exist_ok=True)
@@ -586,7 +597,7 @@ def ready_erminej(base_path):
     if not os.path.exists(os.path.join(ej_path, "ermineJ-3.1.2", "bin", "ermineJ.sh")):
         print("Unzipping ermineJ software.")
         p = subprocess.run(
-            ['unzip', '-u', os.path.join(ej_path, software['file']),],
+            ['unzip', '-u', os.path.join(ej_path, software['file']), ],
             cwd=ej_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
         if p.returncode != 0:
@@ -758,16 +769,19 @@ def interpret_descriptor(descriptor):
         split_max = 499
     rdict['query_set'] = PushResult.objects.filter(
         samp="glasser", prob="fornito", split__gte=split_min, split__lte=split_max,
-        algo=rdict['algo'], comp=rdict['comp'], parby=rdict['parby'], splby=rdict['splby'], mask=rdict['mask'], norm=rdict['norm'],
+        algo=rdict['algo'], comp=rdict['comp'], parby=rdict['parby'], splby=rdict['splby'],
+        mask=rdict['mask'], norm=rdict['norm'],
         batch__startswith=rdict['phase']
     )
 
     rdict['n'] = rdict['query_set'].count()
+    # Files are named with mask-none rather than mask-00, so tweak that key
+    rdict['glob_mask'] = "none" if rdict['mask'] == "00" else rdict['mask']
     rdict['glob_pattern'] = os.path.join(
         "derivatives", "sub-all_hem-A_samp-glasser_prob-fornito",
         "parby-{parby}_splby-{splby}_batch-{phase}00{xval}*",
         "tgt-max_algo-{algo}_shuf-*",
-        "sub-all_comp-{comp}_mask-{mask}_norm-{norm}_adj-none*.tsv"
+        "sub-all_comp-{comp}_mask-{glob_mask}_norm-{norm}_adj-none*.tsv"
     ).format(**rdict)
 
     return rdict
@@ -887,7 +901,7 @@ def calculate_individual_stats(
         df = pd.DataFrame(relevant_results)
 
         os.makedirs(os.path.join(data_root, "plots", "cache"), exist_ok=True)
-        df.to_pickle(cache_file)
+        df.to_pickle(cache_file, protocol=4)
 
     progress_recorder.set_progress(
         progress_to - 1, 100,
@@ -903,7 +917,8 @@ def calculate_group_stats(
 ):
     """ Using meta-data from each result, calculate statistics between results and about the entire group. """
 
-    rdf.to_pickle("/data/plots/cache/group_in_rdf.df")
+    t_stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    rdf.to_pickle("/data/plots/cache/group_{}_in_rdf.df".format(t_stamp), protocol=4)
 
     progress_recorder.set_progress(progress_from, 100, "Step 2/3<br />1. Within-shuffle overlap")
     """ Calculate similarity within split-halves and within shuffle-seeds. """
@@ -927,7 +942,9 @@ def calculate_group_stats(
             local_df = rdf.loc[shuffle_mask, :]
             local_n = len(local_df)
             print("Calculating percent overlaps and Kendall taus for {} {}-shuffles".format(local_n, shuffle))
-            progress_recorder.set_progress((100.0 * i / n), 100, "Step 2/3<br />2. {}-shuffle similarity".format(shuffle))
+            progress_recorder.set_progress(
+                (100.0 * i / n), 100, "Step 2/3<br />2. {}-shuffle similarity".format(shuffle)
+            )
             progress_delta = float(progress_to - progress_from) * 0.25 / n
 
             """ Calculate overlaps and such, only if there are results available to calculate. """
@@ -989,21 +1006,25 @@ def calculate_group_stats(
                 """ For each result in actual split-half train data, compare it to its shuffles. """
                 # Each unshuffled run will match itself only for these two, resulting in a 1.0 perfect comparison.
                 # So we overwrite them with a better comparison
-                local_df['real_v_shuffle_overlap'] = local_df.apply(lambda x:
-                    algorithms.pct_similarity([x.path, x.real_tsv_from_shuffle], top=rdict['threshold']), axis=1
+                local_df['real_v_shuffle_overlap'] = local_df.apply(
+                    lambda x: algorithms.pct_similarity(
+                        [x.path, x.real_tsv_from_shuffle], top=rdict['threshold']
+                    ), axis=1
                 )
-                local_df['real_v_shuffle_ktau'] = local_df.apply(lambda x:
-                    algorithms.kendall_tau([x.path, x.real_tsv_from_shuffle]), axis=1
+                local_df['real_v_shuffle_ktau'] = local_df.apply(
+                    lambda x: algorithms.kendall_tau(
+                        [x.path, x.real_tsv_from_shuffle]
+                    ), axis=1
                 )
 
             print("Pickling {}".format(post_file))
-            local_df.to_pickle(post_file)
+            local_df.to_pickle(post_file, protocol=4)
 
         # Whether from cache or calculation, keep a list of each separate shuffle dataframe for later concatenation.
         local_dfs.append(local_df)
 
     new_group_rdf = pd.concat(local_dfs, axis='index')
-    new_group_rdf.to_pickle("/data/plots/cache/group_out_rdf.df")
+    new_group_rdf.to_pickle("/data/plots/cache/group_{}_out_rdf.df".format(t_stamp), protocol=4)
 
     progress_recorder.set_progress(progress_to, 100, "Step 2/3<br />Similarity calculated")
 
@@ -1015,7 +1036,9 @@ def write_gene_lists(rdict, rdf, progress_recorder, data_root="/data"):
     """ Rank genes and write them out as two csvs. """
     df_ranked_full, gene_description = describe_genes(rdf, rdict, progress_recorder)
     df_ranked_full.to_csv(os.path.join(data_root, "plots", "{}_ranked_full.csv".format(rdict['descriptor'])))
-    df_ranked_full[['entrez_id', ]].to_csv(os.path.join(data_root, "plots", "{}_raw_ranked.csv".format(rdict['descriptor'])))
+    df_ranked_full[['entrez_id', ]].to_csv(
+        os.path.join(data_root, "plots", "{}_raw_ranked.csv".format(rdict['descriptor']))
+    )
 
     return gene_description
 
@@ -1208,9 +1231,6 @@ def assess_everything(self, plot_descriptor, data_root="/data"):
     dt_down09 = datetime.now()
     print("Overlap descriptions generated in [{}]".format(len(rdf), str(dt_down09 - dt_down08)))
 
-    # TODO: Add csv files for ermineJ-ready scored gene files.
-    pass
-
     with open(os.path.join(data_root, "plots", "{}_report.html".format(plot_descriptor.lower())), 'w') as f:
         f.write("<h1>Mantel Correlations</h1>\n")
         f.write(mantel_description)
@@ -1267,7 +1287,9 @@ def assess_mantel(self, plot_descriptor, data_root="/data"):
 
     progress_recorder = ProgressRecorder(self)
 
-    rdict, rdf = calculate_individual_stats(plot_descriptor, progress_recorder, progress_from=0, progress_to=74, data_root=data_root)
+    rdict, rdf = calculate_individual_stats(
+        plot_descriptor, progress_recorder, progress_from=0, progress_to=74, data_root=data_root
+    )
     print("{} records for Mantel assessment.".format(len(rdf)))
 
     progress_recorder.set_progress(74, 100, "Generating plot")
@@ -1293,7 +1315,8 @@ def assess_mantel(self, plot_descriptor, data_root="/data"):
 
     progress_recorder.set_progress(82, 100, "Generating figure 3")
     f_3, axes = plot_fig_3(
-        rdf, shuffles=['none', 'dist', 'be04', 'agno', ], title="Mantels: {}s, split by {}, {}-masked, {}-ranked, {}-normed, by {}, top-{}".format(
+        rdf, shuffles=['none', 'dist', 'be04', 'agno', ],
+        title="Mantels: {}s, split by {}, {}-masked, {}-ranked, {}-normed, by {}, top-{}".format(
             rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], rdict['norm'], plot_descriptor[:3].upper(),
             'peak' if rdict['threshold'] is None else rdict['threshold']
         ),
@@ -1374,7 +1397,7 @@ def assess_overlap(self, plot_descriptor, data_root="/data"):
             rdf.loc[shuffle_mask, 'real_v_shuffle_overlap'] = rdf.loc[shuffle_mask, :].apply(
                 lambda x: algorithms.pct_similarity([x.path, x.real_tsv_from_shuffle], top=rdict['threshold']), axis=1)
 
-    rdf.to_pickle(post_file)
+    rdf.to_pickle(post_file, protocol=4)
 
     progress_recorder.set_progress(90, 100, "Generating plot")
     print("Plotting overlaps with {} threshold(s).".format(len(set(rdf['threshold']))))
@@ -1399,7 +1422,6 @@ def assess_overlap(self, plot_descriptor, data_root="/data"):
     )
     f_4.savefig(os.path.join(data_root, "plots", "{}_fig_4.png".format(plot_descriptor.lower())))
 
-
     progress_recorder.set_progress(95, 100, "Generating description")
     description = describe_overlap(
         rdf, descriptor=plot_descriptor.lower(),
@@ -1423,18 +1445,18 @@ def assess_performance(self, plot_descriptor, data_root="/data"):
     :param data_root: default /data, base path to all of the results
     """
 
-    # It's tough to pass a list of thresholds via url, so it's hard-coded here.
-    thresholds = [0, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 28, 32, 48, 64, 80,
-                  96, 128, 157, 160, 192, 224, 256, 298, 320, 352, 384, 416, 448, 480, 512, ]
     progress_recorder = ProgressRecorder(self)
-
     rdict, rdf = calculate_individual_stats(
         plot_descriptor, progress_recorder, progress_from=0, progress_to=2, data_root=data_root
     )
 
+    # It's tough to pass a list of thresholds via url, so it's hard-coded here.
+    thresholds = [0, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 28, 32, 48, 64, 80,
+                  96, 128, 157, 160, 192, 224, 256, 298, 320, 352, 384, 416, 448, 480, 512, ]
+    total_pieces = rdict['n'] * len(thresholds)
+
     # Determine an end-point, correlating to 100%
     # There are two sections: first, results * thresholds; second, overlaps, which will just have to normalize to 50/50
-    total = rdict['n'] * len(thresholds) * 2  # The *2 allows for later overlaps to constitute 50% of the reported percentage
     progress_recorder.set_progress(2, 100, "Finding results")
     print("Found {:,} results ({} {} {} {} {} {} {})".format(
         rdict['n'], "glasser", "fornito", rdict['algo'], rdict['comp'], rdict['parby'], rdict['splby'], rdict['mask']
@@ -1450,9 +1472,9 @@ def assess_performance(self, plot_descriptor, data_root="/data"):
             relevant_results = []
 
             """ Calculate (or load) stats for individual tsv files. """
-            for i, path in enumerate(rdict['query_set'].values('tsv_path')):
+            for path_idx, path in enumerate(rdict['query_set'].values('tsv_path')):
                 if os.path.isfile(path['tsv_path']):
-                    for j, threshold in enumerate(thresholds):
+                    for threshold_idx, threshold in enumerate(thresholds):
                         relevant_results.append(
                             results_as_dict(
                                 path['tsv_path'], base_path=data_root,
@@ -1460,8 +1482,8 @@ def assess_performance(self, plot_descriptor, data_root="/data"):
                             )
                         )
                         progress_recorder.set_progress(
-                            2 + ((i * len(thresholds) + j) / total) * 88, 100,
-                            "Processing {:,}/{:,} results".format(i, rdict['n'])
+                            2 + ((path_idx * len(thresholds) + threshold_idx) / (total_pieces * 2)) * 88, 100,
+                            "Processing {:,}/{:,} results".format(path_idx, rdict['n'])
                         )
                 else:
                     print("ERR: DOES NOT EXIST: {}".format(path['tsv_path']))
@@ -1469,7 +1491,9 @@ def assess_performance(self, plot_descriptor, data_root="/data"):
 
             # Just temporarily, in case debugging offline is necessary
             os.makedirs(os.path.join(data_root, "plots", "cache"), exist_ok=True)
-            rdf.to_pickle(os.path.join(data_root, "plots", "cache", "{}_ap_pre.df".format(plot_descriptor.lower())))
+            rdf.to_pickle(
+                os.path.join(data_root, "plots", "cache", "{}_ap_pre.df".format(plot_descriptor.lower())), protocol=4
+            )
 
             """ Calculate grouped stats, overlap between each tsv file and its shuffle-based 'peers'. """
             progress_recorder.set_progress(90, 100, "Generating overlap lists")
@@ -1477,19 +1501,19 @@ def assess_performance(self, plot_descriptor, data_root="/data"):
             splits = list(set(rdf['split']))
             shuffles = list(set(rdf['shuf']))
             calcs = len(splits) * len(shuffles)
-            for k, shuffle in enumerate(shuffles):
+            for shuffle_idx, shuffle in enumerate(shuffles):
                 shuffle_mask = rdf['shuf'] == shuffle
-                for l, split in enumerate(splits):
+                for split_idx, split in enumerate(splits):
                     progress_recorder.set_progress(
-                        (rdict['n'] * len(thresholds)) + int(((k * len(splits) + l) / calcs) * (rdict['n'] * len(thresholds) / 2)),
-                        total + calcs,
-                        "overlap list {}:{}/{}:{}".format(k, len(shuffles), l, len(splits))
+                        total_pieces + int(((shuffle_idx * len(splits) + split_idx) / calcs) * (total_pieces / 2)),
+                        total_pieces * 2 + calcs,
+                        "overlap list {}:{}/{}:{}".format(shuffle_idx, len(shuffles), split_idx, len(splits))
                     )
                     split_mask = rdf['split'] == split
                     # We can only do this in training data, unless we want to double the prior workload for test, too.
                     # Generate a list of lists for each file's single 'train_overlap' cell in our dataframe.
-                    # At this point, rdf is typically a (num thresholds *) 784-row dataframe of each result.tsv path and its scores.
-                    # We apply these functions to only the 'none'-shuffled rows, but pass them the shuffled rows for comparison
+                    # rdf here is typically a (num thresholds *) 784-row df of each result.tsv path and its scores.
+                    # We apply functions to the 'none'-shuffled rows, but pass them the shuffled rows for comparison
                     rdf["t_mantel_" + shuffle] = rdf[rdf['shuf'] == 'none'].apply(
                         calc_ttests, axis=1, df=rdf[shuffle_mask & split_mask]
                     )
@@ -1502,7 +1526,7 @@ def assess_performance(self, plot_descriptor, data_root="/data"):
                 # rdf["complete_overlap_vs_" + shuffle] = rdf.apply(calc_total_overlap, axis=1, df=rdf[shuffle_mask])
 
             # Just temporarily, in case debugging offline is necessary
-            rdf.to_pickle(post_file)
+            rdf.to_pickle(post_file, protocol=4)
 
         progress_recorder.set_progress(95, 100, "Generating plot")
         # Plot performance of thresholds on correlations.
@@ -1516,4 +1540,3 @@ def assess_performance(self, plot_descriptor, data_root="/data"):
         progress_recorder.set_progress(100, 100, "Finished")
 
     return None
-
