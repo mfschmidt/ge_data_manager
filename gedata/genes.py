@@ -159,6 +159,7 @@ def rank_genes_respecting_shuffles(real_files, shuffle_files, shuffle_name):
 
     # And, without regard to split, compare real to shuffles.
     reals_ranks = reals[[col for col in reals.columns if "reals_rank_" in col]]
+
     def ttests_vs_real(row):
         t_ranksums, p_ranksums = ranksums(row.values, reals_ranks.loc[row.name, :].values)
         t_ttestind, p_ttestind = ttest_ind(row.values, reals_ranks.loc[row.name, :].values)
@@ -197,10 +198,19 @@ def write_result_as_entrezid_ranking(tsv_file):
 
     rank_file = tsv_file.replace(".tsv", ".entrez_rank")
 
+    # import subprocess
+    # p = subprocess.run(["ls", "-la", tsv_file], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # print(p.stdout.decode())
+    # print(p.stderr.decode())
+    # end_of_dir = tsv_file.rfind("/")
+    # p = subprocess.run(["ls", "-lad", tsv_file[:end_of_dir]], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # print(p.stdout.decode())
+    # print(p.stderr.decode())
+
     df = pd.read_csv(tsv_file, sep="\t", index_col=None, header=0)
     df['rank'] = df.index + 1
     df['entrez_id'] = df['probe_id'].apply(lambda x: map_pid_to_eid(x, "fornito"))
-    df.sort_index(ascending=True).set_index('entrez_id')[['rank',]].to_csv(rank_file, sep="\t")
+    df.sort_index(ascending=True).set_index('entrez_id')[['rank', ]].to_csv(rank_file, sep="\t")
 
     return rank_file
 
@@ -224,8 +234,14 @@ def describe_genes(rdf, rdict, progress_recorder):
 
     # all_ranked.to_csv("/data/plots/cache/intermediate_a.csv")
 
-    output = ["<p>Comparison of Mantel correlations between the test half (using probes discovered in the train half) vs connectivity similarity.</p>",
-              "<ol>"]
+    output = [
+        "<p>{} {} {}</p>".format(
+            "Comparison of Mantel correlations between the test half",
+            "(using probes discovered in the train half)",
+            "vs connectivity similarity."
+        ),
+        "<ol>"
+    ]
     # Calculate p with a t-test between real and shuffled.
     actuals = rdf[rdf['shuf'] == 'none']
     for shf in list(set(rdf[rdf['shuf'] != 'none']['shuf'])):
@@ -234,7 +250,8 @@ def describe_genes(rdf, rdict, progress_recorder):
         if len(shuffles) > 0 and len(actuals) > 0:
             tt, pt = ttest_ind(actuals['test_score'].values, shuffles['test_score'].values)
             tr, pr = ranksums(actuals['test_score'].values, shuffles['test_score'].values)
-            output.append("  <li>discovery in real vs discovery in {} ({}) ({})</li>".format(shf,
+            output.append("  <li>discovery in real vs discovery in {} ({}) ({})</li>".format(
+                shf,
                 "t-test: t = {:0.2f}, p = {:0.5f}".format(tt, pt),
                 "ranksum-test: t = {:0.2f}, p = {:0.5f}".format(tr, pr),
             ))
@@ -256,11 +273,11 @@ def describe_genes(rdf, rdict, progress_recorder):
             top_by_ave_p = all_ranked[low_ave_p_indices]
             print("{} items in top_by_ave_p (real outperforms shuffled @ p<0.05)".format(len(top_by_ave_p)))
 
-            ave_p_lines.append("{}: {:,} {} {}-shuffled data {} (p<0.05) ({:,} if p<0.01). {} {:,} genes is {:,}".format(
+            ave_p_lines.append("{}: {:,} {} {}{} (p<0.05) ({:,} if p<0.01). {} {:,} genes is {:,}".format(
                 shf,
                 len(tmpdf[tmpdf['p_by-ave-count_for-' + shf] < 0.05].index),
                 "genes perform better in",
-                shf, "than the average real ranking",
+                shf, "-shuffled data than the average real ranking",
                 len(tmpdf[tmpdf['p_by-ave-count_for-' + shf] < 0.01].index),
                 "The average ranking of these",
                 len(tmpdf[tmpdf['p_by-ave-count_for-' + shf] < 0.05].index),
@@ -272,11 +289,11 @@ def describe_genes(rdf, rdict, progress_recorder):
             top_by_ind_p = all_ranked[low_ind_p_indices]
             print("{} items in top_by_ind_p (real outperforms shuffled @ p<0.05)".format(len(top_by_ind_p)))
 
-            ind_p_lines.append("{}: {:,} {} {}-shuffled data {} (p<0.05) ({:,} if p<0.01). {} {:,} genes is {:,}".format(
+            ind_p_lines.append("{}: {:,} {} {}{} (p<0.05) ({:,} if p<0.01). {} {:,} genes is {:,}".format(
                 shf,
                 len(tmpdf[tmpdf['p_by-ind-count_for-' + shf] < 0.05].index),
                 "genes perform better in",
-                shf, "than each shuffle's source re-sampling",
+                shf, "-shuffled data than each shuffle's source re-sampling",
                 len(tmpdf[tmpdf['p_by-ind-count_for-' + shf] < 0.01].index),
                 "each split's real ranking of these",
                 len(tmpdf[tmpdf['p_by-ind-count_for-' + shf] < 0.05].index),
@@ -355,8 +372,12 @@ def describe_genes(rdf, rdict, progress_recorder):
     output.append("</div>")
 
     # Return the all_ranked dataframe, with two key-like Series as the first columns
-    ordered_columns = ["entrez_id", "probe_id", ] + \
-                      sorted([item for item in all_ranked.columns if "_id" not in item and "rank" not in item]) + \
-                      sorted([item for item in all_ranked.columns if "rank" in item]) + \
-                      sorted([item for item in all_ranked.columns if "_id" in item])
-    return all_ranked[ordered_columns + [col for col in all_ranked.columns if col not in ordered_columns]], "\n".join(output)
+    ordered_columns = [
+        "entrez_id", "probe_id",
+        sorted([item for item in all_ranked.columns if "_id" not in item and "rank" not in item]),
+        sorted([item for item in all_ranked.columns if "rank" in item]),
+        sorted([item for item in all_ranked.columns if "_id" in item]),
+    ]
+    remaining_columns = [col for col in all_ranked.columns if col not in ordered_columns]
+
+    return all_ranked[ordered_columns + remaining_columns], "\n".join(output)
