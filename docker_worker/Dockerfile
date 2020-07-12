@@ -7,9 +7,15 @@ RUN apt-get update && apt-get install -y openjdk-11-jre && apt-get install -y an
 RUN export JAVA_HOME
 
 RUN mkdir /code
-COPY requirements.txt manage.py /code/
+WORKDIR /code
+
+COPY requirements.txt /code/
+RUN pip install --upgrade pip && pip install -r requirements.txt && pip install --upgrade git+git://github.com/mfschmidt/PyGEST.git
+
+COPY manage.py /code/
 COPY celery_progress /code/celery_progress
 COPY gedata /code/gedata
 COPY ge_data_manager /code/ge_data_manager
-WORKDIR /code
-RUN pip install --upgrade pip && pip install -r requirements.txt && pip install --upgrade git+git://github.com/mfschmidt/PyGEST.git
+
+# RUN groupadd -g 1000 workeruser && useradd -u 1000 -g workeruser workeruser && chmod 777 /code/gedata/static/gedata
+# USER workeruser
