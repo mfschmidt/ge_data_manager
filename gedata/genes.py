@@ -374,9 +374,9 @@ def describe_genes(rdf, rdict, progress_recorder):
     # Return the all_ranked dataframe, with two key-like Series as the first columns
     ordered_columns = [
         "entrez_id", "probe_id",
-        sorted([item for item in all_ranked.columns if "_id" not in item and "rank" not in item]),
-        sorted([item for item in all_ranked.columns if "rank" in item]),
-        sorted([item for item in all_ranked.columns if "_id" in item]),
+        *sorted([item for item in all_ranked.columns if "_id" not in item and "rank" not in item]),
+        *sorted([item for item in all_ranked.columns if "rank" in item]),
+        *sorted([item for item in all_ranked.columns if "_id" in item]),
     ]
     remaining_columns = [col for col in all_ranked.columns if col not in ordered_columns]
 
