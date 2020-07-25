@@ -143,7 +143,21 @@ def gather_results(pattern=None, data_root="/data", pr=None):
                 result["mask"] = "00"
 
             # Second, parse the key-value pairs from the json file containing processing information.
-            result.update(json_contents(os.path.join(result['path'], result['json_file'])))
+            try:
+                result.update(json_contents(os.path.join(result['path'], result['json_file'])))
+            except FileNotFoundError:
+                result.update({
+                    "host": "unknown",
+                    "command": "unknown",
+                    "blas": "unknown",
+                    "pygest version": "unknown",
+                    "log": os.path.join(result["path"], result["log_file"]),
+                    "data": os.path.join(result["path"], result["tsv_file"]),
+                    "began": "2000-01-01 00:00:00",
+                    "completed": "2000-01-01 00:00:00",
+                    "elapsed": "0:00:00.000000",
+                    "duration": "no time at all",
+                })
 
             split_key = "batch-test" if "batch-test" in result['path'] else "batch-train"
             split = extract_seed(os.path.join(result['path'], result['tsv_file']), split_key)
@@ -352,7 +366,7 @@ def test_score(tsv_file, base_path='/data', own_expr=False, mask='none', probe_s
 
     if mask != "none":
         data = ge.Data(base_path, external_logger=null_handler)
-        v_mask = algorithms.one_mask(expr, mask, bids_val('parby', tsv_file), data, null_handler)
+        v_mask = algorithms.one_mask(expr, mask, bids_val('parby', tsv_file), data)
         expr_vec = expr_vec[v_mask]
         comp_vec = comp_vec[v_mask]
 
