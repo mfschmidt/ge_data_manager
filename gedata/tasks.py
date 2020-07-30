@@ -474,7 +474,6 @@ def ready_erminej(base_path):
     # Ensure pre-requisites exist and are accessible
     ej_path = os.path.join(base_path, "genome", "erminej")
     os.makedirs(ej_path, exist_ok=True)
-    os.makedirs(os.path.join(ej_path, "data"), exist_ok=True)
     ontology = {
         'url': 'http://archive.geneontology.org/latest-termdb/go_daily-termdb.rdf-xml.gz',
         'file': '2019-07-09-erminej_go.rdf-xml',
@@ -488,10 +487,10 @@ def ready_erminej(base_path):
         'file': 'ermineJ-3.1.2-generic-bundle.zip',
     }
     for prereq in [ontology, annotation, ]:
-        if not os.path.exists(os.path.join(ej_path, prereq['file'])):
+        if not os.path.exists(os.path.join(ej_path, "data", prereq['file'])):
             print("Downloading fresh {}, it didn't exist.".format(prereq['file']))
             response = request.urlopen(prereq['url'])
-            with open(os.path.join(ej_path, prereq['file']), "wb") as f:
+            with open(os.path.join(ej_path, "data", prereq['file']), "wb") as f:
                 f.write(gzip.decompress(response.read()))
     if not os.path.exists(os.path.join(ej_path, software['file'])):
         response = request.urlopen(software['url'])
@@ -520,8 +519,8 @@ def ready_erminej(base_path):
 
     return_dict = {
         "executable": os.path.join(ej_path, "ermineJ-3.1.2", "bin", "ermineJ.sh"),
-        "ontology": os.path.join(ej_path, ontology['file']),
-        "annotation": os.path.join(ej_path, annotation['file']),
+        "ontology": os.path.join(ej_path, "data", ontology['file']),
+        "annotation": os.path.join(ej_path, "data", annotation['file']),
         "data": os.path.join(ej_path, "data"),
         "ready": True,
     }
@@ -542,13 +541,13 @@ def run_gene_ontology(tsv_file, base_path="/data"):
 
     ej = ready_erminej(base_path)
 
-    go_path = tsv_file.replace(".tsv", ".ejgo_roc")
+    go_path = tsv_file.replace(".tsv", ".ejgo_roc2048")
 
     rank_file = write_result_as_entrezid_ranking(tsv_file)
 
     # Only run gene ontology if it does not yet exist.
     print("initiating ermineJ run on '{}...{}'".format(tsv_file[:30], tsv_file[-30:]))
-    print("  'ready': {}, 'go_path': ...{}".format(ej["ready"], go_path[-36:]))
+    print("  'ready': {}, 'go_path': ...{}".format(ej["ready"], go_path[-40:]))
     if ej["ready"] and not os.path.isfile(go_path):
         p = subprocess.run(
             [
@@ -561,8 +560,8 @@ def run_gene_ontology(tsv_file, base_path="/data"):
                 '--mtc', 'FDR',  # FDR indicates Benjamini-Hochberg corrections for false discovery rate
                 '--reps', 'BEST',  # If a gene has multiple probes/ids in input, use BEST
                 '--genesOut',  # Include gene symbols in output
-                '--minClassSize', '5',  # smallest gene set size to be considered
-                '--maxClassSize', '128',  # largest gene set size to be considered
+                '--minClassSize', '2',  # smallest gene set size to be considered
+                '--maxClassSize', '2048',  # largest gene set size to be considered
                 '-aspects', 'BCM',  # Test against all three GO components
                 '-b', 'false',  # Big is not better, rankings are low==good
                 '--logTrans', 'false',  # If we fed p-values, we would set this to true
@@ -572,7 +571,7 @@ def run_gene_ontology(tsv_file, base_path="/data"):
         )
 
         # Write the log file
-        with open(tsv_file.replace(".tsv", ".ejlog"), "w") as f:
+        with open(tsv_file.replace(".tsv", ".ejlog"), "a") as f:
             f.write("STDOUT:\n")
             f.write(p.stdout.decode())
             f.write("STDERR:\n")
