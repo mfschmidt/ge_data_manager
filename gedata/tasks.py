@@ -563,7 +563,6 @@ def run_gene_ontology(tsv_file, base_path="/data"):
                 '--minClassSize', '2',  # smallest gene set size to be considered
                 '--maxClassSize', '2048',  # largest gene set size to be considered
                 '-aspects', 'BCM',  # Test against all three GO components
-                '-b', 'false',  # Big is not better, rankings are low==good
                 '--logTrans', 'false',  # If we fed p-values, we would set this to true
                 '--output', go_path,
             ],
