@@ -541,7 +541,7 @@ def run_gene_ontology(tsv_file, base_path="/data"):
 
     ej = ready_erminej(base_path)
 
-    go_path = tsv_file.replace(".tsv", ".ejgo_roc2048")
+    go_path = tsv_file.replace(".tsv", ".ejgo_roc_0002-2048")
 
     rank_file = write_result_as_entrezid_ranking(tsv_file)
 
