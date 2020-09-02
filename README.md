@@ -80,3 +80,23 @@ You can accomplish this as follows:
     docker-compose run web bash
     python manage.py makemigrations
     python manage.py migrate
+
+## Additional info, or what ge_data_manager does
+
+1. calculate_individual_stats (will not overwrite cache)
+    for each tsv in the queryset:
+        store results_as_dict(tsv) as json
+    store individual summaries as one cached dataframe
+
+2. calculate_group_stats (will not overwrite cache)
+    for each shuffle-type:
+        calculate % similarity and kendall tau
+        for each split:
+            calculate % similarity and kendall tau
+        for each seed:
+            calculate % similarity and kendall tau
+        calculate real-vs-shuffle % similarity and kendall tau
+    store group summary as one cached dataframe
+
+3. Build plots and gene lists.
+
