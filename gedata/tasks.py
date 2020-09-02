@@ -21,7 +21,7 @@ from pygest import algorithms
 from pygest.convenience import bids_val
 import pygest as ge
 
-from .models import PushResult, ResultSummary
+from .models import PushResult, ResultSummary, GroupedResultSummary
 from .plots import plot_all_train_vs_test, plot_performance_over_thresholds, plot_overlap
 from .plots import plot_fig_2, plot_fig_3, plot_fig_4
 from .plots import describe_overlap, describe_mantel
@@ -87,10 +87,29 @@ def tz_aware_file_mtime(path):
     )
 
 
-def gather_results(pattern=None, data_root="/data", pr=None):
+def glob_str_from_keys(
+        pygest_data="/data",
+        sub="*", hem="*", samp="*", prob="*", parby="*", splby="*", batch="train00*",
+        tgt="*", algo="*", shuf="*", comp="*", mask="*", norm="*", adj="*"
+):
+    """ Use BIDS keys and values to generate a globbable string
+    """
+
+    return str(os.path.join(
+        pygest_data,
+        "derivatives",
+        "sub-{}_hem-{}_samp-{}_prob-{}".format(sub, hem, samp, prob),
+        "parby-{}_splby-{}_batch-{}".format(parby, splby, batch),
+        "tgt-{}_algo-{}_shuf-{}".format(tgt, algo, shuf),
+        "sub-{}_comp-{}_mask-{}_norm-{}_adj-{}*.tsv".format(sub, comp, mask, norm, adj),
+    ))
+
+
+def gather_results(pattern=None, glob_dict=None, data_root="/data", pr=None):
     """ Quickly find available files, and queue any heavy processing elsewhere.
 
     :param pattern: glob pattern to restrict files searched for
+    :param glob_dict: glob dict to restrict files searched for
     :param data_root: default /data, base path to all of the results
     :param pr: progress_recorder to report intermediate status.
     """
@@ -99,17 +118,26 @@ def gather_results(pattern=None, data_root="/data", pr=None):
         pr.set_progress(0, 100, "Looking for files")
 
     # Get a list of files to parse.
-    if pattern is None:
-        glob_pattern = os.path.join(data_root, "derivatives", "*", "*", "*", "*.tsv")
+    if pattern is None and glob_dict is None:
+        globbable = str(os.path.join(data_root, "derivatives", "*", "*", "*", "*.tsv"))
+    elif isinstance(glob_dict, dict):
+        globbable = glob_str_from_keys(pygest_data=data_root, **glob_dict)
+    elif isinstance(pattern, str):
+        globbable = pattern
     else:
-        glob_pattern = os.path.join(data_root, pattern)
-    print("Starting to glob files ('{}')".format(glob_pattern))
-    sda = os.listdir(os.path.join(data_root, "derivatives"))[0]
-    sdb = os.listdir(os.path.join(data_root, "derivatives", sda))[0]
-    print(os.path.join(data_root, "derivatives", sda, sdb))
-    print(os.listdir(os.path.join(data_root, "derivatives", sda, sdb)))
-    files = glob.glob(glob_pattern)
-    print("File glob complete; discovered {:,} results".format(len(files)))
+        print("File globbing can run by setting 'pattern' to a path")
+        print("or 'glob_dict' to a BIDS dict. Something else was supplied.")
+        print("    'pattern' is '{}' and glob_dict is '{}'".format(type(pattern), type(glob_dict)))
+        globbable = "NONSENSE_WITHOUT_A_MATCH"
+
+    print("Starting to glob files ('{}')".format(globbable))
+    before_glob = datetime.now()
+    files = glob.glob(globbable)
+    after_glob = datetime.now()
+    print("File glob complete; discovered {:,} results in {:,.1f} seconds".format(
+        len(files), (after_glob - before_glob).total_seconds()
+    ))
+
     if pr:
         pr.set_progress(0, len(files), "Checking filesystem against database")
 
@@ -131,7 +159,15 @@ def gather_results(pattern=None, data_root="/data", pr=None):
                 'tsv_file': f,
                 'json_file': f.replace(".tsv", ".json"),
                 'log_file': f.replace(".tsv", ".log"),
+                'summary_file': f.replace(".tsv", ".top-peak.v4.json"),
+                'entrez_file': f.replace(".tsv", ".entrez_rank"),
+                'ejgo_file': f.replace(".tsv", ".ejgo_0002-2048"),
             }
+            for file_type in ["tsv", "json", "log", "summary", "entrez", "ejgo", ]:
+                if os.path.isfile(os.path.join(result.get("path", ""), result.get(file_type + '_file', ""))):
+                    result[file_type + '_present'] = True
+                else:
+                    result[file_type + '_present'] = False
 
             # Gather information about each result.
             for bids_pair in re.findall(
@@ -226,6 +262,41 @@ def gather_results(pattern=None, data_root="/data", pr=None):
         s = ResultSummary.current()
         print("Summary: ", s.to_json())
         s.save()
+
+        unique_groups = list(PushResult.objects.values("comp", "parby", "resample", "norm", "mask").distinct())
+        for ug in unique_groups:
+            results_in_group = PushResult.objects.filter(
+                comp=ug["comp"], parby=ug["parby"], resample=ug["resample"], mask=ug["mask"]
+            )
+            # TODO: Add StatusCounts model  (for each GroupedResultSummary)
+            if ug.get("resample", "") == "split-half":
+                split = 299
+            elif ug.get("resample", "") == "split-quarter":
+                split = 499
+            else:
+                split = 0
+            g = GroupedResultSummary(
+                summary_date=django_timezone.now(),
+                sourcedata=build_descriptor(
+                    ug.get("comp", ""), ug.get("parby", ""), ug.get("mask", ""),  # splby and parby interchangeable here
+                    ug.get("norm", ""), split, level="long",
+                ),
+                descriptor=build_descriptor(
+                    ug.get("comp", ""), ug.get("parby", ""), ug.get("mask", ""),  # splby and parby interchangeable here
+                    ug.get("norm", ""), split, level="short",
+                ),
+                comp=ug['comp'],
+                parby=ug['parby'],
+                mask=ug['mask'],
+                resample=ug["resample"],
+                num_reals=results_in_group.filter(shuf="none").count(),
+                num_agnos=results_in_group.filter(shuf="agno").count(),
+                num_dists=results_in_group.filter(shuf="dist").count(),
+                num_be04s=results_in_group.filter(shuf="be04").count(),
+                summary=s,
+            )
+            g.save()
+
     else:
         print("No PushResults, not saving a summary.")
 
@@ -687,6 +758,12 @@ def interpret_descriptor(descriptor):
         "tgt-max_algo-{algo}_shuf-*",
         "sub-all_comp-{comp}_mask-{glob_mask}_norm-{norm}_adj-none*.tsv"
     ).format(**rdict)
+    rdict['glob_dict'] = {
+        "sub": "all", "hem": "A", "samp": "glasser", "prob": "fornito",
+        "parby": rdict["parby"], "splby": rdict["splby"], "batch": rdict["phase"] + "00" + rdict["xval"] + "*",
+        "tgt": "max", "algo": rdict["algo"], "shuf": "*",
+        "comp": rdict["comp"], "mask": rdict["glob_mask"], "norm": rdict["norm"], "adj": "none",
+    }
 
     return rdict
 

@@ -10,6 +10,7 @@ urlpatterns = [
     path('REST/inventory/<str:signature>', views.rest_inventory, name='inventory'),
     path('oldinventory/', views.InventoryView.as_view(), name='oldinventory'),
     path('newinventory/', views.NewInventoryView.as_view(), name='newinventory'),
+    path('inventory/', views.GroupedResultsView.as_view(), name='grouped_inventory'),
     path('results/', views.ResultsView.as_view(), name='results'),
     path('result/<int:pk>', views.ResultView.as_view(), name='result'),
     path('set/<str:metric>', forms.resultset, name='resultset'),

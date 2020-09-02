@@ -11,7 +11,7 @@ from ge_data_manager.celery import celery_id_from_name, celery_tasks_in_progress
 from .tasks import clear_all_jobs, interpret_descriptor, gather_results_as_task
 from .tasks import assess_mantel, assess_overlap, assess_performance, assess_everything, just_genes
 from .tasks import clear_macro_caches, clear_micro_caches
-from .models import PushResult, ResultSummary
+from .models import PushResult, ResultSummary, GroupedResultSummary
 from .forms import thresholds
 
 
@@ -27,6 +27,7 @@ def index(request):
 
     return render(request, 'gedata/index.html', context=context)
 
+
 class ResultView(generic.DetailView):
     model = PushResult
     template_name = 'gedata/result.html'
@@ -37,6 +38,7 @@ class ResultView(generic.DetailView):
         context['m_results'] = ResultSummary.objects.latest('summary_date').num_results
         # context['latest_result_summary'] = ResultSummary.objects.latest('summary_date')
         return context
+
 
 class ResultsView(generic.ListView):
     model = PushResult
@@ -54,6 +56,7 @@ class ResultsView(generic.ListView):
 
 
 class NewInventoryView(generic.ListView):
+    """ The only one that really matters """
     model = PushResult
     template_name = "gedata/newinventory.html"
 
@@ -62,6 +65,15 @@ class NewInventoryView(generic.ListView):
     ordering = ['-comp', 'resample', '-splby', 'mask', '-shuf', 'split', 'seed']
 
     # Returns self.object_list to the template.
+
+
+class GroupedResultsView(generic.ListView):
+    """ Faster than NewInventory, more detailed than Summary """
+
+    model = GroupedResultSummary
+    template_name = "gedata/grouped_inventory.html"
+
+    ordering = ["-comp", "-resample", "-parby", "mask", ]
 
 
 class InventoryView(generic.ListView):
@@ -208,7 +220,6 @@ def rest_refresh(request, job_name):
             celery_result = fn.delay(job_name.rsplit('_', 1)[0].lower(), data_root="/data")
             print("     new id for '{}' is '{}'.".format(job_name, celery_result.task_id))
             return celery_result.task_id
-
 
     if job_name == "global_refresh":
         if jobs_id is None:
