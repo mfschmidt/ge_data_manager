@@ -16,4 +16,6 @@ matplotlib = "*"
 seaborn = "*"
 pytz = "*"
 Django = "<3.0,>=2.2.10"
-zipp = {path = "/home/mike/Projects/PyGEST"}
+
+[packages.6c72bad]
+path = "/home/mike/Projects/PyGEST"
