@@ -124,9 +124,18 @@ def describe_three_relevant_overlaps(relevant_results, phase, threshold):
 
 
 @print_duration
+def rank_ontologies_respecting_shuffles(real_files, shuffle_files, shuffle_name):
+    """ Given ontology rankings from actual data and ontology ratings from shuffled data,
+        calculate how likely each ontology is to have outperformed the shuffle in actual data.
+    """
+
+    return None
+
+
+@print_duration
 def rank_genes_respecting_shuffles(real_files, shuffle_files, shuffle_name):
     """ Given gene rankings from actual data and gene rankings from shuffled data,
-        calculate how likely each gene is to have oushuffletperformed the shuffle in actual data.
+        calculate how likely each gene is to have outperformed the shuffle in actual data.
     """
 
     # Rearrange results to use ranking, ordered by probe_id index
@@ -190,29 +199,67 @@ def rank_genes_respecting_shuffles(real_files, shuffle_files, shuffle_name):
     return new_df
 
 
-def write_result_as_entrezid_ranking(tsv_file):
+def write_result_as_entrezid_ranking(tsv_file, force_replace=False):
     """ Read a tsv file, and write out its results as ranked entrez_ids for ermineJ to use.
 
     :param tsv_file: The path to a PyGEST results file
+    :param force_replace: Set true to overwrite existing files
     """
 
     rank_file = tsv_file.replace(".tsv", ".entrez_rank")
 
-    # import subprocess
-    # p = subprocess.run(["ls", "-la", tsv_file], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    # print(p.stdout.decode())
-    # print(p.stderr.decode())
-    # end_of_dir = tsv_file.rfind("/")
-    # p = subprocess.run(["ls", "-lad", tsv_file[:end_of_dir]], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    # print(p.stdout.decode())
-    # print(p.stderr.decode())
-
-    df = pd.read_csv(tsv_file, sep="\t", index_col=None, header=0)
-    df['rank'] = df.index + 1
-    df['entrez_id'] = df['probe_id'].apply(lambda x: map_pid_to_eid(x, "fornito"))
-    df.sort_index(ascending=True).set_index('entrez_id')[['rank', ]].to_csv(rank_file, sep="\t")
+    if force_replace or not os.path.isfile(rank_file):
+        df = pd.read_csv(tsv_file, sep="\t", index_col=None, header=0)
+        df['rank'] = df.index + 1
+        df['entrez_id'] = df['probe_id'].apply(lambda x: map_pid_to_eid(x, "fornito"))
+        df.sort_index(ascending=True).set_index('entrez_id')[['rank', ]].to_csv(rank_file, sep="\t")
 
     return rank_file
+
+
+def extract_description_for(values, ranks, thresholds, comparison_string):
+    """ Report values from df_with_ranks[col] by thresholds.
+
+    :param values: Series containing values, indexed by probe_id
+    :param ranks: Series containing ranks, indexed by probe_id
+    :param thresholds: Thresholds for reporting out those values
+    :param comparison_string: A string used to describe the comparison underlying the p-value
+    :return: descriptive text
+    """
+
+    if len(thresholds) < 1:
+        return "No thresholds requested"
+
+        # Calculate a quantity of values under each threshold,
+        # and pair the quantity with the threshold.
+    quants = list(zip([(values < t).sum() for t in thresholds], thresholds))
+    print("{} values less than {} in {}".format(*quants[0], values.name, ))
+
+    return "{}: {:,} {} {}-{}, p<{} ({}). {} of these {:,} genes is {:,}".format(
+        values.name[-4:], quants[0][0], "genes perform better in",
+        values.name[-4:], comparison_string, thresholds[0],
+        ", ".join(["{:,} <{:0.2f}".format(*q) for q in quants]),
+        comparison_string, quants[0][0],
+        0 if quants[0][0] < 1 else int(ranks[values[values < 0.05].index].mean()),
+    )
+
+
+@print_duration
+def describe_ontologies(rdf, rdict, progress_recorder):
+    """
+
+    :param rdf:
+    :param rdict:
+    :param progress_recorder:
+    :return:
+    """
+
+    progress_recorder.set_progress(90, 100, "Ranking ontologies")
+
+    # ontologies = rank_ontologies_respecting_shuffles(list(actuals['path']), list(shuffles['path']), shf)
+    # ontologies.to_csv()
+
+    return None
 
 
 @print_duration
@@ -265,55 +312,22 @@ def describe_genes(rdf, rdict, progress_recorder):
     for shf in list(set(rdf[rdf['shuf'] != 'none']['shuf'])):
         shuffles = rdf[rdf['shuf'] == shf]
         if len(shuffles) > 0 and len(actuals) > 0:
-            tmpdf = rank_genes_respecting_shuffles(list(actuals['path']), list(shuffles['path']), shf).sort_index()
-            all_ranked = pd.concat([all_ranked, tmpdf], axis=1)
+            all_ranked = pd.concat([
+                all_ranked,
+                rank_genes_respecting_shuffles(list(actuals['path']), list(shuffles['path']), shf).sort_index()
+            ], axis=1)
 
-            # Extract p-values.
-            low_ave_p_indices = all_ranked['probe_id'].isin(tmpdf[tmpdf['p_by-ave-count_for-' + shf] < 0.05].index)
-            top_by_ave_p = all_ranked[low_ave_p_indices]
-            print("{} items in top_by_ave_p (real outperforms shuffled @ p<0.05)".format(len(top_by_ave_p)))
-
-            ave_p_lines.append("{}: {:,} {} {}{} (p<0.05) ({:,} if p<0.01). {} {:,} genes is {:,}".format(
-                shf,
-                len(tmpdf[tmpdf['p_by-ave-count_for-' + shf] < 0.05].index),
-                "genes perform better in",
-                shf, "-shuffled data than the average real ranking",
-                len(tmpdf[tmpdf['p_by-ave-count_for-' + shf] < 0.01].index),
-                "The average ranking of these",
-                len(tmpdf[tmpdf['p_by-ave-count_for-' + shf] < 0.05].index),
-                0 if len(top_by_ave_p) < 1 else int(top_by_ave_p['raw_rank'].mean()),
+            ave_p_lines.append(extract_description_for(
+                all_ranked['p_by-ave-count_for-' + shf], all_ranked['raw_rank'], (0.05, 0.01),
+                "the average real ranking",
             ))
-
-            # Extract p-values.
-            low_ind_p_indices = all_ranked['probe_id'].isin(tmpdf[tmpdf['p_by-ind-count_for-' + shf] < 0.05].index)
-            top_by_ind_p = all_ranked[low_ind_p_indices]
-            print("{} items in top_by_ind_p (real outperforms shuffled @ p<0.05)".format(len(top_by_ind_p)))
-
-            ind_p_lines.append("{}: {:,} {} {}{} (p<0.05) ({:,} if p<0.01). {} {:,} genes is {:,}".format(
-                shf,
-                len(tmpdf[tmpdf['p_by-ind-count_for-' + shf] < 0.05].index),
-                "genes perform better in",
-                shf, "-shuffled data than each shuffle's source re-sampling",
-                len(tmpdf[tmpdf['p_by-ind-count_for-' + shf] < 0.01].index),
-                "each split's real ranking of these",
-                len(tmpdf[tmpdf['p_by-ind-count_for-' + shf] < 0.05].index),
-                0 if len(top_by_ave_p) < 1 else int(top_by_ave_p['raw_rank'].mean()),
+            ind_p_lines.append(extract_description_for(
+                all_ranked['p_by-ind-count_for-' + shf], all_ranked['raw_rank'], (0.05, 0.01),
+                "each shuffle's re-sampling source"
             ))
-
-            # Extract deltas.
-            high_delta_indices = all_ranked['probe_id'].isin(tmpdf[tmpdf['delta_for-' + shf] > 1000].index)
-            top_by_delta = all_ranked[high_delta_indices]
-            print("{} items in top_by_delta (real ranks >1000 places better than shuffled)".format(len(top_by_delta)))
-
-            d_lines.append("{}: {:,} {} {}-shuffled data. ({:,} > 2000). {} {:,} genes is {:,}".format(
-                shf,
-                len(tmpdf[tmpdf['delta_for-' + shf] > 1000].index),
-                "genes perform 1000 spots better in actual than",
-                shf,
-                len(tmpdf[tmpdf['delta_for-' + shf] > 2000].index),
-                "The average ranking of these",
-                len(tmpdf[tmpdf['delta_for-' + shf] > 1000].index),
-                0 if len(top_by_delta) < 1 else int(top_by_delta['raw_rank'].mean()),
+            d_lines.append(extract_description_for(
+                all_ranked['delta_for-' + shf], all_ranked['raw_rank'], (1000, 2000, 5000),
+                "the average ranking"
             ))
 
         else:

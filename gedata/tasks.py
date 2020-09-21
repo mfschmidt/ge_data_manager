@@ -9,7 +9,6 @@ from django.utils import timezone as django_timezone
 
 import os
 import glob
-import re
 import pickle
 import numpy as np
 import pandas as pd
@@ -18,14 +17,14 @@ import json
 from scipy import stats
 
 from pygest import algorithms
-from pygest.convenience import bids_val
+from pygest.convenience import bids_val, extract_seed, build_descriptor
 import pygest as ge
 
 from .models import PushResult, ResultSummary, GroupedResultSummary
 from .plots import plot_all_train_vs_test, plot_performance_over_thresholds, plot_overlap
 from .plots import plot_fig_2, plot_fig_3, plot_fig_4
 from .plots import describe_overlap, describe_mantel
-from .genes import describe_genes, write_result_as_entrezid_ranking
+from .genes import describe_genes, describe_ontologies, write_result_as_entrezid_ranking
 
 from .decorators import print_duration
 
@@ -36,48 +35,6 @@ class NullHandler(logging.Handler):
 
 
 null_handler = NullHandler()
-
-
-def json_contents(json_file):
-    """ Parse contents of json file into a dict
-
-        I tried the standard json parser, but had repeated issues and failures.
-        Regex works well and the code is still fairly clean.
-    """
-    items = {}
-    with open(json_file, "r") as jf:
-        for line in jf.readlines():
-            clean_line = line.strip().rstrip(",").replace(": ", ":")
-            m = re.match(".*\"(?P<k>.+)\":\"(?P<v>.+)\".*", clean_line)
-            if m:
-                k = m.group('k')
-                v = m.group('v')
-                items[k] = v
-    return items
-
-
-def seconds_elapsed(elapsed):
-    """ Convert a string from the json file, like "5 days, 2:45:32.987", into integer seconds.
-
-    :param elapsed: string scraped from json file
-    :return: seconds represented by the elapsed string, as an integer
-    """
-
-    parts = elapsed.split(":")
-    if len(parts) != 3:
-        return 0
-    seconds = int(float(parts[2]))
-    minutes = int(parts[1])
-    if "days" in parts[0]:
-        hours = int(parts[0].split(" days, ")[1])
-        days = int(parts[0].split(" days, ")[0])
-    elif "day" in parts[0]:
-        hours = int(parts[0].split(" day, ")[1])
-        days = int(parts[0].split(" day, ")[0])
-    else:
-        hours = int(parts[0])
-        days = 0
-    return seconds + (minutes * 60) + (hours * 3600) + (days * 3600 * 24)
 
 
 def tz_aware_file_mtime(path):
@@ -105,6 +62,64 @@ def glob_str_from_keys(
     ))
 
 
+def interpret_descriptor(descriptor):
+    """ Parse the plot descriptor into parts """
+    rdict = {
+        'descriptor': descriptor,
+        'comp': comp_from_signature(descriptor[:4]),
+        'parby': "glasser" if descriptor[3].lower() == "g" else "wellid",
+        'splby': "glasser" if descriptor[4].lower() == "g" else "wellid",
+        'mask': descriptor[5:7],
+        'algo': 'once' if descriptor[7] == "o" else "smrt",
+        'norm': 'srs' if ((len(descriptor) > 8) and (descriptor[8] == "s")) else "none",
+        'xval': descriptor[9] if len(descriptor) > 9 else '0',
+        'phase': 'train',
+        'opposite_phase': 'test',
+    }
+
+    try:
+        rdict['threshold'] = int(descriptor[8:])
+    except ValueError:
+        # This catches "peak" or "", both should be fine as None
+        rdict['threshold'] = None
+
+    # The xval, or cross-validation sample split range indicator,
+    # is '2' for splits in the 200's and '4' for splits in the 400s.
+    # Splits in the 200's are split-halves; 400's are split-quarters.
+    split_min = 0
+    split_max = 999
+    if rdict['xval'] == '2':
+        split_min = 200
+        split_max = 299
+    if rdict['xval'] == '4':
+        split_min = 400
+        split_max = 499
+    rdict['query_set'] = PushResult.objects.filter(
+        samp="glasser", prob="fornito", split__gte=split_min, split__lte=split_max,
+        algo=rdict['algo'], comp=rdict['comp'], parby=rdict['parby'], splby=rdict['splby'],
+        mask=rdict['mask'], norm=rdict['norm'],
+        batch__startswith=rdict['phase']
+    )
+
+    rdict['n'] = rdict['query_set'].count()
+    # Files are named with mask-none rather than mask-00, so tweak that key
+    rdict['glob_mask'] = "none" if rdict['mask'] == "00" else rdict['mask']
+    rdict['glob_pattern'] = os.path.join(
+        "derivatives", "sub-all_hem-A_samp-glasser_prob-fornito",
+        "parby-{parby}_splby-{splby}_batch-{phase}00{xval}*",
+        "tgt-max_algo-{algo}_shuf-*",
+        "sub-all_comp-{comp}_mask-{glob_mask}_norm-{norm}_adj-none*.tsv"
+    ).format(**rdict)
+    rdict['glob_dict'] = {
+        "sub": "all", "hem": "A", "samp": "glasser", "prob": "fornito",
+        "parby": rdict["parby"], "splby": rdict["splby"], "batch": rdict["phase"] + "00" + rdict["xval"] + "*",
+        "tgt": "max", "algo": rdict["algo"], "shuf": "*",
+        "comp": rdict["comp"], "mask": rdict["glob_mask"], "norm": rdict["norm"], "adj": "none",
+    }
+
+    return rdict
+
+
 def gather_results(pattern=None, glob_dict=None, data_root="/data", pr=None):
     """ Quickly find available files, and queue any heavy processing elsewhere.
 
@@ -125,7 +140,7 @@ def gather_results(pattern=None, glob_dict=None, data_root="/data", pr=None):
     elif isinstance(pattern, str):
         globbable = pattern
     else:
-        print("File globbing can run by setting 'pattern' to a path")
+        print("File globbing can run via 'gather_results()' by setting 'pattern' to a path")
         print("or 'glob_dict' to a BIDS dict. Something else was supplied.")
         print("    'pattern' is '{}' and glob_dict is '{}'".format(type(pattern), type(glob_dict)))
         globbable = "NONSENSE_WITHOUT_A_MATCH"
@@ -150,103 +165,8 @@ def gather_results(pattern=None, glob_dict=None, data_root="/data", pr=None):
             dupe_count += 1
         else:
             new_count += 1
-            f = path.split(os.sep)[-1]
-            rel_path = path[(len(data_root) + 1):(len(path) - len(f) - 1)]
-            result = {
-                'data_dir': data_root,
-                'rel_path': rel_path,
-                'path': os.path.join(data_root, rel_path),
-                'tsv_file': f,
-                'json_file': f.replace(".tsv", ".json"),
-                'log_file': f.replace(".tsv", ".log"),
-                'summary_file': f.replace(".tsv", ".top-peak.v4.json"),
-                'entrez_file': f.replace(".tsv", ".entrez_rank"),
-                'ejgo_file': f.replace(".tsv", ".ejgo_0002-2048"),
-            }
-            for file_type in ["tsv", "json", "log", "summary", "entrez", "ejgo", ]:
-                if os.path.isfile(os.path.join(result.get("path", ""), result.get(file_type + '_file', ""))):
-                    result[file_type + '_present'] = True
-                else:
-                    result[file_type + '_present'] = False
-
-            # Gather information about each result.
-            for bids_pair in re.findall(
-                r"[^\W_]+-[^\W_]*", os.path.join(result.get('path', ''), result.get('tsv_file', ''))
-            ):
-                bids_key, bids_value = bids_pair.split("-")
-                result[bids_key] = bids_value
-            if "mask" in result and result.get("mask", "") == "none":
-                result["mask"] = "00"
-
-            # Second, parse the key-value pairs from the json file containing processing information.
-            try:
-                result.update(json_contents(os.path.join(result['path'], result['json_file'])))
-            except FileNotFoundError:
-                result.update({
-                    "host": "unknown",
-                    "command": "unknown",
-                    "blas": "unknown",
-                    "pygest version": "unknown",
-                    "log": os.path.join(result["path"], result["log_file"]),
-                    "data": os.path.join(result["path"], result["tsv_file"]),
-                    "began": "2000-01-01 00:00:00",
-                    "completed": "2000-01-01 00:00:00",
-                    "elapsed": "0:00:00.000000",
-                    "duration": "no time at all",
-                })
-
-            split_key = "batch-test" if "batch-test" in result['path'] else "batch-train"
-            split = extract_seed(os.path.join(result['path'], result['tsv_file']), split_key)
-            resample = "whole"
-            if 200 <= split <= 299:
-                resample = "split-half"
-            elif 400 <= split <= 499:
-                resample = "split-quarter"
-
-            # Finally, put it all into a model for storage in the database.
-            r = PushResult(
-                sourcedata=build_descriptor(
-                    result.get("comp", ""), result.get("splby", ""), result.get("mask", ""),
-                    result.get("norm", ""), split, level="long",
-                ),
-                descriptor=build_descriptor(
-                    result.get("comp", ""), result.get("splby", ""), result.get("mask", ""),
-                    result.get("norm", ""), split, level="short",
-                ),
-                resample=resample,
-                json_path=os.path.join(result['path'], result['json_file']),
-                tsv_path=os.path.join(result['path'], result['tsv_file']),
-                log_path=os.path.join(result['path'], result['log_file']),
-                # For dates, we assume EDT (-0400) as most runs were in EDT. If EST, the hour makes no real difference.
-                start_date=datetime.strptime(
-                    result.get("began", "1900-01-01 00:00:00") + "-0400", "%Y-%m-%d %H:%M:%S%z"
-                ),
-                end_date=datetime.strptime(
-                    result.get("completed", "1900-01-01 00:00:00") + "-0400", "%Y-%m-%d %H:%M:%S%z"
-                ),
-                host=result.get("host", ""),
-                command=result.get("command", ""),
-                version=result.get("pygest version", ""),
-                duration=seconds_elapsed(result.get("elapsed", "")),
-                sub=result.get("sub", ""),
-                hem=result.get("hem", " ").upper()[0],
-                samp=result.get("samp", ""),
-                prob=result.get("prob", ""),
-                parby=result.get("parby", ""),
-                splby=result.get("splby", ""),
-                batch=result.get("batch", ""),
-                tgt=result.get("tgt", ""),
-                algo=result.get("algo", ""),
-                shuf=result.get("shuf", ""),
-                norm=result.get("norm", ""),
-                comp=result.get("comp", ""),
-                mask=result.get("mask", ""),
-                adj=result.get("adj", ""),
-                seed=int(result.get("seed", 0)),
-                split=split,
-                columns=0,
-                rows=0,
-            )
+            r = PushResult()
+            r.fill_from_tsv_file(tsv_path=path, data_root=data_root)
             r.save()
         if pr:
             pr.set_progress(i, len(files), "Summarizing new files")
@@ -273,6 +193,8 @@ def gather_results(pattern=None, glob_dict=None, data_root="/data", pr=None):
                 split = 299
             elif ug.get("resample", "") == "split-quarter":
                 split = 499
+            elif ug.get("resample", "") == "whole":
+                split = 100
             else:
                 split = 0
             g = GroupedResultSummary(
@@ -468,19 +390,6 @@ def train_vs_test_overlap(tsv_file, probe_significance_threshold=None):
         return 0.00
 
 
-def extract_seed(path, key):
-    """ Scrape the 5-character seed from the path and return it as an integer.
-
-    :param path: path to the tsv file containing results
-    :param key: substring preceding the seed, "batch-train" for splits, seed-" for shuffles
-    """
-    try:
-        i = path.find(key) + len(key)
-        return int(path[i:i + 5])
-    except ValueError:
-        return 0
-
-
 def results_as_dict(tsv_file, base_path, probe_sig_threshold=None, use_cache=True):
     """ Return a key-value description of a single result.
         This is the workhorse of all of these plots. All calculations from these runs come from this function.
@@ -617,9 +526,9 @@ def run_gene_ontology(tsv_file, base_path="/data"):
     rank_file = write_result_as_entrezid_ranking(tsv_file)
 
     # Only run gene ontology if it does not yet exist.
-    print("initiating ermineJ run on '{}...{}'".format(tsv_file[:30], tsv_file[-30:]))
-    print("  'ready': {}, 'go_path': ...{}".format(ej["ready"], go_path[-40:]))
+    print("run_gene_ontology: 'ready': {}, 'go_path': ...{}".format(ej["ready"], go_path[-40:]))
     if ej["ready"] and not os.path.isfile(go_path):
+        print("initiating ermineJ run on '{}...{}'".format(tsv_file[:30], tsv_file[-30:]))
         p = subprocess.run(
             [
                 ej['executable'],
@@ -646,126 +555,6 @@ def run_gene_ontology(tsv_file, base_path="/data"):
             f.write(p.stdout.decode())
             f.write("STDERR:\n")
             f.write(p.stderr.decode())
-
-
-def build_descriptor(comp, splitby, mask, normalization, split, level="short"):
-    """ Generate a shorthand descriptor for the group a result belongs to. """
-
-    # From actual file, or from path to result, boil down comparator to its abbreviation
-    comp_map = {
-        'hcp_niftismooth_conn_parby-glasser_sim.df': ('hcpg', "HCP [rest] (glasser parcels)"),
-        'hcpniftismoothconnparbyglassersim': ('hcpg', "HCP [rest] (glasser parcels)"),
-        'hcp_niftismooth_conn_sim.df': ('hcpw', "HCP [rest] (wellids)"),
-        'hcpniftismoothconnsim': ('hcpw', "HCP [rest] (wellids)"),
-        'indi-glasser-conn_sim.df': ('nkig', "NKI [rest] (glasser parcels)"),
-        'indiglasserconnsim': ('nkig', "NKI [rest] (glasser parcels)"),
-        'indi-connectivity_sim.df': ('nkiw', "NKI [rest] (wellids)"),
-        'indiconnsim': ('nkiw', "NKI [rest] (wellids)"),
-        'fear_glasser_sim.df': ('f__g', "HCP [task: fear] (glasser parcels)"),
-        'fearglassersim': ('f__g', "HCP [task: fear] (glasser parcels)"),
-        'fear_conn_sim.df': ('f__w', "HCP [task: fear] (wellids)"),
-        'fearconnsim': ('f__w', "HCP [task: fear] (wellids)"),
-        'neutral_glasser_sim.df': ('n__g', "HCP [task: neutral] (glasser parcels)"),
-        'neutralglassersim': ('n__g', "HCP [task: neutral] (glasser parcels)"),
-        'neutral_conn_sim.df': ('n__w', "HCP [task: neutral] (wellids)"),
-        'neutralconnsim': ('n__w', "HCP [task: neutral] (wellids)"),
-        'fear-neutral_glasser_sim.df': ('fn_g', "HCP [task: fear-neutral] (glasser parcels)"),
-        'fearneutralglassersim': ('fn_g', "HCP [task: fear-neutral] (glasser parcels)"),
-        'fear-neutral_conn_sim.df': ('fn_w', "HCP [task: fear-neutral] (wellids)"),
-        'fearneutralconnsim': ('fn_w', "HCP [task: fear-neutral] (wellids)"),
-        'glasserwellidsproximity': ('px_w', "Proximity (wellids)"),
-        'glasserparcelsproximity': ('px_g', "Proximity (glasser parcels)"),
-        'glasserwellidslogproximity': ('pxlw', "log Proximity (wellids)"),
-        'glasserparcelslogproximity': ('pxlg', "log Proximity (glasser parcels)"),
-    }
-
-    # Make short string for split seed and normalization
-    split = int(split)
-    if 200 <= split < 300:
-        xv = "2"
-        xvlong = "halves"
-    elif 400 <= split < 500:
-        xv = "4"
-        xvlong = "quarters"
-    else:
-        xv = "_"
-        xvlong = "undefined"
-    norm = "s" if normalization == "srs" else "_"
-
-    # Build and return the descriptor
-    if level == "short":
-        return "{}{}{:0>2}{}{}{}".format(
-            comp_map[comp][0],
-            splitby[0],
-            0 if mask == "none" else int(mask),
-            's',
-            norm,
-            xv,
-        )
-    elif level == "long":
-        return "{}, {}-normalized, {}".format(
-            comp_map[comp][1], normalization, xvlong,
-        )
-    else:
-        return "Undefined"
-
-
-def interpret_descriptor(descriptor):
-    """ Parse the plot descriptor into parts """
-    rdict = {
-        'descriptor': descriptor,
-        'comp': comp_from_signature(descriptor[:4]),
-        'parby': "glasser" if descriptor[3].lower() == "g" else "wellid",
-        'splby': "glasser" if descriptor[4].lower() == "g" else "wellid",
-        'mask': descriptor[5:7],
-        'algo': 'once' if descriptor[7] == "o" else "smrt",
-        'norm': 'srs' if ((len(descriptor) > 8) and (descriptor[8] == "s")) else "none",
-        'xval': descriptor[9] if len(descriptor) > 9 else '0',
-        'phase': 'train',
-        'opposite_phase': 'test',
-    }
-
-    try:
-        rdict['threshold'] = int(descriptor[8:])
-    except ValueError:
-        # This catches "peak" or "", both should be fine as None
-        rdict['threshold'] = None
-
-    # The xval, or cross-validation sample split range indicator,
-    # is '2' for splits in the 200's and '4' for splits in the 400s.
-    # Splits in the 200's are split-halves; 400's are split-quarters.
-    split_min = 0
-    split_max = 999
-    if rdict['xval'] == '2':
-        split_min = 200
-        split_max = 299
-    if rdict['xval'] == '4':
-        split_min = 400
-        split_max = 499
-    rdict['query_set'] = PushResult.objects.filter(
-        samp="glasser", prob="fornito", split__gte=split_min, split__lte=split_max,
-        algo=rdict['algo'], comp=rdict['comp'], parby=rdict['parby'], splby=rdict['splby'],
-        mask=rdict['mask'], norm=rdict['norm'],
-        batch__startswith=rdict['phase']
-    )
-
-    rdict['n'] = rdict['query_set'].count()
-    # Files are named with mask-none rather than mask-00, so tweak that key
-    rdict['glob_mask'] = "none" if rdict['mask'] == "00" else rdict['mask']
-    rdict['glob_pattern'] = os.path.join(
-        "derivatives", "sub-all_hem-A_samp-glasser_prob-fornito",
-        "parby-{parby}_splby-{splby}_batch-{phase}00{xval}*",
-        "tgt-max_algo-{algo}_shuf-*",
-        "sub-all_comp-{comp}_mask-{glob_mask}_norm-{norm}_adj-none*.tsv"
-    ).format(**rdict)
-    rdict['glob_dict'] = {
-        "sub": "all", "hem": "A", "samp": "glasser", "prob": "fornito",
-        "parby": rdict["parby"], "splby": rdict["splby"], "batch": rdict["phase"] + "00" + rdict["xval"] + "*",
-        "tgt": "max", "algo": rdict["algo"], "shuf": "*",
-        "comp": rdict["comp"], "mask": rdict["glob_mask"], "norm": rdict["norm"], "adj": "none",
-    }
-
-    return rdict
 
 
 def calc_ttests(row, df):
@@ -1020,6 +809,9 @@ def write_gene_lists(rdict, rdf, progress_recorder, data_root="/data"):
     df_ranked_full[['entrez_id', ]].to_csv(
         os.path.join(data_root, "plots", "{}_raw_ranked.csv".format(rdict['descriptor']))
     )
+
+    # df_ontology = describe_ontologies(rdf, rdict, progress_recorder)
+    # df_ontology.to_csv(os.path.join(data_root, "plots", "{}_ranked_ontologies.csv".format(rdict['descriptor'])))
 
     return gene_description
 
