@@ -2,7 +2,11 @@ from __future__ import absolute_import, unicode_literals
 
 from django.db import models
 from django.utils import timezone as django_timezone
-import datetime
+from datetime import datetime
+import os
+import re
+
+from pygest.convenience import json_contents, extract_seed, build_descriptor, seconds_elapsed
 
 
 # Create your models here.
@@ -70,6 +74,117 @@ class PushResult(models.Model):
                 self.shuf, self.parby, self.splby, self.comp, self.tgt, self.algo, self.batch, self.mask, self.seed,
             )
 
+    def fill_from_tsv_file(self, tsv_path, data_root="/data"):
+        self.f = tsv_path.split(os.sep)[-1]
+        rel_path = tsv_path[(len(data_root) + 1):(len(tsv_path) - len(self.f) - 1)]
+        self.result = {
+            'data_dir': data_root,
+            'rel_path': rel_path,
+            'path': os.path.join(data_root, rel_path),
+            'tsv_file': self.f,
+            'json_file': self.f.replace(".tsv", ".json"),
+            'log_file': self.f.replace(".tsv", ".log"),
+            'summary_file': self.f.replace(".tsv", ".top-peak.v4.json"),
+            'entrez_file': self.f.replace(".tsv", ".entrez_rank"),
+            'ejgo_file': self.f.replace(".tsv", ".ejgo_0002-2048"),
+        }
+        for file_type in ["tsv", "json", "log", "summary", "entrez", "ejgo", ]:
+            if os.path.isfile(os.path.join(self.result.get("path", ""), self.result.get(file_type + '_file', ""))):
+                self.result[file_type + '_present'] = True
+            else:
+                self.result[file_type + '_present'] = False
+
+        # Gather information about each result.
+        for bids_pair in re.findall(
+                r"[^\W_]+-[^\W_]*", os.path.join(self.result.get('path', ''), self.result.get('tsv_file', ''))
+        ):
+            bids_key, bids_value = bids_pair.split("-")
+            self.result[bids_key] = bids_value
+        if "mask" in self.result and self.result.get("mask", "") == "none":
+            self.result["mask"] = "00"
+
+        # Second, parse the key-value pairs from the json file containing processing information.
+        try:
+            self.result.update(json_contents(os.path.join(self.result['path'], self.result['json_file'])))
+        except FileNotFoundError:
+            self.result.update({
+                "host": "unknown",
+                "command": "unknown",
+                "blas": "unknown",
+                "pygest version": "unknown",
+                "log": os.path.join(self.result["path"], self.result["log_file"]),
+                "data": os.path.join(self.result["path"], self.result["tsv_file"]),
+                "began": "2000-01-01 00:00:00",
+                "completed": "2000-01-01 00:00:00",
+                "elapsed": "0:00:00.000000",
+                "duration": "no time at all",
+            })
+
+        # Determine how the original sample was split for re-sampling
+        if "batch-test" in self.result['path']:
+            split_key = "batch-test"
+        elif "batch-train" in self.result['path']:
+            split_key = "batch-train"
+        else:
+            split_key = "batch-"
+        split = extract_seed(os.path.join(self.result['path'], self.result['tsv_file']), split_key)
+        if 200 <= split <= 299:
+            self.result['resample'] = "split-half"
+        elif 400 <= split <= 499:
+            self.result['resample'] = "split-quarter"
+        elif split == 100:
+            self.result['resample'] = "whole"
+        else:
+            self.result['resample'] = "error"
+
+        # Finally, put it all into a model for storage in the database.
+        self.sourcedata = build_descriptor(
+            self.result.get("comp", ""), self.result.get("splby", ""), self.result.get("mask", ""),
+            self.result.get("norm", ""), split, level="long",
+        )
+        self.descriptor = build_descriptor(
+            self.result.get("comp", ""), self.result.get("splby", ""), self.result.get("mask", ""),
+            self.result.get("norm", ""), split, level="short",
+        )
+        self.resample = self.result.get("resample", "")
+        self.json_path = os.path.join(self.result['path'], self.result['json_file'])
+        self.tsv_path = os.path.join(self.result['path'], self.result['tsv_file'])
+        self.log_path = os.path.join(self.result['path'], self.result['log_file'])
+        # For dates, we assume EDT (-0400) as most runs were in EDT. If EST, the hour makes no real difference.
+        self.start_date = datetime.strptime(
+            self.result.get("began", "1900-01-01 00:00:00") + "-0400", "%Y-%m-%d %H:%M:%S%z"
+        )
+        self.end_date = datetime.strptime(
+            self.result.get("completed", "1900-01-01 00:00:00") + "-0400", "%Y-%m-%d %H:%M:%S%z"
+        )
+        self.host = self.result.get("host", "")
+        self.command = self.result.get("command", "")
+        self.version = self.result.get("pygest version", "")
+        self.duration = seconds_elapsed(self.result.get("elapsed", ""))
+        self.sub = self.result.get("sub", "")
+        self.hem = self.result.get("hem", " ").upper()[0]
+        self.samp = self.result.get("samp", "")
+        self.prob = self.result.get("prob", "")
+        self.parby = self.result.get("parby", "")
+        self.splby = self.result.get("splby", "")
+        self.batch = self.result.get("batch", "")
+        self.tgt = self.result.get("tgt", "")
+        self.algo = self.result.get("algo", "")
+        self.shuf = self.result.get("shuf", "")
+        self.norm = self.result.get("norm", "")
+        self.comp = self.result.get("comp", "")
+        self.mask = self.result.get("mask", "")
+        self.adj = self.result.get("adj", "")
+        self.tsv_present = self.result.get("tsv_present", False)
+        self.json_present = self.result.get("json_present", False)
+        self.log_present = self.result.get("log_present", False)
+        self.summary_present = self.result.get("summary_present", False)
+        self.ejgo_present = self.result.get("ejgo_present", False)
+        self.seed = int(self.result.get("seed", 0))
+        self.split = split
+        self.columns = 0
+        self.rows = 0
+
 
 class ConnectivityMatrix(models.Model):
     """ Connectivity matrices can be available in the conn directory. """
@@ -97,7 +212,7 @@ class ResultSummary(models.Model):
         if timestamp:
             summary_date = django_timezone.now()
         else:
-            summary_date = datetime.datetime.strptime("1900-01-01 00:00:00-0400", "%Y-%m-%d %H:%M:%S%z")
+            summary_date = datetime.strptime("1900-01-01 00:00:00-0400", "%Y-%m-%d %H:%M:%S%z")
         return cls(
             summary_date=summary_date,
             num_results=0,
