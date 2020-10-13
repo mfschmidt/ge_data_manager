@@ -247,6 +247,8 @@ def rest_refresh(request, job_name):
         jobs_id = handle_task(clear_macro_caches)
     elif task_handle == "clearmicro":
         jobs_id = handle_task(clear_micro_caches)
+    elif task_handle == "compute":
+        jobs_id = handle_task(compute_some)
     else:
         print("I don't understand job_name '{}'".format(job_name))
 
