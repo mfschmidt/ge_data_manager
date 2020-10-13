@@ -7,29 +7,59 @@ import re
 
 from pygest import algorithms
 from pygest.rawdata import miscellaneous
-from pygest.convenience import create_symbol_to_id_map, create_id_to_symbol_map, get_ranks_from_file, map_pid_to_eid
+from pygest.convenience import create_symbol_to_id_map, create_id_to_symbol_map, get_ranks_from_file
+from pygest.erminej import get_ranks_from_ejgo_file
 
 from .decorators import print_duration
 
 
 @print_duration
-def pervasive_probes(tsvs, top):
-    """ Go through the files provided, at the threshold specified, and report probes in all files. """
+def pervasive_results(files, threshold):
+    """ Go through the files provided, at the threshold specified, and report ids in all files. """
 
     print("    These results average {:0.2%} overlap.".format(
-        algorithms.pct_similarity(tsvs, map_probes_to_genes_first=False, top=top)
+        algorithms.pct_similarity(files, map_probes_to_genes_first=False, top=threshold)
     ))
     hitters = {}
-    for i, tsv in enumerate(tsvs):
-        if i == 0:
-            hitters = set(algorithms.run_results(tsv, top=top)['top_probes'])
+    for i, f in enumerate(files):
+        if ".ejgo" in f:
+            fn = algorithms.run_ontology
+            fld = 'top_gos'
         else:
-            hitters = hitters.intersection(set(algorithms.run_results(tsv, top=top)['top_probes']))
-        if i == len(tsvs):
-            print("    {} probes remain in all {} results.".format(len(hitters), i + 1))
-    winners = pd.DataFrame({'probe_id': list(hitters)})
-    winners['entrez_id'] = winners['probe_id'].map(miscellaneous.map_pid_to_eid_fornito)
-    return winners
+            fn = algorithms.run_results
+            fld = 'top_probes'
+        if i == 0:
+            hitters = set(fn(f, top=threshold)[fld])
+        else:
+            hitters = hitters.intersection(set(fn(f, top=threshold)[fld]))
+        if i == len(files):
+            print("    {} ids remain in all {} results.".format(len(hitters), i + 1))
+
+    return pd.DataFrame({'id': list(hitters)})
+
+
+def column_name_from_file(path, prefix, seq):
+    """ From a path to a file and a preset prefix, generate a unique column name for this file's results.
+
+        :param str path: The path to a file
+        :param str prefix: A prefix to start the column name
+        :param int seq: A number to sequentially identify the source of the column's data
+        :returns str: A string to use as a column name
+    """
+
+    # Decide on a unique column name for this particular gene ranking
+    # Looking for path like ...batch-train00400...
+    m_split = re.search(r"(?P<sub>{})-train(?P<val>[a-zA-Z0-9+]+)".format("batch"), path)
+    split = int(m_split.group("val")) if m_split is not None else None
+    m_seed = re.search(r"(?P<sub>{})-(?P<val>[0-9+]+)".format("seed"), path)
+    seed = int(m_seed.group("val")) if m_seed is not None else None
+    column_name = "{}_rank_{:04d}".format(
+        prefix, split if split is not None else 32 + seq,
+    )
+    if seed is not None:
+        column_name = "{}-{:04d}".format(column_name, seed)
+
+    return column_name
 
 
 @print_duration
@@ -39,7 +69,7 @@ def ranked_probes(tsvs, rank_type, top):
         :param list tsvs: A list of result files
         :param rank_type: a string to label/discriminate different groups of results
         :param top: Threshold for how many of the top genes to consider relevant
-        :returns: dataframe with probes as rows, and a column of probe ranks for each result, plus a 'mean' column.
+        :returns: dataframe with probes as rows, and a column of probe ranks for each tsv, plus a 'mean' column.
     """
 
     if len(tsvs) < 1:
@@ -52,46 +82,72 @@ def ranked_probes(tsvs, rank_type, top):
     # Collect raw rankings of all probes in all tsvs
     rs = []
     for i, tsv in enumerate(tsvs):
-        # Decide on a unique column name for this particular gene ranking
-        # Looking for path like ...batch-train00400...
-        m_split = re.search(r"(?P<sub>{})-train(?P<val>[a-zA-Z0-9+]+)".format("batch"), tsv)
-        split = int(m_split.group("val")) if m_split is not None else None
-        m_seed = re.search(r"(?P<sub>{})-(?P<val>[0-9+]+)".format("seed"), tsv)
-        seed = int(m_seed.group("val")) if m_seed is not None else None
-        column_name = "{}_rank_{:04d}".format(
-            rank_type, split if split is not None else 32 + i,
-        )
-        if seed is not None:
-            column_name = "{}-{:04d}".format(column_name, seed)
-
         # Use the calculated column name for this ranking
-        rs.append(get_ranks_from_file(tsv, column_name=column_name)[column_name])
-    dfr = pd.concat(rs, axis=1)
+        column_name = column_name_from_file(tsv, rank_type, i)
+        df = get_ranks_from_file(tsv)
+        rs.append(df.rename(columns={'rank': column_name})[column_name])
+    df_rankings = pd.concat(rs, axis=1)
 
     # Replace NaNs (genes in at least one list, but not all) with the worst rankings in each column
     # A NaN represents a score too low to make the given list and should penalize the mean ranking
     # This should no longer ever happen, as we no longer use truncated gene lists.
-    if dfr.isnull().values.any():
+    if df_rankings.isnull().values.any():
         print("ACK! truncating probes in genes.py:ranked_probes(); Why?!?!")
-        for col in dfr.columns:
+        for col in df_rankings.columns:
             # Replace this column's nans with this column's highest (worst) rankings
             print("column has {} values ranging from {} to {}; {} are NaN. Replace them with {}".format(
-                len(dfr),
-                dfr[col].min(), dfr[col].max(),
-                len(dfr.loc[np.isnan(dfr.loc[:, col]), col]),
-                len(list(range(int(max(dfr[col]) + 1), len(dfr) + 1)))
+                len(df_rankings),
+                df_rankings[col].min(), df_rankings[col].max(),
+                len(df_rankings.loc[np.isnan(df_rankings.loc[:, col]), col]),
+                len(list(range(int(max(df_rankings[col]) + 1), len(df_rankings) + 1)))
             ))
-            dfr.loc[np.isnan(dfr.loc[:, col]), col] = range(int(max(dfr[col]) + 1), len(dfr) + 1)
+            df_rankings.loc[np.isnan(df_rankings.loc[:, col]), col] = range(
+                int(max(df_rankings[col]) + 1), len(df_rankings) + 1
+            )
 
-    dfr[rank_type + '_mean'] = dfr.mean(axis=1)
-    if 'entrez_id' not in dfr.columns:
-        dfr['entrez_id'] = dfr.index.map(miscellaneous.map_pid_to_eid_fornito)
-    return dfr.sort_values(rank_type + '_mean', ascending=True)
+    df_rankings[rank_type + '_mean'] = df_rankings.mean(axis=1)
+    if 'entrez_id' not in df_rankings.columns:
+        df_rankings['entrez_id'] = df_rankings.index.map(miscellaneous.map_pid_to_eid_fornito)
+    return df_rankings.sort_values(rank_type + '_mean', ascending=True)
+
+
+@print_duration
+def ranked_ontologies(ejgos, rank_type):
+    """ Go through the files provided in ejgos, and return a dataframe of terms with ranks in all files.
+
+        :param list ejgos: A list of result files
+        :param rank_type: a string to label/discriminate different groups of results
+        :returns: dataframe with GO terms as rows, and a column of ranks for each ejgo, plus a 'mean' column.
+    """
+
+    if len(ejgos) < 1:
+        return None
+
+    print("    Ranking ontologies in {:,} results.".format(len(ejgos)))
+
+    # Collect raw rankings of all probes in all ejgos
+    rankings = []
+    for i, ejgo in enumerate(ejgos):
+        column_name = column_name_from_file(ejgo, rank_type, i)
+        # Use the calculated column name for this ranking
+        df = get_ranks_from_ejgo_file(ejgo)
+        rankings.append(df.rename(columns={'rank': column_name})[column_name])
+    df_rankings = pd.concat(rankings, axis=1)
+
+    df_rankings[rank_type + '_mean'] = df_rankings.mean(axis=1)
+
+    return df_rankings.sort_values(rank_type + '_mean', ascending=True)
 
 
 @print_duration
 def describe_three_relevant_overlaps(relevant_results, phase, threshold):
-    """ Filter results by the arguments, and report percent similarity and consistent top genes.
+    """ Filter results by the arguments, and report percent similarity, kendall tau and consistent top genes
+        for 'train', 'test', 'train vs test'.
+
+    :param relevant_results:
+    :param phase:
+    :param threshold:
+    :return pd.DataFrame: dataframe containing un-shuffled results
     """
 
     print("=== {} ===".format(phase))
@@ -124,30 +180,30 @@ def describe_three_relevant_overlaps(relevant_results, phase, threshold):
 
 
 @print_duration
-def rank_ontologies_respecting_shuffles(real_files, shuffle_files, shuffle_name):
-    """ Given ontology rankings from actual data and ontology ratings from shuffled data,
-        calculate how likely each ontology is to have outperformed the shuffle in actual data.
-    """
-
-    return None
-
-
-@print_duration
-def rank_genes_respecting_shuffles(real_files, shuffle_files, shuffle_name):
+def rank_respecting_shuffles(real_files, shuffle_files, shuffle_name):
     """ Given gene rankings from actual data and gene rankings from shuffled data,
         calculate how likely each gene is to have outperformed the shuffle in actual data.
     """
 
+    # Determine the files' extensions to determine whether to parse tsv results or ejgo results
+    ext = real_files[0][real_files[0].rfind("."):][1:]
     # Rearrange results to use ranking, ordered by probe_id index
     # Get a separate dataframe of probe rankings for each result for reals and shuffles
-    reals = ranked_probes(real_files, "reals", None).sort_index()
-    shuffles = ranked_probes(shuffle_files, "shufs", None).sort_index()
+    if ext == "tsv":
+        reals = ranked_probes(real_files, "reals", None).sort_index()
+        shuffles = ranked_probes(shuffle_files, "shufs", None).sort_index()
+    elif ext.startswith("ejgo"):
+        reals = ranked_ontologies(real_files, "reals").sort_index()
+        shuffles = ranked_ontologies(shuffle_files, "shufs").sort_index()
+    else:
+        print("The {} extension is not understood, boycotting!! <genes.py:rank_respecting_shuffles()>".format(ext))
+        return None
 
-    print("Writing {} reals and {} shuffles, named {} to csv. <genes.py:rank_genes_respecting_shuffles()>".format(
-        reals.shape, shuffles.shape, shuffle_name
+    print("Writing {} real and {} shuffled {}, named {} to csv. <genes.py:rank_respecting_shuffles()>".format(
+        reals.shape, shuffles.shape, ext, shuffle_name
     ))
-    reals.to_csv("/data/plots/cache/_ranked_reals_{}_.csv".format(shuffle_name))
-    shuffles.to_csv("/data/plots/cache/_ranked_shufs_{}_.csv".format(shuffle_name))
+    reals.to_csv("/data/plots/cache/_ranked_real_{}_{}_.csv".format(ext[:3], shuffle_name))
+    shuffles.to_csv("/data/plots/cache/_ranked_shuf_{}_{}_.csv".format(ext[:3], shuffle_name))
 
     new_df = pd.DataFrame(data=None, index=reals.index)
 
@@ -199,24 +255,6 @@ def rank_genes_respecting_shuffles(real_files, shuffle_files, shuffle_name):
     return new_df
 
 
-def write_result_as_entrezid_ranking(tsv_file, force_replace=False):
-    """ Read a tsv file, and write out its results as ranked entrez_ids for ermineJ to use.
-
-    :param tsv_file: The path to a PyGEST results file
-    :param force_replace: Set true to overwrite existing files
-    """
-
-    rank_file = tsv_file.replace(".tsv", ".entrez_rank")
-
-    if force_replace or not os.path.isfile(rank_file):
-        df = pd.read_csv(tsv_file, sep="\t", index_col=None, header=0)
-        df['rank'] = df.index + 1
-        df['entrez_id'] = df['probe_id'].apply(lambda x: map_pid_to_eid(x, "fornito"))
-        df.sort_index(ascending=True).set_index('entrez_id')[['rank', ]].to_csv(rank_file, sep="\t")
-
-    return rank_file
-
-
 def extract_description_for(values, ranks, thresholds, comparison_string):
     """ Report values from df_with_ranks[col] by thresholds.
 
@@ -244,68 +282,34 @@ def extract_description_for(values, ranks, thresholds, comparison_string):
     )
 
 
-@print_duration
-def describe_ontologies(rdf, rdict, progress_recorder):
+def p_real_shuffle_ttest(rdf, comparator):
+    """ Calculate p values between real and each shuffle via t-test.
+
+    :param rdf: dataframe with 'shuf' field for comparing 'none' to all other groups and comparator value field
+    :param comparator: field containing numeric data for comparisions between groups
+    :return: list of html <li> strings describing the comparisons
     """
 
-    :param rdf:
-    :param rdict:
-    :param progress_recorder:
-    :return:
-    """
-
-    progress_recorder.set_progress(90, 100, "Ranking ontologies")
-
-    # ontologies = rank_ontologies_respecting_shuffles(list(actuals['path']), list(shuffles['path']), shf)
-    # ontologies.to_csv()
-
-    return None
-
-
-@print_duration
-def describe_genes(rdf, rdict, progress_recorder):
-    """ Create a description of the top genes. """
-
-    progress_recorder.set_progress(86, 100, "Building gene maps")
-    sym_id_map = create_symbol_to_id_map()
-    id_sym_map = create_id_to_symbol_map()
-
-    progress_recorder.set_progress(90, 100, "Ranking genes")
-    relevant_tsvs = list(describe_three_relevant_overlaps(rdf, rdict['phase'], rdict['threshold'])['path'])
-    survivors = pervasive_probes(relevant_tsvs, rdict['threshold'])
-
-    # Calculate the raw ranking of all genes over all splits, and create a new 'raw_rank' to summarize them.
-    all_ranked = ranked_probes(relevant_tsvs, "raw", rdict['threshold'])
-    all_ranked['raw_rank'] = range(1, len(all_ranked.index) + 1, 1)
-    all_ranked['probe_id'] = all_ranked.index
-
-    # all_ranked.to_csv("/data/plots/cache/intermediate_a.csv")
-
-    output = [
-        "<p>{} {} {}</p>".format(
-            "Comparison of Mantel correlations between the test half",
-            "(using probes discovered in the train half)",
-            "vs connectivity similarity."
-        ),
-        "<ol>"
-    ]
-    # Calculate p with a t-test between real and shuffled.
+    output = []
     actuals = rdf[rdf['shuf'] == 'none']
     for shf in list(set(rdf[rdf['shuf'] != 'none']['shuf'])):
-        # 'test_score' is in the test set, and is most appropriate and conservative; could do 'train_score', too
         shuffles = rdf[rdf['shuf'] == shf]
         if len(shuffles) > 0 and len(actuals) > 0:
-            tt, pt = ttest_ind(actuals['test_score'].values, shuffles['test_score'].values)
-            tr, pr = ranksums(actuals['test_score'].values, shuffles['test_score'].values)
-            output.append("  <li>discovery in real vs discovery in {} ({}) ({})</li>".format(
-                shf,
+            tt, pt = ttest_ind(actuals[comparator].values, shuffles[comparator].values)
+            tr, pr = ranksums(actuals[comparator].values, shuffles[comparator].values)
+            output.append("  <li>discovery in real vs discovery for {} in {} ({}) ({})</li>".format(
+                comparator, shf,
                 "t-test: t = {:0.2f}, p = {:0.5f}".format(tt, pt),
                 "ranksum-test: t = {:0.2f}, p = {:0.5f}".format(tr, pr),
             ))
-    output.append("</ol>")
+    return output
 
-    progress_recorder.set_progress(92, 100, "Calculating p-values per gene")
-    # Calculate delta and p for each gene by counting how many times its shuffled rank outperforms its real rank.
+
+def p_real_shuffle_count(rdf, all_ranked, path_field='path'):
+    """ Calculate p values between real and shuffle via counting outperformance.
+    """
+
+    actuals = rdf[rdf['shuf'] == 'none']
     ave_p_lines = []
     ind_p_lines = []
     d_lines = []
@@ -314,7 +318,7 @@ def describe_genes(rdf, rdict, progress_recorder):
         if len(shuffles) > 0 and len(actuals) > 0:
             all_ranked = pd.concat([
                 all_ranked,
-                rank_genes_respecting_shuffles(list(actuals['path']), list(shuffles['path']), shf).sort_index()
+                rank_respecting_shuffles(list(actuals[path_field]), list(shuffles[path_field]), shf).sort_index()
             ], axis=1)
 
             ave_p_lines.append(extract_description_for(
@@ -338,6 +342,51 @@ def describe_genes(rdf, rdict, progress_recorder):
             ind_p_lines.append(crap_out_line)
             d_lines.append(crap_out_line)
 
+    return ave_p_lines, ind_p_lines, d_lines
+
+
+@print_duration
+def describe_genes(rdf, rdict, progress_recorder):
+    """ Create a description of the top genes. """
+
+    progress_recorder.set_progress(86, 100, "Building gene maps")
+    sym_id_map = create_symbol_to_id_map()
+    id_sym_map = create_id_to_symbol_map()
+
+    progress_recorder.set_progress(90, 100, "Ranking genes")
+    relevant_tsvs = list(describe_three_relevant_overlaps(rdf, rdict['phase'], rdict['threshold'])['path'])
+    survivors = pervasive_results(relevant_tsvs, rdict['threshold'])
+    survivors['entrez_id'] = survivors['id'].map(miscellaneous.map_pid_to_eid_fornito)
+
+    # Calculate the raw ranking of all genes over all splits, and create a new 'raw_rank' to summarize them.
+    all_ranked = ranked_probes(relevant_tsvs, "raw", rdict['threshold'])
+
+    all_ranked.to_csv("/data/plots/cache/intermediate_a.csv")
+
+    all_ranked['raw_rank'] = range(1, len(all_ranked.index) + 1, 1)
+    # all_ranked['probe_id'] = all_ranked.index
+
+    all_ranked.to_csv("/data/plots/cache/intermediate_b.csv")
+
+    # Calculate p with a t-test between real and shuffled.
+    # 'test_score' is in the test set, and is most appropriate and conservative; could do 'train_score', too
+    output = [
+        "<p>{} {} {}</p>".format(
+            "Comparison of Mantel correlations between the test half",
+            "(using probes discovered in the train half)",
+            "vs connectivity similarity."
+        ),
+        "<ol>",
+    ] + p_real_shuffle_ttest(rdf, 'test_score') + [
+        "</ol>",
+    ]
+
+    progress_recorder.set_progress(92, 100, "Calculating p-values per gene")
+    # Calculate delta and p for each gene by counting how many times its shuffled rank outperforms its real rank.
+    ave_p_lines, ind_p_lines, d_lines = p_real_shuffle_count(rdf, all_ranked, path_field='path')
+
+    all_ranked.to_csv("/data/plots/cache/intermediate_c.csv")
+
     output.append("<p>{}</p>".format(" ".join([
         "Relevant genes should perform better in real data than shuffled, but some don't.",
         "<ul>p-values by average real ranking<li>", "</li><li>".join(ave_p_lines), "</li></ul>",
@@ -346,8 +395,6 @@ def describe_genes(rdf, rdict, progress_recorder):
         "That doesn't mean they performed well, necessarily, just better in shuffled than real.",
         "See {}_ranked_full.csv for quantitative details.".format(rdict['descriptor']),
     ])))
-    # This is unnecessary as df_gene_ps is no longer created.
-    # all_ranked = pd.concat([all_ranked, df_gene_ps], axis=1)
 
     """ Next, for the description file, report top genes. """
     progress_recorder.set_progress(95, 100, "Summarizing genes")
@@ -359,9 +406,8 @@ def describe_genes(rdf, rdict, progress_recorder):
     output.append("<p>" + line1 + " " + line2 + "</p>\n  <ol>")
     # print(line)
     all_ranked = all_ranked.sort_values("raw_rank")
-    for p in (list(all_ranked.index[0:20]) + [x for x in survivors['probe_id'] if
-                                              x not in all_ranked.index[0:20]]):
-        asterisk = " *" if p in list(survivors['probe_id']) else ""
+    for p in (list(all_ranked.index[0:20]) + [x for x in survivors['id'] if x not in all_ranked.index[0:20]]):
+        asterisk = " *" if p in list(survivors['id']) else ""
         gene_id = all_ranked.loc[p, 'entrez_id']
         gene_id_string = "<a href=\"https://www.ncbi.nlm.nih.gov/gene/{g}\" target=\"_blank\">{g}</a>".format(
             g=gene_id
@@ -382,16 +428,93 @@ def describe_genes(rdf, rdict, progress_recorder):
         # print("{}. {}".format(all_ranked.loc[p, 'rank'], item_string))
     output.append("  </ol>\n</p>")
     output.append("<div id=\"notes_below\">")
-    output.append("    <p>Asterisks indicate probes making the top {} in all 16 splits.</p>".format(rdict['threshold']))
+    output.append("    <p>Asterisks indicate probes making the top {} in all splits.</p>".format(rdict['threshold']))
     output.append("</div>")
+
+    # Return the all_ranked dataframe, with two key-like Series as the first columns (this just orders the columns)
+    ordered_columns = [
+        "entrez_id",
+        *sorted([item for item in all_ranked.columns if "id" not in item and "rank" not in item]),
+        *sorted([item for item in all_ranked.columns if "rank" in item]),
+    ]
+    remaining_columns = [col for col in all_ranked.columns if col not in ordered_columns]
+
+    all_ranked.to_csv("/data/plots/cache/intermediate_d.csv")
+    all_ranked.to_pickle("/data/plots/cache/intermediate_d.df")
+
+    return all_ranked[ordered_columns + remaining_columns], "\n".join(output)
+
+
+@print_duration
+def describe_ontologies(rdf, rdict, progress_recorder):
+    """
+
+    :param rdf:
+    :param rdict:
+    :param progress_recorder:
+    :return:
+    """
+
+    go_threshold = 0.01
+
+    progress_recorder.set_progress(90, 100, "Ranking ontologies")
+
+    # Find ontologies and their rankings
+    relevant_gos = list(describe_three_relevant_overlaps(rdf, rdict['phase'], rdict['threshold'])['path'])
+    relevant_gos = [f.replace(".tsv", ".ejgo_roc_0002-2048") for f in relevant_gos]
+    survivors = pervasive_results(relevant_gos, go_threshold)
+    all_ranked = ranked_ontologies(relevant_gos, "raw")
+    all_ranked.to_csv("/data/plots/cache/intermediate_ontologyranks_a.csv")
+
+    all_ranked['raw_rank'] = range(1, len(all_ranked.index) + 1, 1)
+    all_ranked['go_id'] = all_ranked.index
+    all_ranked.to_csv("/data/plots/cache/intermediate_ontologyranks_b.csv")
+
+    progress_recorder.set_progress(92, 100, "Calculating p-values per GO term")
+    # Calculate delta and p for each gene by counting how many times its shuffled rank outperforms its real rank.
+    ave_p_lines, ind_p_lines, d_lines = p_real_shuffle_count(rdf, all_ranked, path_field='ejgo_path')
+
+    all_ranked.to_csv("/data/plots/cache/intermediate_ontologyranks_c.csv")
+
+    output = ["<p>{}</p>".format(" ".join([
+        "Relevant ontologies should perform better in real data than shuffled, but some don't.",
+        "<ul>p-values by average real ranking<li>", "</li><li>".join(ave_p_lines), "</li></ul>",
+        "<ul>p-values by individual real rankings<li>", "</li><li>".join(ind_p_lines), "</li></ul>",
+        "<ul>delta values<li>", "</li><li>".join(d_lines), "</li></ul>",
+        "That doesn't mean they performed well, necessarily, just better in shuffled than real.",
+        "See {}_ranked_full.csv for quantitative details.".format(rdict['descriptor']),
+    ])), ]
+
+    """ Next, for the description file, report top ontologies. """
+    progress_recorder.set_progress(95, 100, "Summarizing ontologies")
+    line1 = "Top ontologies from {} {}, {}-ranked by-{}, mask={}".format(
+        len(relevant_gos), rdict['phase'], rdict['algo'], rdict['splby'], rdict['mask']
+    )
+    output.append("<p>" + line1 + "</p>\n  <ol>")
+
+    all_ranked = all_ranked.sort_values("raw_rank")
+    for p in (list(all_ranked.index[0:20]) + [x for x in all_ranked.index[20:] if x in survivors['id']]):
+        asterisk = " *" if p in list(survivors['id']) else ""
+        go_id_string = "<a href=\"http://amigo.geneontology.org/amigo/term/{p}\" target=\"_blank\">{p}</a>".format(p=p)
+        item_string = "GO term {}, mean rank {:0.1f}{}".format(
+            go_id_string, all_ranked.loc[p, 'raw_mean'] + 1.0, asterisk
+        )
+        output.append("    <li value=\"{}\">{}</li>".format(all_ranked.loc[p, 'raw_rank'], item_string))
+        # print("{}. {}".format(all_ranked.loc[p, 'rank'], item_string))
+    output.append("  </ol>\n</p>")
+    output.append("<div id=\"notes_below\">")
+    output.append("    <p>Asterisks indicate ontologies with p<{} in all splits.</p>".format(go_threshold))
+    output.append("</div>")
+
+    all_ranked.to_csv("/data/plots/cache/intermediate_ontologyranks_d.csv")
 
     # Return the all_ranked dataframe, with two key-like Series as the first columns
     ordered_columns = [
-        "entrez_id", "probe_id",
-        *sorted([item for item in all_ranked.columns if "_id" not in item and "rank" not in item]),
+        *sorted([item for item in all_ranked.columns if "id" not in item and "rank" not in item]),
         *sorted([item for item in all_ranked.columns if "rank" in item]),
-        *sorted([item for item in all_ranked.columns if "_id" in item]),
     ]
     remaining_columns = [col for col in all_ranked.columns if col not in ordered_columns]
+
+    all_ranked.to_csv("/data/plots/cache/intermediate_ontologyranks_e.csv")
 
     return all_ranked[ordered_columns + remaining_columns], "\n".join(output)

@@ -18,13 +18,14 @@ from scipy import stats
 
 from pygest import algorithms
 from pygest.convenience import bids_val, extract_seed, build_descriptor
+from pygest.erminej import run_gene_ontology
 import pygest as ge
 
 from .models import PushResult, ResultSummary, GroupedResultSummary
 from .plots import plot_all_train_vs_test, plot_performance_over_thresholds, plot_overlap
 from .plots import plot_fig_2, plot_fig_3, plot_fig_4
 from .plots import describe_overlap, describe_mantel
-from .genes import describe_genes, describe_ontologies, write_result_as_entrezid_ranking
+from .genes import describe_genes, describe_ontologies
 
 from .decorators import print_duration
 
@@ -444,119 +445,6 @@ def results_as_dict(tsv_file, base_path, probe_sig_threshold=None, use_cache=Tru
     return result_dict
 
 
-def ready_erminej(base_path):
-    """ If ermineJ is not available, download and prepare it. """
-
-    import urllib.request as request
-    import gzip
-    import subprocess
-
-    # Ensure pre-requisites exist and are accessible
-    ej_path = os.path.join(base_path, "genome", "erminej")
-    os.makedirs(ej_path, exist_ok=True)
-    ontology = {
-        'url': 'http://archive.geneontology.org/latest-termdb/go_daily-termdb.rdf-xml.gz',
-        'file': '2019-07-09-erminej_go.rdf-xml',
-    }
-    annotation = {
-        'url': 'https://gemma.msl.ubc.ca/annots/Generic_human_ncbiIds_noParents.an.txt.gz',
-        'file': '2020-04-22-erminej_human_annotation_entrezid.txt',
-    }
-    software = {
-        'url': 'http://home.pavlab.msl.ubc.ca/ermineJ/distributions/ermineJ-3.1.2-generic-bundle.zip',
-        'file': 'ermineJ-3.1.2-generic-bundle.zip',
-    }
-    for prereq in [ontology, annotation, ]:
-        if not os.path.exists(os.path.join(ej_path, "data", prereq['file'])):
-            print("Downloading fresh {}, it didn't exist.".format(prereq['file']))
-            response = request.urlopen(prereq['url'])
-            with open(os.path.join(ej_path, "data", prereq['file']), "wb") as f:
-                f.write(gzip.decompress(response.read()))
-    if not os.path.exists(os.path.join(ej_path, software['file'])):
-        response = request.urlopen(software['url'])
-        with open(os.path.join(ej_path, software['file']), "wb") as f:
-            data = response.read()
-            f.write(data)
-
-    # Unzip ermineJ software, if necessary
-    if not os.path.exists(os.path.join(ej_path, "ermineJ-3.1.2", "bin", "ermineJ.sh")):
-        print("Unzipping ermineJ software.")
-        p = subprocess.run(
-            ['unzip', '-u', os.path.join(ej_path, software['file']), ],
-            cwd=ej_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        )
-        if p.returncode != 0:
-            print(p.stdout.decode())
-            print(p.stderr.decode())
-
-        p = subprocess.run(
-            ['chmod', "a+x", os.path.join(ej_path, "ermineJ-3.1.2", "bin", "ermineJ.sh"), ],
-            cwd=ej_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        )
-        if p.returncode != 0:
-            print(p.stdout.decode())
-            print(p.stderr.decode())
-
-    return_dict = {
-        "executable": os.path.join(ej_path, "ermineJ-3.1.2", "bin", "ermineJ.sh"),
-        "ontology": os.path.join(ej_path, "data", ontology['file']),
-        "annotation": os.path.join(ej_path, "data", annotation['file']),
-        "data": os.path.join(ej_path, "data"),
-        "ready": True,
-    }
-    for req_path in ["executable", "ontology", "annotation", "data", ]:
-        if not os.path.exists(return_dict[req_path]):
-            return_dict["ready"] = False
-    return return_dict
-
-
-def run_gene_ontology(tsv_file, base_path="/data"):
-    """ Run ermineJ gene ontology on one gene ordering.
-
-    :param tsv_file: full path to a PyGEST result
-    :param base_path: PyGEST data root
-    """
-
-    import subprocess
-
-    ej = ready_erminej(base_path)
-
-    go_path = tsv_file.replace(".tsv", ".ejgo_roc_0002-2048")
-
-    rank_file = write_result_as_entrezid_ranking(tsv_file)
-
-    # Only run gene ontology if it does not yet exist.
-    print("run_gene_ontology: 'ready': {}, 'go_path': ...{}".format(ej["ready"], go_path[-40:]))
-    if ej["ready"] and not os.path.isfile(go_path):
-        print("initiating ermineJ run on '{}...{}'".format(tsv_file[:30], tsv_file[-30:]))
-        p = subprocess.run(
-            [
-                ej['executable'],
-                '-d', ej["data"],
-                '--annots', ej['annotation'],
-                '--classFile', ej['ontology'],
-                '--scoreFile', rank_file,
-                '--test', 'ROC',  # Method for computing significance. ROC best for ordinal rankings
-                '--mtc', 'FDR',  # FDR indicates Benjamini-Hochberg corrections for false discovery rate
-                '--reps', 'BEST',  # If a gene has multiple probes/ids in input, use BEST
-                '--genesOut',  # Include gene symbols in output
-                '--minClassSize', '2',  # smallest gene set size to be considered
-                '--maxClassSize', '2048',  # largest gene set size to be considered
-                '-aspects', 'BCM',  # Test against all three GO components
-                '--logTrans', 'false',  # If we fed p-values, we would set this to true
-                '--output', go_path,
-            ],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        )
-
-        # Write the log file
-        with open(tsv_file.replace(".tsv", ".ejlog"), "a") as f:
-            f.write("STDOUT:\n")
-            f.write(p.stdout.decode())
-            f.write("STDERR:\n")
-            f.write(p.stderr.decode())
-
-
 def calc_ttests(row, df):
     """ for a given dataframe row, if it's a real result, return its t-test t-value vs all shuffles in df. """
     if row.shuf == 'none':
@@ -576,7 +464,9 @@ def calc_real_v_shuffle_overlaps(row, df):
             top_threshold = row.threshold
             if top_threshold == "peak" or top_threshold == 0:
                 top_threshold = None
-            overlaps.append(algorithms.pct_similarity([row.path, shuffled_tsv], top=top_threshold))
+            overlaps.append(
+                algorithms.pct_similarity([row.path, shuffled_tsv], map_probes_to_genes_first=True, top=top_threshold)
+            )
         return np.mean(overlaps)
     else:
         return 0.0
@@ -587,7 +477,9 @@ def calc_total_overlap(row, df):
     if row.shu == 'none':
         overlaps = []
         for shuffled_tsv in df[(df['threshold'] == row.threshold)]['path']:
-            overlaps.append(algorithms.pct_similarity([row.path, shuffled_tsv], top=row.threshold))
+            overlaps.append(
+                algorithms.pct_similarity([row.path, shuffled_tsv], map_probes_to_genes_first=True, top=row.threshold)
+            )
         return np.mean(overlaps)
     else:
         return 0.0
@@ -652,15 +544,15 @@ def calculate_individual_stats(
     else:
         """ Calculate results for individual tsv files. """
         relevant_results = []
-        for i, path in enumerate(rdict['query_set'].values('tsv_path')):
-            print("Calculating stats for #{}. {}".format(i, path['tsv_path']))
-            if os.path.isfile(path['tsv_path']):
+        for i, path in enumerate([p[0] for p in rdict['query_set'].values_list('tsv_path')]):
+            print("Calculating stats for #{}. {}".format(i, path))
+            if os.path.isfile(path):
                 relevant_results.append(
-                    results_as_dict(path['tsv_path'], base_path=data_root, probe_sig_threshold=rdict['threshold'])
+                    results_as_dict(path, base_path=data_root, probe_sig_threshold=rdict['threshold'])
                 )
-                run_gene_ontology(path['tsv_path'], base_path=data_root)
+                run_gene_ontology(path, base_path=data_root)
             else:
-                print("ERR: DOES NOT EXIST: {}".format(path['tsv_path']))
+                print("ERR: DOES NOT EXIST: {}".format(path))
 
             complete_portion = ((i + 1) / rdict['n']) * (progress_to - progress_from)
             progress_recorder.set_progress(
@@ -682,13 +574,13 @@ def calculate_individual_stats(
 
 
 @print_duration
-def calculate_group_stats(
+def calculate_group_result_stats(
         rdict, rdf, progress_recorder, progress_from=0, progress_to=99, data_root="/data", use_cache=True
 ):
     """ Using meta-data from each result, calculate statistics between results and about the entire group. """
 
     t_stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    rdf.to_pickle("/data/plots/cache/group_{}_in_rdf.df".format(t_stamp), protocol=4)
+    rdf.to_pickle("/data/plots/cache/group_result_{}_in_rdf.df".format(t_stamp), protocol=4)
 
     progress_recorder.set_progress(progress_from, 100, "Step 2/3<br />1. Within-shuffle overlap")
     """ Calculate similarity within split-halves and within shuffle-seeds. """
@@ -700,7 +592,7 @@ def calculate_group_stats(
         """
 
         # If these data were cached, load them rather than re-calculate.
-        post_file = os.path.join(data_root, "plots", "cache", "{}_summary_group_{}.df".format(
+        post_file = os.path.join(data_root, "plots", "cache", "{}_summary_group_result_{}.df".format(
             rdict['descriptor'], shuffle
         ))
         if use_cache and os.path.isfile(post_file):
@@ -711,7 +603,7 @@ def calculate_group_stats(
             shuffle_mask = rdf['shuf'] == shuffle
             local_df = rdf.loc[shuffle_mask, :]
             local_n = len(local_df)
-            print("Calculating percent overlaps and Kendall taus for {} {}-shuffles".format(local_n, shuffle))
+            print("Calculating percent overlaps & Kendall taus for {} {}-shuffled results.".format(local_n, shuffle))
             progress_recorder.set_progress(
                 (100.0 * i / n), 100, "Step 2/3<br />2. {}-shuffle similarity".format(shuffle)
             )
@@ -721,11 +613,11 @@ def calculate_group_stats(
             if local_n > 0:
                 # Overlap and Kendall tau intra- all members of this shuffle_mask (all 32 'none' shuffles perhaps)
                 before_overlap = datetime.now()
-                local_df['train_overlap'] = algorithms.pct_similarity_list(
-                    list(local_df['path']), top=rdict['threshold']
+                local_df.loc[:, 'train_overlap'] = algorithms.pct_similarity_list(
+                    list(local_df['path']), map_probes_to_genes_first=True, top=rdict['threshold']
                 )
                 before_ktau = datetime.now()
-                local_df['train_ktau'] = algorithms.kendall_tau_list(
+                local_df.loc[:, 'train_ktau'] = algorithms.kendall_tau_list(
                     list(local_df['path']),
                 )
                 after_ktau = datetime.now()
@@ -746,7 +638,9 @@ def calculate_group_stats(
                         ))
                         # The following similarities are masked to include only one shuffle type, and one split-half
                         local_df.loc[split_mask, 'overlap_by_split'] = algorithms.pct_similarity_list(
-                            list(local_df.loc[split_mask, 'path']), top=rdict['threshold']
+                            list(local_df.loc[split_mask, 'path']),
+                            map_probes_to_genes_first=True,
+                            top=rdict['threshold']
                         )
                         local_df.loc[split_mask, 'ktau_by_split'] = algorithms.kendall_tau_list(
                             list(local_df.loc[split_mask, 'path']),
@@ -764,7 +658,9 @@ def calculate_group_stats(
                             np.sum(shuffle_mask & seed_mask), seed, shuffle
                         ))
                         local_df.loc[seed_mask, 'overlap_by_seed'] = algorithms.pct_similarity_list(
-                            list(local_df.loc[seed_mask, 'path']), top=rdict['threshold']
+                            list(local_df.loc[seed_mask, 'path']),
+                            map_probes_to_genes_first=True,
+                            top=rdict['threshold']
                         )
                         local_df.loc[seed_mask, 'ktau_by_seed'] = algorithms.kendall_tau_list(
                             list(local_df.loc[seed_mask, 'path']),
@@ -776,14 +672,155 @@ def calculate_group_stats(
                 """ For each result in actual split-half train data, compare it to its shuffles. """
                 # Each unshuffled run will match itself only for these two, resulting in a 1.0 perfect comparison.
                 # So we overwrite them with a better comparison
-                local_df['real_v_shuffle_overlap'] = local_df.apply(
+                local_df.loc[:, 'real_v_shuffle_overlap'] = local_df.apply(
                     lambda x: algorithms.pct_similarity(
-                        [x.path, x.real_tsv_from_shuffle], top=rdict['threshold']
+                        [x.path, x.real_tsv_from_shuffle], map_probes_to_genes_first=True, top=rdict['threshold']
                     ), axis=1
                 )
-                local_df['real_v_shuffle_ktau'] = local_df.apply(
+                local_df.loc[:, 'real_v_shuffle_ktau'] = local_df.apply(
                     lambda x: algorithms.kendall_tau(
                         [x.path, x.real_tsv_from_shuffle]
+                    ), axis=1
+                )
+
+            print("Pickling {}".format(post_file))
+            local_df.to_pickle(post_file, protocol=4)
+
+        # Whether from cache or calculation, keep a list of each separate shuffle dataframe for later concatenation.
+        local_dfs.append(local_df)
+
+    new_group_rdf = pd.concat(local_dfs, axis='index')
+    new_group_rdf.to_pickle("/data/plots/cache/group_{}_out_rdf.df".format(t_stamp), protocol=4)
+
+    progress_recorder.set_progress(progress_to, 100, "Step 2/3<br />Similarity calculated")
+
+    return pd.concat(local_dfs, axis='index')
+
+
+@print_duration
+def calculate_group_ontology_stats(
+        rdict, rdf, progress_recorder, progress_from=0, progress_to=99, data_root="/data", use_cache=True
+):
+    """ Using meta-data from each result, calculate statistics between results and about the entire group. """
+
+    t_stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    rdf.to_pickle("/data/plots/cache/group_ontology_{}_in_rdf.df".format(t_stamp), protocol=4)
+    rdf['ejgo_path'] = rdf['path'].apply(lambda x: x.replace(".tsv", ".ejgo_roc_0002-2048"))
+
+    progress_recorder.set_progress(progress_from, 100, "Step 2/3<br />1. Within-shuffle overlap")
+    """ Calculate similarity within split-halves and within shuffle-seeds. """
+    n = len(set(rdf['shuf']))
+    local_dfs = []
+    for i, shuffle in enumerate(list(set(rdf['shuf']))):
+        """ This explores the idea of viewing similarity between same-split-seed runs and same-shuffle-seed runs
+            vs all shuffled runs of the type. All three of these are "internal" or "intra-list" overlap.
+        """
+
+        # If these data were cached, load them rather than re-calculate.
+        post_file = os.path.join(data_root, "plots", "cache", "{}_summary_group_ontology_{}.df".format(
+            rdict['descriptor'], shuffle
+        ))
+        if use_cache and os.path.isfile(post_file):
+            """ Load results from a cached file, if possible"""
+            print("Loading individual data from cache, {}".format(post_file))
+            local_df = pickle.load(open(post_file, 'rb'))
+        else:
+            shuffle_mask = rdf['shuf'] == shuffle
+            local_df = rdf.loc[shuffle_mask, :]
+            local_n = len(local_df)
+            print("Calculating percent overlaps & Kendall taus for {} {}-shuffled ontologies.".format(local_n, shuffle))
+            progress_recorder.set_progress(
+                (100.0 * i / n), 100, "Step 2/3<br />2. {}-shuffle similarity".format(shuffle)
+            )
+            progress_delta = float(progress_to - progress_from) * 0.25 / n
+
+            """ Calculate overlaps and such, only if there are results available to calculate. """
+            if local_n > 0:
+                # Overlap and Kendall tau intra- all members of this shuffle_mask (all 32 'none' shuffles perhaps)
+                before_overlap = datetime.now()
+                local_df.loc[:, 'train_overlap_01'] = algorithms.pct_similarity_list(
+                    list(local_df['ejgo_path']), map_probes_to_genes_first=False, top=0.01
+                )
+                local_df.loc[:, 'train_overlap_05'] = algorithms.pct_similarity_list(
+                    list(local_df['ejgo_path']), map_probes_to_genes_first=False, top=0.05
+                )
+                before_ktau = datetime.now()
+                local_df.loc[:, 'train_ktau'] = algorithms.kendall_tau_list(
+                    list(local_df['ejgo_path']),
+                )
+                after_ktau = datetime.now()
+                print("Overlaps for {} took {}".format(shuffle, str(before_ktau - before_overlap)))
+                print("Kendall taus for {} took {}".format(shuffle, str(after_ktau - before_ktau)))
+
+                progress_recorder.set_progress(
+                    (100.0 * i / n) + (progress_delta * 1), 100, "Step 2/3<br />3. {}-shuffle seeds".format(shuffle)
+                )
+                # For each shuffled result, compare it against same-shuffled results from the same split
+                for split in list(set(local_df['split'])):
+                    # These values will all be 'nan' for unshuffled results. There's only one per split.
+                    split_mask = local_df['split'] == split
+                    if np.sum(split_mask) > 0:
+                        # For a given split (within-split, across-seeds):
+                        print("    overlap and ktau of {} {}-split {}-shuffles".format(
+                            np.sum(shuffle_mask & split_mask), split, shuffle
+                        ))
+                        # The following similarities are masked to include only one shuffle type, and one split-half
+                        local_df.loc[split_mask, 'overlap_by_split_01'] = algorithms.pct_similarity_list(
+                            list(local_df.loc[split_mask, 'ejgo_path']),
+                            map_probes_to_genes_first=False, top=0.01
+                        )
+                        local_df.loc[split_mask, 'overlap_by_split_05'] = algorithms.pct_similarity_list(
+                            list(local_df.loc[split_mask, 'ejgo_path']),
+                            map_probes_to_genes_first=False, top=0.05
+                        )
+                        local_df.loc[split_mask, 'ktau_by_split'] = algorithms.kendall_tau_list(
+                            list(local_df.loc[split_mask, 'ejgo_path']),
+                        )
+
+                progress_recorder.set_progress(
+                    (100.0 * i / n) + (progress_delta * 2), 100, "Step 2/3<br />4. {}-shuffle seeds".format(shuffle)
+                )
+                # For each shuffled result, compare it against same-shuffled results from the same shuffle seed
+                for seed in list(set(local_df['seed'])):
+                    seed_mask = local_df['seed'] == seed
+                    if np.sum(seed_mask) > 0:
+                        # For a given seed (within seed, across splits):
+                        print("    overlap and ktau of {} {}-seed {}-shuffles".format(
+                            np.sum(shuffle_mask & seed_mask), seed, shuffle
+                        ))
+                        local_df.loc[seed_mask, 'overlap_by_seed_01'] = algorithms.pct_similarity_list(
+                            list(local_df.loc[seed_mask, 'path']),
+                            map_probes_to_genes_first=False, top=0.01
+                        )
+                        local_df.loc[seed_mask, 'overlap_by_seed_05'] = algorithms.pct_similarity_list(
+                            list(local_df.loc[seed_mask, 'path']),
+                            map_probes_to_genes_first=False, top=0.05
+                        )
+                        local_df.loc[seed_mask, 'ktau_by_seed'] = algorithms.kendall_tau_list(
+                            list(local_df.loc[seed_mask, 'path']),
+                        )
+
+                progress_recorder.set_progress(
+                    (100.0 * i / n) + (progress_delta * 3), 100, "Step 2/3<br />5. {}-shuffle seeds".format(shuffle)
+                )
+                """ For each result in actual split-half train data, compare it to its shuffles. """
+                # Each unshuffled run will match itself only for these two, resulting in a 1.0 perfect comparison.
+                # So we overwrite them with a better comparison
+                local_df.loc[:, 'real_v_shuffle_overlap_01'] = local_df.apply(
+                    lambda x: algorithms.pct_similarity(
+                        [x.ejgo_path, x.real_tsv_from_shuffle.replace(".tsv", ".ejgo_roc_0002-2048")],
+                        map_probes_to_genes_first=False, top=0.01
+                    ), axis=1
+                )
+                local_df.loc[:, 'real_v_shuffle_overlap_05'] = local_df.apply(
+                    lambda x: algorithms.pct_similarity(
+                        [x.ejgo_path, x.real_tsv_from_shuffle.replace(".tsv", ".ejgo_roc_0002-2048")],
+                        map_probes_to_genes_first=False, top=0.05
+                    ), axis=1
+                )
+                local_df.loc[:, 'real_v_shuffle_ktau'] = local_df.apply(
+                    lambda x: algorithms.kendall_tau(
+                        [x.ejgo_path, x.real_tsv_from_shuffle.replace(".tsv", ".ejgo_roc_0002-2048")]
                     ), axis=1
                 )
 
@@ -805,15 +842,21 @@ def calculate_group_stats(
 def write_gene_lists(rdict, rdf, progress_recorder, data_root="/data"):
     """ Rank genes and write them out as two csvs. """
     df_ranked_full, gene_description = describe_genes(rdf, rdict, progress_recorder)
-    df_ranked_full.to_csv(os.path.join(data_root, "plots", "{}_ranked_full.csv".format(rdict['descriptor'])))
+    df_ranked_full.to_csv(os.path.join(data_root, "plots", "{}_ranked_genes.csv".format(rdict['descriptor'])))
     df_ranked_full[['entrez_id', ]].to_csv(
         os.path.join(data_root, "plots", "{}_raw_ranked.csv".format(rdict['descriptor']))
     )
-
-    # df_ontology = describe_ontologies(rdf, rdict, progress_recorder)
-    # df_ontology.to_csv(os.path.join(data_root, "plots", "{}_ranked_ontologies.csv".format(rdict['descriptor'])))
-
     return gene_description
+
+
+@print_duration
+def write_ontology_lists(rdict, rdf, progress_recorder, data_root="/data"):
+    """ Rank ontologies and write them out as two csvs. """
+    df_ontology, ontology_description = describe_ontologies(rdf, rdict, progress_recorder)
+    df_ontology.to_csv(
+        os.path.join(data_root, "plots", "{}_ranked_ontologies.csv".format(rdict['descriptor']))
+    )
+    return ontology_description
 
 
 @shared_task(bind=True)
@@ -890,8 +933,8 @@ def clear_micro_caches(self, descriptor, progress_from=0, progress_to=100):
 
     """ Delete calculated results for individual tsv files. """
     n_removed = 0
-    for i, path in enumerate(rdict['query_set'].values('tsv_path')):
-        analyzed_path = path['tsv_path'].replace(".tsv", ".top-{}.v3.json".format(
+    for i, path in enumerate([p[0] for p in rdict['query_set'].values_list('tsv_path')]):
+        analyzed_path = path.replace(".tsv", ".top-{}.v3.json".format(
             "peak" if rdict['threshold'] is None else "{:04}".format(rdict['threshold'])
         ))
         if os.path.isfile(analyzed_path):
@@ -921,88 +964,124 @@ def assess_everything(self, plot_descriptor, data_root="/data"):
     """
 
     progress_recorder = ProgressRecorder(self)
+    i = 0  # i is the index into how many plots and reports to build, for reporting progress
+    n = 11  # n is the total number of plots and reports, for percentage calculation
 
+    datetimes = []
     """ 1. Find all result files.
            Caches a json file for each result, and a summary dataframe, greatly speeding the process on subsequent runs.
     """
-    dt_begin = datetime.now()
+    datetimes.append(datetime.now())
+    progress_recorder.set_progress(100.0 * i / n, 100, "Step {}/{}<br />Individual stats".format(i + 1, n))
+    i += 1
     rdict, rdf = calculate_individual_stats(
-        plot_descriptor, progress_recorder, progress_from=0, progress_to=99, data_root=data_root
+        plot_descriptor, progress_recorder, progress_from=0, progress_to=int(100.0 * i / n), data_root=data_root
     )
-    dt_down01 = datetime.now()
-    print("{:,} records for full analysis. [{}]".format(len(rdf), str(dt_down01 - dt_begin)))
+    with open(os.path.join(data_root, "plots", "cache", plot_descriptor + "_rdf_from_indi_stats.df"), "wb") as f:
+        pickle.dump(rdf, f)
+    datetimes.append(datetime.now())
+    print("{:,} records for full analysis. [{}]".format(len(rdf), str(datetimes[-2] - datetimes[-1])))
 
     """ 2. Calculate grouped stats, overlap within each group of tsv files.
            This, too, caches the resultant calculations.
     """
-    rdf = calculate_group_stats(
-        rdict, rdf, progress_recorder, progress_from=0, progress_to=99, data_root=data_root
+    progress_recorder.set_progress(100.0 * i / n, 100, "Step {}/{}<br />Group result stats".format(i + 1, n))
+    i += 1
+    grrdf = calculate_group_result_stats(
+        rdict, rdf, progress_recorder, progress_from=0, progress_to=int(100.0 * i / n), data_root=data_root
     )
-    dt_down02 = datetime.now()
-    print("{:,} group stats. [{}]".format(len(rdf), str(dt_down02 - dt_down01)))
+    with open(os.path.join(data_root, "plots", "cache", plot_descriptor + "_rdf_from_groupresult_stats.df"), "wb") as f:
+        pickle.dump(grrdf, f)
+    datetimes.append(datetime.now())
+    print("{:,} group result stats. [{}]".format(len(grrdf), str(datetimes[-2] - datetimes[-1])))
 
-    i = 0  # i is the index into how many plots and reports to build, for reporting progress
-    n = 6
-    plotted_shuffles = ["none", "be04", "agno", ]
+    """ 3. Calculate grouped ontology stats.
+           This, too, caches the resultant calculations.
+    """
+    progress_recorder.set_progress(100.0 * i / n, 100, "Step {}/{}<br />Group ontology stats".format(i + 1, n))
+    i += 1
+    gordf = calculate_group_ontology_stats(
+        rdict, rdf, progress_recorder, progress_from=0, progress_to=int(100.0 * i / n), data_root=data_root
+    )
+    with open(os.path.join(data_root, "plots", "cache", plot_descriptor + "_rdf_from_groupontol_stats.df"), "wb") as f:
+        pickle.dump(gordf, f)
+    datetimes.append(datetime.now())
+    print("{:,} group ontology stats. [{}]".format(len(gordf), str(datetimes[-2] - datetimes[-1])))
 
     """ 3. Plot aggregated data. """
+
+    plotted_shuffles = ["none", "be04", "agno", ]
+
+    progress_recorder.set_progress(100.0 * i / n, 100, "Step {}/{}<br />Over-Plotting fig 2".format(i + 1, n))
+    i += 1
     plot_title = "Mantels: {}s, split by {}, {}-masked, {}-ranked, {}-normed, by {}, top-{}".format(
         rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], rdict['norm'], plot_descriptor[:3].upper(),
         'peak' if rdict['threshold'] is None else rdict['threshold']
     )
-    progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3<br />Over-Plotting fig 2")
-    f_over, axes = plot_all_train_vs_test(rdf, title=plot_title, fig_size=(14, 14), y_min=-0.15, y_max=0.70)
+    f_over, axes = plot_all_train_vs_test(grrdf, title=plot_title, fig_size=(14, 14), y_min=-0.15, y_max=0.70)
     f_over.savefig(os.path.join(data_root, "plots", "{}_f_over-plot-fig-2.png".format(plot_descriptor.lower())))
-    i += 1
-    dt_down03 = datetime.now()
-    print("Figure 2 (overplot) generated in [{}]".format(len(rdf), str(dt_down03 - dt_down02)))
+    datetimes.append(datetime.now())
+    print("Figure 2 (overplot) generated in [{}]".format(len(grrdf), str(datetimes[-2] - datetimes[-1])))
 
     plot_title = "Mantels: {}s, split by {}, {}-masked, {}-ranked, {}-normed, by {}, top-{}".format(
         rdict['parby'], rdict['splby'], rdict['mask'], rdict['algo'], rdict['norm'], plot_descriptor[:3].upper(),
         'peak' if rdict['threshold'] is None else rdict['threshold']
     )
-    progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3<br />Plotting figure 2")
-    f_2, axes = plot_fig_2(rdf, shuffles=plotted_shuffles, title=plot_title, fig_size=(12, 6), y_min=-0.15, y_max=0.50)
+    progress_recorder.set_progress(100.0 * i / n, 100, "Step {}/{}<br />Plotting figure 2".format(i + 1, n))
+    f_2, axes = plot_fig_2(
+        grrdf, shuffles=plotted_shuffles, title=plot_title, fig_size=(12, 6), y_min=-0.15, y_max=0.50
+    )
     f_2.savefig(os.path.join(data_root, "plots", "{}_fig_2.png".format(plot_descriptor.lower())))
     i += 1
-    dt_down03 = datetime.now()
-    print("Figure 2 generated in [{}]".format(len(rdf), str(dt_down03 - dt_down02)))
+    datetimes.append(datetime.now())
+    print("Figure 2 generated in [{}]".format(len(grrdf), str(datetimes[-2] - datetimes[-1])))
 
-    progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3<br />Plotting figure 3")
-    f_3, axes = plot_fig_3(rdf, shuffles=plotted_shuffles, title=plot_title, fig_size=(6, 5), y_min=-0.1, y_max=0.50)
+    progress_recorder.set_progress(100.0 * i / n, 100, "Step {}/{}<br />Plotting figure 3".format(i + 1, n))
+    f_3, axes = plot_fig_3(
+        grrdf, shuffles=plotted_shuffles, title=plot_title, fig_size=(6, 5), y_min=-0.1, y_max=0.50
+    )
     f_3.savefig(os.path.join(data_root, "plots", "{}_fig_3.png".format(plot_descriptor.lower())))
     i += 1
-    dt_down04 = datetime.now()
-    print("Figure 3 generated in [{}]".format(len(rdf), str(dt_down04 - dt_down03)))
+    datetimes.append(datetime.now())
+    print("Figure 3 generated in [{}]".format(len(grrdf), str(datetimes[-2] - datetimes[-1])))
 
-    progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3<br />Plotting figure 4")
-    f_4, axes = plot_fig_4(rdf, shuffles=plotted_shuffles, title=plot_title, y_min=0.0, y_max=0.80, fig_size=(13, 5),)
+    progress_recorder.set_progress(100.0 * i / n, 100, "Step {}/{}<br />Plotting figure 4".format(i + 1, n))
+    f_4, axes = plot_fig_4(
+        grrdf, shuffles=plotted_shuffles, title=plot_title, y_min=0.0, y_max=0.80, fig_size=(13, 5),
+    )
     f_4.savefig(os.path.join(data_root, "plots", "{}_fig_4.png".format(plot_descriptor.lower())))
     i += 1
-    dt_down05 = datetime.now()
-    print("Figure 4 generated in [{}]".format(len(rdf), str(dt_down05 - dt_down04)))
+    datetimes.append(datetime.now())
+    print("Figure 4 generated in [{}]".format(len(grrdf), str(datetimes[-2] - datetimes[-1])))
 
-    # TODO: Add plot for some result over all four distance masks.
-    dt_down06 = datetime.now()
-    print("Nothing generated in [{}]".format(len(rdf), str(dt_down06 - dt_down05)))
+    # TODO: Add plot for some result over all four distance masks. How do results change as we mask more proximate pairs
+    datetimes.append(datetime.now())
+    print("Nothing generated in [{}]".format(len(grrdf), str(datetimes[-2] - datetimes[-1])))
 
     """ 4. Describe results in text form. """
-    progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3<br />Writing result text")
-    mantel_description = describe_mantel(rdf, descriptor=plot_descriptor.lower(), title=plot_title, )
+    progress_recorder.set_progress(100.0 * i / n, 100, "Step {}/{}<br />Writing result text".format(i + 1, n))
+    mantel_description = describe_mantel(grrdf, descriptor=plot_descriptor.lower(), title=plot_title, )
     i += 1
-    dt_down07 = datetime.now()
-    print("Mantel result text generated in [{}]".format(len(rdf), str(dt_down07 - dt_down06)))
+    datetimes.append(datetime.now())
+    print("Mantel result text generated in [{}]".format(len(grrdf), str(datetimes[-2] - datetimes[-1])))
 
-    progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3<br />Writing gene lists")
-    gene_description = write_gene_lists(rdict, rdf, progress_recorder, data_root="/data")
+    progress_recorder.set_progress(100.0 * i / n, 100, "Step {}/{}<br />Writing gene lists".format(i + 1, n))
+    gene_description = write_gene_lists(rdict, grrdf, progress_recorder, data_root="/data")
     i += 1
-    dt_down08 = datetime.now()
-    print("Gene lists generated in [{}]".format(len(rdf), str(dt_down08 - dt_down07)))
+    datetimes.append(datetime.now())
+    print("Gene lists generated in [{}]".format(len(grrdf), str(datetimes[-2] - datetimes[-1])))
 
-    progress_recorder.set_progress(100.0 * i / n, 100, "Step 3/3<br />Writing overlap description")
-    overlap_description = describe_overlap(rdf, descriptor=plot_descriptor.lower(), title=plot_title, )
-    dt_down09 = datetime.now()
-    print("Overlap descriptions generated in [{}]".format(len(rdf), str(dt_down09 - dt_down08)))
+    progress_recorder.set_progress(100.0 * i / n, 100, "Step {}/{}<br />Writing ontology lists".format(i + 1, n))
+    i += 1
+    ontology_description = write_ontology_lists(rdict, gordf, progress_recorder, data_root="/data")
+    datetimes.append(datetime.now())
+    print("Ontology lists generated in [{}]".format(len(grrdf), str(datetimes[-2] - datetimes[-1])))
+
+    progress_recorder.set_progress(100.0 * i / n, 100, "Step {}/{}<br />Writing overlap description".format(i + 1, n))
+    i += 1
+    overlap_description = describe_overlap(grrdf, descriptor=plot_descriptor.lower(), title=plot_title, )
+    datetimes.append(datetime.now())
+    print("Overlap descriptions generated in [{}]".format(len(grrdf), str(datetimes[-2] - datetimes[-1])))
 
     with open(os.path.join(data_root, "plots", "{}_report.html".format(plot_descriptor.lower())), 'w') as f:
         f.write("<h1>Mantel Correlations</h1>\n")
@@ -1011,12 +1090,15 @@ def assess_everything(self, plot_descriptor, data_root="/data"):
         f.write(overlap_description)
         f.write("<h1>Probe/Gene Descriptions</h1>\n")
         f.write(gene_description)
+        f.write("<h1>Ontology Descriptions</h1>\n")
+        f.write(ontology_description)
     i += 1
 
-    progress_recorder.set_progress(99, 100, "Step 3/3. Plotting finished")
-    print("Completely finished in [{}] ({} to {})".format(
-        str(datetime.now() - dt_begin), str(dt_begin), str(datetime.now())
+    progress_recorder.set_progress(99, 100, "Plotting finished")
+    print("Completely finished {} tasks in [{}] ({} to {})".format(
+        i, str(datetime.now() - datetimes[0]), str(datetimes[0]), str(datetime.now())
     ))
+    print(datetimes)
 
 
 @shared_task(bind=True)
@@ -1038,7 +1120,7 @@ def just_genes(self, plot_descriptor, data_root="/data"):
         plot_descriptor, progress_recorder, progress_from=0, progress_to=5, data_root=data_root
     )
     print("In just_genes, calculating group stats.")
-    rdf = calculate_group_stats(
+    rdf = calculate_group_result_stats(
         rdict, rdf, progress_recorder, progress_from=5, progress_to=10, data_root=data_root
     )
     progress_recorder.set_progress(10, 100, "Just writing gene lists")
@@ -1148,27 +1230,35 @@ def assess_overlap(self, plot_descriptor, data_root="/data"):
             shuffle_mask = rdf['shuf'] == shuffle
             # We can only do this in training data, unless we want to double the workload above for test, too.
             rdf.loc[shuffle_mask, 'train_overlap'] = algorithms.pct_similarity_list(
-                list(rdf.loc[shuffle_mask, 'path']), top=rdict['threshold']
+                list(rdf.loc[shuffle_mask, 'path']), map_probes_to_genes_first=True, top=rdict['threshold']
             )
 
             # For each shuffled result, compare it against same-shuffled results from the same split
             for split in list(set(rdf['split'])):
                 split_mask = rdf['split'] == split
                 rdf.loc[shuffle_mask & split_mask, 'overlap_by_split'] = algorithms.pct_similarity_list(
-                    list(rdf.loc[shuffle_mask & split_mask, 'path']), top=rdict['threshold']
+                    list(rdf.loc[shuffle_mask & split_mask, 'path']),
+                    map_probes_to_genes_first=True,
+                    top=rdict['threshold']
                 )
 
             # For each shuffled result, compare it against same-shuffled results from the same shuffle seed
             for seed in list(set(rdf['seed'])):
                 seed_mask = rdf['seed'] == seed
                 rdf.loc[shuffle_mask & seed_mask, 'overlap_by_seed'] = algorithms.pct_similarity_list(
-                    list(rdf.loc[shuffle_mask & seed_mask, 'path']), top=rdict['threshold']
+                    list(rdf.loc[shuffle_mask & seed_mask, 'path']),
+                    map_probes_to_genes_first=True,
+                    top=rdict['threshold']
                 )
 
             """ For each result in actual split-half train data, compare it to its shuffles. """
             rdf['real_tsv_from_shuffle'] = rdf['path'].replace("shuf-" + shuffle, "shuf-none")
             rdf.loc[shuffle_mask, 'real_v_shuffle_overlap'] = rdf.loc[shuffle_mask, :].apply(
-                lambda x: algorithms.pct_similarity([x.path, x.real_tsv_from_shuffle], top=rdict['threshold']), axis=1)
+                lambda x: algorithms.pct_similarity(
+                    [x.path, x.real_tsv_from_shuffle],
+                    map_probes_to_genes_first=True,
+                    top=rdict['threshold']
+                ), axis=1)
 
     rdf.to_pickle(post_file, protocol=4)
 
@@ -1245,21 +1335,21 @@ def assess_performance(self, plot_descriptor, data_root="/data"):
             relevant_results = []
 
             """ Calculate (or load) stats for individual tsv files. """
-            for path_idx, path in enumerate(rdict['query_set'].values('tsv_path')):
-                if os.path.isfile(path['tsv_path']):
+            for i, path in enumerate([p[0] for p in rdict['query_set'].values_list('tsv_path')]):
+                if os.path.isfile(path):
                     for threshold_idx, threshold in enumerate(thresholds):
                         relevant_results.append(
                             results_as_dict(
-                                path['tsv_path'], base_path=data_root,
+                                path, base_path=data_root,
                                 probe_sig_threshold=None if threshold == 0 else threshold
                             )
                         )
                         progress_recorder.set_progress(
-                            2 + ((path_idx * len(thresholds) + threshold_idx) / (total_pieces * 2)) * 88, 100,
-                            "Processing {:,}/{:,} results".format(path_idx, rdict['n'])
+                            2 + ((i * len(thresholds) + threshold_idx) / (total_pieces * 2)) * 88, 100,
+                            "Processing {:,}/{:,} results".format(i, rdict['n'])
                         )
                 else:
-                    print("ERR: DOES NOT EXIST: {}".format(path['tsv_path']))
+                    print("ERR: DOES NOT EXIST: {}".format(path))
             rdf = pd.DataFrame(relevant_results)
 
             # Just temporarily, in case debugging offline is necessary
@@ -1274,13 +1364,13 @@ def assess_performance(self, plot_descriptor, data_root="/data"):
             splits = list(set(rdf['split']))
             shuffles = list(set(rdf['shuf']))
             calcs = len(splits) * len(shuffles)
-            for shuffle_idx, shuffle in enumerate(shuffles):
+            for i, shuffle in enumerate(shuffles):
                 shuffle_mask = rdf['shuf'] == shuffle
                 for split_idx, split in enumerate(splits):
                     progress_recorder.set_progress(
-                        total_pieces + int(((shuffle_idx * len(splits) + split_idx) / calcs) * (total_pieces / 2)),
+                        total_pieces + int(((i * len(splits) + split_idx) / calcs) * (total_pieces / 2)),
                         total_pieces * 2 + calcs,
-                        "overlap list {}:{}/{}:{}".format(shuffle_idx, len(shuffles), split_idx, len(splits))
+                        "overlap list {}:{}/{}:{}".format(i, len(shuffles), split_idx, len(splits))
                     )
                     split_mask = rdf['split'] == split
                     # We can only do this in training data, unless we want to double the prior workload for test, too.
@@ -1313,3 +1403,30 @@ def assess_performance(self, plot_descriptor, data_root="/data"):
         progress_recorder.set_progress(100, 100, "Finished")
 
     return None
+
+
+@shared_task(bind=True)
+def compute_some(self, plot_descriptor, data_root="/data"):
+    """ This is like assess_everything, but includes 0's and 1's to indicate which steps to run.
+
+    :param self: interact with celery via decorator
+    :param plot_descriptor: Abbreviated string, like 'hcpww16ss00001111' describing underlying data
+    :param data_root: default root path to find all results
+    """
+
+    progress_recorder = ProgressRecorder(self)
+    print("In compute_some, about to start.")
+    print("In compute_some, calculating individual stats.")
+    rdict, rdf = calculate_individual_stats(
+        plot_descriptor, progress_recorder, progress_from=0, progress_to=5, data_root=data_root
+    )
+    print("In compute_some, calculating group stats.")
+    rdf = calculate_group_result_stats(
+        rdict, rdf, progress_recorder, progress_from=5, progress_to=10, data_root=data_root
+    )
+    progress_recorder.set_progress(10, 100, "Just writing gene lists")
+    print("In compute_some, working on gene descriptions.")
+    gene_description = write_gene_lists(rdict, rdf, progress_recorder, data_root="/data")
+    with open(os.path.join(data_root, "plots", "{}_genes.html".format(plot_descriptor.lower())), 'w') as f:
+        f.write("<h1>Probe/Gene Descriptions</h1>\n")
+        f.write(gene_description)
