@@ -3,7 +3,7 @@ from django.shortcuts import render
 from django.db.utils import ProgrammingError
 
 from os import path
-from .models import PushResult, ResultSummary
+from .models import PushResult, GroupedResultSummary
 
 
 """ Common selection options """
@@ -19,7 +19,13 @@ def unique_tuples(k, enumerated=False):
     """ Return a list of tuples, containing all values matching the k key, useful for select box widgets """
 
     # Upon initial run, the database may not exist yet and trigger a ProgrammingError when queried.
-    unique_values = []   # if PushResult.objects.count() == 0 else PushResult.objects.order_by().values_list(k).distinct()
+    try:
+        if PushResult.objects.count() == 0:
+            unique_values = []
+        else:
+            unique_values = PushResult.objects.order_by().values_list(k).distinct()
+    except ProgrammingError:
+        unique_values = []
 
     vs = (('*', '*', ), )
     for i, v in enumerate(sorted(unique_values)):
@@ -28,6 +34,7 @@ def unique_tuples(k, enumerated=False):
         else:
             vs += (v + v, )
     return vs
+
 
 class FilterForm(forms.Form):
     """ Focus on split halves for now, ignoring less interesting variables. """
@@ -56,6 +63,7 @@ class FilterForm(forms.Form):
         label="mask (mask)", widget=forms.Select, choices=unique_tuples('mask'), initial='none')
     # adjustment = forms.ChoiceField(
     #     label="adjustment (adj)", widget=forms.Select, choices=unique_tuples('adjustment'), initial='*')
+
 
 def filter_results(request):
     """ Render the FilterForm. """
@@ -185,7 +193,7 @@ def image_dict_from_selection(selection):
 def image_dict_from_selections(clean_form_data, side):
     """ Convert a collection of selections into a single string allowing selection of the correct plot image. """
 
-    prefix='na'
+    prefix = 'na'
     summary_string = "empty"
     summary_template = "{comp}{pby}{sby}{mask}{mask}{algo}{norm}"
     if side.upper()[0] == "L":
@@ -209,7 +217,7 @@ def image_dict_from_selections(clean_form_data, side):
             norm=clean_form_data['right_norm'],
         )
     elif side.lower() == "performance":
-        prefix='performance'
+        prefix = 'performance'
         summary_string = summary_template.format(
             comp=clean_form_data['comp'].lower(),
             pby=clean_form_data['parcel'].lower()[0],
@@ -223,6 +231,59 @@ def image_dict_from_selections(clean_form_data, side):
         'alt': summary_string,
     }
     return image_dict
+
+
+class ComputeForm(forms.Form):
+    """ Form fields for computation. """
+
+    run_individual = forms.BooleanField()
+    force_individual = forms.BooleanField()
+    run_group = forms.BooleanField()
+    force_group = forms.BooleanField()
+    run_figures = forms.BooleanField()
+    force_figures = forms.BooleanField()
+
+    def __init__(self, compute_sets, initial_compute_set):
+        super().__init__()
+        if len(compute_sets) > 0:
+            self.compute_set = forms.ChoiceField(
+                label="compute from",
+                widget=forms.Select,
+                choices=compute_sets,
+                initial=initial_compute_set if initial_compute_set in compute_sets else compute_sets[0],
+            )
+        else:
+            self.compute_set = forms.ChoiceField(
+                label="compute from",
+                widget=forms.Select,
+                choices=[initial_compute_set, ],
+                initial=initial_compute_set,
+            )
+            self.add_error('compute_set', "No compute sets named " + initial_compute_set + " available.")
+
+
+def compute(request, descriptor):
+    """ Render the compute form. """
+
+    submitted = False
+    if request.method == 'POST':
+        form = ComputeForm(request.POST, None)  # NOT working, both arguments are probably shit here.
+        if form.is_valid():
+            print("We calculated the image name, {}, in python. I didn't think we'd ever POST form data.".format(
+                descriptor
+            ))
+    else:
+        # Create a blank form
+        descriptors = list(GroupedResultSummary.objects.order_by().values_list('descriptor').distinct())
+        form = ComputeForm(descriptors, descriptor)
+        if 'submitted' in request.GET:
+            submitted = True
+
+    return render(request, 'gedata/compute.html', {
+        'form': form,
+        'submitted': submitted,
+        'descriptor': descriptor,
+    })
 
 
 def compare_results(request):
@@ -337,4 +398,3 @@ def resultset(request, metric):
         'image': image,
         'metric': metric,
     })
-
