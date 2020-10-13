@@ -1,0 +1,56 @@
+{% extends 'gedata/base.html' %}
+
+{% load humanize %}
+
+{% block title %}Compute results from individual PyGEST runs{% endblock %}
+
+{% block content %}
+
+    {% if submitted %}
+        <p>POST data received.</p>
+    {% else %}
+        <form action="" method="POST" novalidate>
+            {% csrf_token %}
+            {{ form.non_field_errors }}
+            {{ form.source.errors }}
+            {{ form.source }}
+            <div class="left_side">
+                <div>{{ form.left_set.label_tag }}</div>
+                <div>{{ form.left_set }}{{ form.left_set.errors }}</div>
+            </div>
+            <div class="right_side">
+                <div>{{ form.right_set.label_tag }}</div>
+                <div>{{ form.right_set }}{{ form.right_set.errors }}</div>
+            </div>
+            <div style="text-align: center;">
+                <!-- Do not allow actual submission, everything we do is javascript, ajax, and celery. Reloading the page may start things over. -->
+                <span id="left_set_string" style="display: none;">empty</span>
+                <input type="button" value="Compare" onclick="buildPlot('left_image', 'left_set_string'); buildPlot('right_image', 'right_set_string');">
+                <span id="right_set_string" style="display: none;">empty</span>
+            </div>
+        </form>
+
+        <div class="left_side">
+            <div id="left_image"><!-- replaced onload --><img src="{{ left_image.url }}" alt="{{ left_image.description }}"></div>
+            <div id="left_descriptor" class="descriptor"><!-- replaced onload --></div>
+            <div id="left_go" class="descriptor"><!-- replaced onload --></div>
+        </div>
+        <div class="right_side">
+            <div id="right_image"><!-- replaced onload --><img src="{{ right_image.url }}" alt="{{ right_image.description }}"></div>
+            <div id="right_descriptor" class="descriptor"><!-- replaced onload --></div>
+            <div id="right_go" class="descriptor"><!-- replaced onload --></div>
+        </div>
+        <div class="left_side">
+            <div id="left_perf_image"><!-- replaced onload --></div>
+            <div id="left_perf_descriptor" class="descriptor"><!-- replaced onload --></div>
+        </div>
+        <div class="right_side">
+            <div id="right_perf_image"><!-- replaced onload --></div>
+            <div id="right_perf_descriptor" class="descriptor"><!-- replaced onload --></div>
+        </div>
+
+    {% endif %}
+
+    <p><!-- just for a bit of space --></p>
+
+{% endblock %}
