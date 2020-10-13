@@ -34,10 +34,9 @@ services:
                         dockerfile: ./docker_worker/Dockerfile
                 volumes:
                         - /data:/data:z
+                user: "${UID_GID}"
                 depends_on:
                         - mq
                         - web
                 command: >
-                        /bin/bash -c "rm -f /code/gedata/static/gedata/plots &&
-                                ln -s /data/plots /code/gedata/static/gedata/plots &&
-                                celery worker --app ge_data_manager --hostname=mq --broker "amqp://guest@mq" --loglevel=INFO --events"
+                        /bin/bash -c "celery worker --app ge_data_manager --hostname=mq --broker "amqp://guest@mq" --loglevel=INFO --events"
