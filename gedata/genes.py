@@ -493,7 +493,7 @@ def describe_ontologies(rdf, rdict, progress_recorder):
     output.append("<p>" + line1 + "</p>\n  <ol>")
 
     all_ranked = all_ranked.sort_values("raw_rank")
-    for p in (list(all_ranked.index[0:20]) + [x for x in all_ranked.index[20:] if x in survivors['id']]):
+    for p in (list(all_ranked.index[0:20]) + [x for x in all_ranked.index[20:] if x in list(survivors['id'])]):
         asterisk = " *" if p in list(survivors['id']) else ""
         go_id_string = "<a href=\"http://amigo.geneontology.org/amigo/term/{p}\" target=\"_blank\">{p}</a>".format(p=p)
         item_string = "GO term {}, mean rank {:0.1f}{}".format(
