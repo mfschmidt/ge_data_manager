@@ -1,7 +1,7 @@
 scipy
 Django>=2.2.10,<3.0
 psycopg2>=2.7,<3.0
-celery>=4.3
+celery>=4.3,<5.0
 django-celery-results
 numpy
 pandas
