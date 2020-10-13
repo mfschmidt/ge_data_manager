@@ -16,6 +16,7 @@ urlpatterns = [
     path('set/<str:metric>', forms.resultset, name='resultset'),
     path('comparison/', forms.comparison_results, name='comparison'),
     path('filter/', forms.filter_results, name='filter'),
+    path('compute/<str:compute_set>', forms.compute, name='compute'),
 ]
 
 """
