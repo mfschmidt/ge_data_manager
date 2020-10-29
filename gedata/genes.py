@@ -316,6 +316,9 @@ def p_real_shuffle_count(rdf, all_ranked, path_field='path'):
     for shf in list(set(rdf[rdf['shuf'] != 'none']['shuf'])):
         shuffles = rdf[rdf['shuf'] == shf]
         if len(shuffles) > 0 and len(actuals) > 0:
+            print("<p_real_shuffle_count: calculating p-values for {} actuals vs {} shuffles".format(
+                len(actuals[path_field]), len(shuffles[path_field])
+            ))
             all_ranked = pd.concat([
                 all_ranked,
                 rank_respecting_shuffles(list(actuals[path_field]), list(shuffles[path_field]), shf).sort_index()
@@ -342,7 +345,7 @@ def p_real_shuffle_count(rdf, all_ranked, path_field='path'):
             ind_p_lines.append(crap_out_line)
             d_lines.append(crap_out_line)
 
-    return ave_p_lines, ind_p_lines, d_lines
+    return ave_p_lines, ind_p_lines, d_lines, all_ranked
 
 
 @print_duration
@@ -383,7 +386,7 @@ def describe_genes(rdf, rdict, progress_recorder):
 
     progress_recorder.set_progress(92, 100, "Calculating p-values per gene")
     # Calculate delta and p for each gene by counting how many times its shuffled rank outperforms its real rank.
-    ave_p_lines, ind_p_lines, d_lines = p_real_shuffle_count(rdf, all_ranked, path_field='path')
+    ave_p_lines, ind_p_lines, d_lines, all_ranked = p_real_shuffle_count(rdf, all_ranked, path_field='path')
 
     all_ranked.to_csv("/data/plots/cache/intermediate_c.csv")
 
@@ -472,7 +475,7 @@ def describe_ontologies(rdf, rdict, progress_recorder):
 
     progress_recorder.set_progress(92, 100, "Calculating p-values per GO term")
     # Calculate delta and p for each gene by counting how many times its shuffled rank outperforms its real rank.
-    ave_p_lines, ind_p_lines, d_lines = p_real_shuffle_count(rdf, all_ranked, path_field='ejgo_path')
+    ave_p_lines, ind_p_lines, d_lines, all_ranked = p_real_shuffle_count(rdf, all_ranked, path_field='ejgo_path')
 
     all_ranked.to_csv("/data/plots/cache/intermediate_ontologyranks_c.csv")
 

@@ -1010,7 +1010,7 @@ def assess_everything(self, plot_descriptor, data_root="/data"):
 
     """ 3. Plot aggregated data. """
 
-    plotted_shuffles = ["none", "be04", "agno", ]
+    plotted_shuffles = ["none", "be04", "dist", "agno", ]
 
     progress_recorder.set_progress(100.0 * i / n, 100, "Step {}/{}<br />Over-Plotting fig 2".format(i + 1, n))
     i += 1
