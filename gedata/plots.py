@@ -7,170 +7,13 @@ import matplotlib.patches as patches
 import seaborn as sns
 
 from pygest import plot
-from pygest.convenience import p_string
+from pygest.convenience import p_string, mean_and_sd, calc_hilo
+from pygest.plot import curve_properties, box_and_swarm
 
 
 def shuf_key(shuf):
     """ return an index to sort shuffles in this order. """
     return ["none", "edge", "be04", "be08", "be16", "smsh", "dist", "agno", ].index(shuf)
-
-
-def mean_and_sd(numbers):
-    """ Report the mean and standard deviation of a list of numbers as text. """
-
-    return "mean {:0.4f} (sd {:0.4f}, n={:,}, range=[{:0.3f} - {:0.3f}])".format(
-        tmean(numbers), tstd(numbers), len(numbers), min(numbers), max(numbers)
-    )
-
-
-def calc_hilo(min_val, max_val, df, cols_to_test):
-    """ Return lowest and highest values from min_val and max_val if present, or calculate from df. """
-
-    # Calculate (or blindly accept) the range of the y-axis, which must be the same for all four axes.
-    if (max_val is None) and (len(df.index) > 0):
-        highest_possible_score = max([max(df[col]) for col in cols_to_test])
-    else:
-        highest_possible_score = max_val
-    if (min_val is None) and (len(df.index) > 0):
-        lowest_possible_score = min([min(df[col]) for col in cols_to_test])
-    else:
-        lowest_possible_score = min_val
-
-    return lowest_possible_score, highest_possible_score
-
-
-def curve_properties(df, shuffle_name):
-    """ Return appropriate properties for curves and boxplots representing a given shuffle type.
-
-    :param pandas.DataFrame df: A dataframe with a 'path' column holding paths to result files by 'shuf'
-    :param str shuffle_name: The name of the shuffle type key
-    :returns dict: dict with labelled properties of a curve
-    """
-
-    # print("DEBUG: df, return value from curve_properties(df, {})".format(shuffle_name))
-    # print("df is {}; has {} {}-paths.".format(df.shape, df[df['shuf'] == shuffle_name].shape, shuffle_name))
-
-    # print(df.shape)
-
-    # Generate colorblind palette, then adjust intensity up and down slightly for light and dark versions
-    pal = sns.color_palette("colorblind")
-    pal_dark = [(c[0] - (c[0] / 3), c[1] - (c[1] / 3), c[2] - (c[2] / 3)) for c in pal]
-    pal_light = [(c[0] + ((1.0 - c[0]) / 3), c[1] + ((1.0 - c[1]) / 3), c[2] + ((1.0 - c[2]) / 3)) for c in pal]
-    # 0: blue, 1: orange, 2: green, 3: red, 4: violet, 5: brown, 6: pink, 7: gray, 8: yellow, 9: aqua
-
-    property_dict = {
-        "files": list(df.loc[df['shuf'] == shuffle_name, 'path']),
-        "shuf": shuffle_name,
-    }
-    if shuffle_name == "none":
-        property_dict.update({"linestyle": "-", "color": "black", "light_color": "gray", })
-    elif shuffle_name.startswith("be"):
-        property_dict.update({"linestyle": ":", "color": pal_dark[0], "light_color": pal_light[0], })  # 0 == blue
-    elif shuffle_name == "dist":
-        property_dict.update({"linestyle": ":", "color": pal_dark[3], "light_color": pal_light[3], })  # 3 == red
-    elif shuffle_name == "agno":
-        property_dict.update({"linestyle": ":", "color": pal_dark[6], "light_color": pal_light[6], })  # 6 == pink
-    elif shuffle_name == "smsh":
-        property_dict.update({"linestyle": ":", "color": pal_dark[5], "light_color": pal_light[5], })  # 5 == brown
-    elif shuffle_name == "edge":
-        property_dict.update({"linestyle": ":", "color": pal_dark[2], "light_color": pal_light[2], })  # 2 == green
-    else:
-        property_dict.update({"linestyle": ".", "color": pal_dark[7], "light_color": pal_light[7], })  # 7 == gray
-
-    # print("DEBUG: property_dict, return value from curve_properties(df, {})".format(shuffle_name))
-    # print("property_dict has {} files for shuf {}".format(len(property_dict['files']), shuffle_name))
-
-    return property_dict
-
-
-def box_and_swarm(figure, placement, label, variable, data, shuffles, high_score=1.0, orientation="v",
-                  lim=None, ps=True, push_ordinate_to=None):
-    """ Create an axes object with a swarm plot drawn over a box plot of the same data. """
-
-    # print("DEBUG: shuffles (should be a list of strings):")
-    # print(shuffles)
-
-    annot_columns = []
-    for i, shuf in enumerate(shuffles):
-        prop = curve_properties(data, shuf)
-        prop.update({"xo": float(i), "xp": float(i * 0.5)})  # updates prop, but returns None, not the updated dict
-        # print("    got '{}' property for '{}'".format(type(prop), shuf))
-        annot_columns.append(prop)
-
-    shuffle_color_boxes = [d['light_color'] for d in annot_columns]
-    shuffle_color_points = [d['color'] for d in annot_columns]
-
-    if push_ordinate_to is not None:
-        data[variable] = data[variable] + push_ordinate_to - data[variable].max()
-
-    ax = figure.add_axes(placement, label=label)
-    if orientation == "v":
-        sns.swarmplot(data=data, x='shuf', y=variable,
-                      order=shuffles, palette=shuffle_color_points, size=3.0, ax=ax)
-        sns.boxplot(data=data, x='shuf', y=variable, order=shuffles, palette=shuffle_color_boxes, ax=ax)
-        ax.set_ylabel(None)
-        ax.set_xlabel(label)
-        if lim is not None:
-            ax.set_ylim(lim)
-    else:
-        sns.swarmplot(data=data, x=variable, y='shuf', order=shuffles, palette=shuffle_color_points, ax=ax)
-        sns.boxplot(data=data, x=variable, y='shuf', order=shuffles, palette=shuffle_color_boxes, ax=ax)
-        ax.set_xlabel(None)
-        ax.set_ylabel(label)
-        if lim is not None:
-            ax.set_xlim(lim)
-
-    """ Calculate p-values for each column in the above plots, and annotate accordingly. """
-    if ps & (orientation == "v"):
-        gap = 0.06
-        actual_results = data[data['shuf'] == 'none'][variable].values
-        try:
-            global_max_y = max(data[variable].values)
-        except ValueError:
-            global_max_y = high_score
-        for i, col in enumerate(annot_columns):
-            shuffle_results = data[data['shuf'] == col.get("shuf", "")]
-            try:
-                # max_y = max(data[data['phase'] == 'train'][y].values)
-                local_max_y = max(shuffle_results[variable].values)
-            except ValueError:
-                local_max_y = high_score
-            try:
-                y_pval = max(max(shuffle_results[variable].values), max(actual_results)) + gap
-            except ValueError:
-                y_pval = high_score + gap
-            try:
-                t, p = ttest_ind(actual_results, shuffle_results[variable].values)
-                # print("    plotting, full p = {}".format(p))
-                p_annotation = p_string(p, use_asterisks=False)
-            except TypeError:
-                p_annotation = "p N/A"
-
-            # y_pline = y_pval + 0.01 + (gap * i)
-            y_pline = global_max_y + 0.01 + (i * gap)
-            if i > 0:
-                ax.hlines(y_pline, 0.0, col['xo'], colors='gray', linewidth=1)
-                ax.vlines(0.0, y_pval, y_pline, colors='gray', linewidth=1)
-                ax.vlines(col['xo'], local_max_y + gap, y_pline, colors='gray', linewidth=1)
-                ax.text(gap + (i * 0.01), y_pline + 0.01, p_annotation, ha='left', va='bottom')
-    elif orientation == "h":
-        for i, col in enumerate(annot_columns):
-            shuffle_results = data[data['shuf'] == col['shuf']]
-            try:
-                local_min_x = min(shuffle_results[variable].values)
-            except ValueError:
-                local_min_x = 0
-            try:
-                local_mean = np.mean(shuffle_results[variable].values)
-                local_n = int(np.mean(shuffle_results['n'].values))
-            except ValueError:
-                local_mean = 0
-                local_n = 0
-
-            s = "mean {:,.0f} (top {:,.0f})".format(local_mean, local_n - local_mean)
-            ax.text(local_min_x - 500, i, s, ha='right', va='center')
-
-    return ax
 
 
 def plot_optimization_curve_with_overlaps(df, shuffles, title="Title", fig_size=(10, 10), y_min=None, y_max=None):
@@ -193,7 +36,7 @@ def plot_optimization_curve_with_overlaps(df, shuffles, title="Title", fig_size=
     """ Plot the first panel, rising lines representing rising Mantel correlations as probes are dropped. """
 
     fig, ax_curve = plot.push_plot(
-        [curve_properties(df, shuf) for shuf in shuffles[::-1]],
+        [curve_properties(df, shuf, palette="colorblind") for shuf in shuffles[::-1]],
         label_keys=['shuf'], fig_size=fig_size, title="", plot_overlaps=False,
     )
     # The top of the plot must be at least 0.25 higher than the highest value to make room for p-values.
@@ -318,7 +161,7 @@ def plot_fig_2(df, shuffles, title=None, fig_size=(8, 8), y_min=None, y_max=None
 
     """ Plot the first pane, rising lines representing rising Mantel correlations as probes are dropped. """
     fig, ax_curve = plot.push_plot(
-        [curve_properties(df, shuf) for shuf in shuffles[::-1]],
+        [curve_properties(df, shuf, palette="colorblind") for shuf in shuffles[::-1]],
         # title="Mantel correlation optimization outcomes" if title is None else title,
         label_keys=['shuf', ],
         fig_size=fig_size,
