@@ -257,6 +257,7 @@ class GroupedResultSummary(models.Model):
     parby = models.CharField(max_length=16)
     resample = models.CharField(max_length=16)  # 'whole', 'split-half', 'split-quarter'
     mask = models.CharField(max_length=32)
+    algo = models.CharField(max_length=12)
     num_reals = models.IntegerField(default=0)
     num_agnos = models.IntegerField(default=0)
     num_dists = models.IntegerField(default=0)

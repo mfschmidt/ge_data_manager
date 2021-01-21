@@ -184,10 +184,10 @@ def gather_results(pattern=None, glob_dict=None, data_root="/data", pr=None):
         print("Summary: ", s.to_json())
         s.save()
 
-        unique_groups = list(PushResult.objects.values("comp", "parby", "resample", "norm", "mask").distinct())
+        unique_groups = list(PushResult.objects.values("comp", "parby", "resample", "norm", "mask", "algo").distinct())
         for ug in unique_groups:
             results_in_group = PushResult.objects.filter(
-                comp=ug["comp"], parby=ug["parby"], resample=ug["resample"], mask=ug["mask"]
+                comp=ug["comp"], parby=ug["parby"], resample=ug["resample"], mask=ug["mask"], algo=ug["algo"],
             )
             # TODO: Add StatusCounts model  (for each GroupedResultSummary)
             if ug.get("resample", "") == "split-half":
@@ -202,15 +202,16 @@ def gather_results(pattern=None, glob_dict=None, data_root="/data", pr=None):
                 summary_date=django_timezone.now(),
                 sourcedata=build_descriptor(
                     ug.get("comp", ""), ug.get("parby", ""), ug.get("mask", ""),  # splby and parby interchangeable here
-                    ug.get("norm", ""), split, level="long",
+                    ug.get("norm", ""), split, algo=ug.get("algo", "smrt"), level="long",
                 ),
                 descriptor=build_descriptor(
                     ug.get("comp", ""), ug.get("parby", ""), ug.get("mask", ""),  # splby and parby interchangeable here
-                    ug.get("norm", ""), split, level="short",
+                    ug.get("norm", ""), split, algo=ug.get("algo", "smrt"), level="short",
                 ),
                 comp=ug['comp'],
                 parby=ug['parby'],
                 mask=ug['mask'],
+                algo=ug["algo"],
                 resample=ug["resample"],
                 num_reals=results_in_group.filter(shuf="none").count(),
                 num_agnos=results_in_group.filter(shuf="agno").count(),
