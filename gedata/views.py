@@ -62,7 +62,7 @@ class NewInventoryView(generic.ListView):
 
     # Order by reverse comp (hcp, then fn), reverse pby&sby (ww, gg), reverse split (4*, then 2*)
     # Just coincidentally, -shuf works for ('none', 'dist', 'be04', 'agno') but may break later and require more code.
-    ordering = ['-comp', 'resample', '-splby', 'mask', '-shuf', 'split', 'seed']
+    ordering = ['-comp', '-algo', 'resample', '-splby', 'mask', '-shuf', 'split', 'seed']
 
     # Returns self.object_list to the template.
 

@@ -140,11 +140,11 @@ class PushResult(models.Model):
         # Finally, put it all into a model for storage in the database.
         self.sourcedata = build_descriptor(
             self.result.get("comp", ""), self.result.get("splby", ""), self.result.get("mask", ""),
-            self.result.get("norm", ""), split, level="long",
+            self.result.get("norm", ""), split, algo=self.result.get("algo", "smrt"), level="long",
         )
         self.descriptor = build_descriptor(
             self.result.get("comp", ""), self.result.get("splby", ""), self.result.get("mask", ""),
-            self.result.get("norm", ""), split, level="short",
+            self.result.get("norm", ""), split, algo=self.result.get("algo", "smrt"), level="short",
         )
         self.resample = self.result.get("resample", "")
         self.json_path = os.path.join(self.result['path'], self.result['json_file'])
