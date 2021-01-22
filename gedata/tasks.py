@@ -71,7 +71,7 @@ def interpret_descriptor(descriptor):
         'parby': "glasser" if descriptor[3].lower() == "g" else "wellid",
         'splby': "glasser" if descriptor[4].lower() == "g" else "wellid",
         'mask': descriptor[5:7],
-        'algo': 'once' if descriptor[7] == "o" else "smrt",
+        'algo': {"o": "once", "s": "smrt", "f": "full", "l": "leon", "_": "unkn", "-": "unkn"}[descriptor[7]],
         'norm': 'srs' if ((len(descriptor) > 8) and (descriptor[8] == "s")) else "none",
         'xval': descriptor[9] if len(descriptor) > 9 else '0',
         'phase': 'train',
