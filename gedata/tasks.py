@@ -47,7 +47,7 @@ def tz_aware_file_mtime(path):
 
 def glob_str_from_keys(
         pygest_data="/data",
-        sub="*", hem="*", samp="*", prob="*", parby="*", splby="*", batch="train00*",
+        sub="*", hem="*", samp="*", prob="*", parby="*", splby="*", batch="train", split_pad="00*",
         tgt="*", algo="*", shuf="*", comp="*", mask="*", norm="*", adj="*"
 ):
     """ Use BIDS keys and values to generate a globbable string
@@ -57,7 +57,7 @@ def glob_str_from_keys(
         pygest_data,
         "derivatives",
         "sub-{}_hem-{}_samp-{}_prob-{}".format(sub, hem, samp, prob),
-        "parby-{}_splby-{}_batch-{}".format(parby, splby, batch),
+        "parby-{}_splby-{}_batch-{}{}".format(parby, splby, batch, split_pad),
         "tgt-{}_algo-{}_shuf-{}".format(tgt, algo, shuf),
         "sub-{}_comp-{}_mask-{}_norm-{}_adj-{}*.tsv".format(sub, comp, mask, norm, adj),
     ))
@@ -75,7 +75,7 @@ def interpret_descriptor(descriptor):
         'norm': 'srs' if ((len(descriptor) > 8) and (descriptor[8] == "s")) else "none",
         'xval': descriptor[9] if len(descriptor) > 9 else '0',
         'phase': 'train',
-        'zero_pad': '00',
+        'split_pad': '*',
         'opposite_phase': 'test',
     }
 
@@ -93,16 +93,19 @@ def interpret_descriptor(descriptor):
     if rdict['xval'] == '1':
         split_min = 100
         split_max = 199
+        rdict["split_pad"] = "001*"
     if rdict['xval'] == '2':
         split_min = 200
         split_max = 299
+        rdict["split_pad"] = "002*"
     elif rdict['xval'] == '4':
         split_min = 400
         split_max = 499
+        rdict["split_pad"] = "004*"
     elif rdict['xval'] in ['_', '-', '0', ]:
         split_max = 0
         rdict["phase"] = "whole"
-        rdict["zero_pad"] = ""
+        rdict["split_pad"] = ""
 
     rdict['query_set'] = PushResult.objects.filter(
         samp="glasser", prob="fornito", split__gte=split_min, split__lte=split_max,
@@ -116,14 +119,14 @@ def interpret_descriptor(descriptor):
     rdict['glob_mask'] = "none" if rdict['mask'] == "00" else rdict['mask']
     rdict['glob_pattern'] = os.path.join(
         "derivatives", "sub-all_hem-A_samp-glasser_prob-fornito",
-        "parby-{parby}_splby-{splby}_batch-{phase}{zero_pad}{xval}*",
+        "parby-{parby}_splby-{splby}_batch-{phase}{split_pad}",
         "tgt-max_algo-{algo}_shuf-*",
         "sub-all_comp-{comp}_mask-{glob_mask}_norm-{norm}_adj-none*.tsv"
     ).format(**rdict)
     rdict['glob_dict'] = {
         "sub": "all", "hem": "A", "samp": "glasser", "prob": "fornito",
         "parby": rdict["parby"], "splby": rdict["splby"],
-        "batch": rdict["phase"] + rdict["zero_pad"] + rdict["xval"] + "*",
+        "batch": rdict["phase"] + rdict["split_pad"],
         "tgt": "max", "algo": rdict["algo"], "shuf": "*",
         "comp": rdict["comp"], "mask": rdict["glob_mask"], "norm": rdict["norm"], "adj": "none",
     }
@@ -323,6 +326,9 @@ def test_score(tsv_file, base_path='/data', own_expr=False, mask='none', probe_s
         batch = bids_val("batch", tsv_file).replace('train', 'test')
     elif (own_expr & ('batch-train' in tsv_file)) | ((not own_expr) & ('batch-test' in tsv_file)):
         batch = bids_val("batch", tsv_file).replace('test', 'train')
+    else:
+        # For 'whole' optimizations, there is no test set.
+        return 0.0
 
     # Figure out where to get data, based on which score we want.
     expr_file = os.path.join(

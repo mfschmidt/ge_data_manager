@@ -156,26 +156,30 @@ def describe_three_relevant_overlaps(relevant_results, phase, threshold):
 
     for which_phase in ["train", "test", ]:
         phased_results = unshuffled_results[unshuffled_results['phase'] == which_phase]
-        if len(phased_results) > 0:
+        if len(phased_results) > 1:
             print("  Overlap between {} random ({}) halves, @{} = {:0.1%}; kendall tau is {:0.03}".format(
                 len(phased_results), phase, threshold,
                 algorithms.pct_similarity(list(phased_results['path']), map_probes_to_genes_first=False, top=threshold),
                 algorithms.kendall_tau(list(phased_results['path']))
             ))
         else:
-            print("  No {} results for overlap or kendall tau calculations @{}.".format(phase, threshold))
+            print("  {}} {} results for overlap or kendall tau calculations @{}.".format(
+                len(phased_results), phase, threshold
+            ))
 
     acrosses = []
     for t in unshuffled_results[unshuffled_results['phase'] == 'train']['path']:
         comps = [t, t.replace('train', 'test'), ]
         comps = [f for f in comps if os.path.isfile(f)]
-        if len(comps) > 0:
+        if len(comps) > 1:
             olap = algorithms.pct_similarity(comps, map_probes_to_genes_first=False, top=threshold)
             acrosses.append(olap)
             # print("    {:0.2%}% - {}".format(olap, t))
+
     print("  Overlap between each direct train-vs-test pair @{} = {:0.1%}".format(
-        threshold, mean(acrosses)
+        threshold, mean(acrosses) if len(acrosses) > 1 else 0.0
     ))
+
     return unshuffled_results
 
 
