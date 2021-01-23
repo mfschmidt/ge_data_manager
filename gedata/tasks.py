@@ -71,10 +71,11 @@ def interpret_descriptor(descriptor):
         'parby': "glasser" if descriptor[3].lower() == "g" else "wellid",
         'splby': "glasser" if descriptor[4].lower() == "g" else "wellid",
         'mask': descriptor[5:7],
-        'algo': {"o": "once", "s": "smrt", "f": "full", "l": "leon", "_": "unkn", "-": "unkn"}[descriptor[7]],
+        'algo': {"o": "once", "s": "smrt", "l": "leon", "_": "unkn", "-": "unkn"}[descriptor[7]],
         'norm': 'srs' if ((len(descriptor) > 8) and (descriptor[8] == "s")) else "none",
         'xval': descriptor[9] if len(descriptor) > 9 else '0',
         'phase': 'train',
+        'zero_pad': '00',
         'opposite_phase': 'test',
     }
 
@@ -89,12 +90,20 @@ def interpret_descriptor(descriptor):
     # Splits in the 200's are split-halves; 400's are split-quarters.
     split_min = 0
     split_max = 999
+    if rdict['xval'] == '1':
+        split_min = 100
+        split_max = 199
     if rdict['xval'] == '2':
         split_min = 200
         split_max = 299
-    if rdict['xval'] == '4':
+    elif rdict['xval'] == '4':
         split_min = 400
         split_max = 499
+    elif rdict['xval'] in ['_', '-', '0', ]:
+        split_max = 0
+        rdict["phase"] = "whole"
+        rdict["zero_pad"] = ""
+
     rdict['query_set'] = PushResult.objects.filter(
         samp="glasser", prob="fornito", split__gte=split_min, split__lte=split_max,
         algo=rdict['algo'], comp=rdict['comp'], parby=rdict['parby'], splby=rdict['splby'],
@@ -102,18 +111,19 @@ def interpret_descriptor(descriptor):
         batch__startswith=rdict['phase']
     )
 
-    rdict['n'] = rdict['query_set'].count()
+    rdict['n'] = (rdict['query_set']).count()
     # Files are named with mask-none rather than mask-00, so tweak that key
     rdict['glob_mask'] = "none" if rdict['mask'] == "00" else rdict['mask']
     rdict['glob_pattern'] = os.path.join(
         "derivatives", "sub-all_hem-A_samp-glasser_prob-fornito",
-        "parby-{parby}_splby-{splby}_batch-{phase}00{xval}*",
+        "parby-{parby}_splby-{splby}_batch-{phase}{zero_pad}{xval}*",
         "tgt-max_algo-{algo}_shuf-*",
         "sub-all_comp-{comp}_mask-{glob_mask}_norm-{norm}_adj-none*.tsv"
     ).format(**rdict)
     rdict['glob_dict'] = {
         "sub": "all", "hem": "A", "samp": "glasser", "prob": "fornito",
-        "parby": rdict["parby"], "splby": rdict["splby"], "batch": rdict["phase"] + "00" + rdict["xval"] + "*",
+        "parby": rdict["parby"], "splby": rdict["splby"],
+        "batch": rdict["phase"] + rdict["zero_pad"] + rdict["xval"] + "*",
         "tgt": "max", "algo": rdict["algo"], "shuf": "*",
         "comp": rdict["comp"], "mask": rdict["glob_mask"], "norm": rdict["norm"], "adj": "none",
     }
@@ -195,7 +205,7 @@ def gather_results(pattern=None, glob_dict=None, data_root="/data", pr=None):
             elif ug.get("resample", "") == "split-quarter":
                 split = 499
             elif ug.get("resample", "") == "whole":
-                split = 100
+                split = 0
             else:
                 split = 0
             g = GroupedResultSummary(

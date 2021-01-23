@@ -126,13 +126,13 @@ class PushResult(models.Model):
         elif "batch-train" in self.result['path']:
             split_key = "batch-train"
         else:
-            split_key = "batch-"
+            split_key = "batch-"  # should only happen for batch-whole, which will return 0 for the split
         split = extract_seed(os.path.join(self.result['path'], self.result['tsv_file']), split_key)
         if 200 <= split <= 299:
             self.result['resample'] = "split-half"
         elif 400 <= split <= 499:
             self.result['resample'] = "split-quarter"
-        elif split == 100:
+        elif split == 0:
             self.result['resample'] = "whole"
         else:
             self.result['resample'] = "error"
