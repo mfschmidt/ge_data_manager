@@ -163,7 +163,7 @@ def describe_three_relevant_overlaps(relevant_results, phase, threshold):
                 algorithms.kendall_tau(list(phased_results['path']))
             ))
         else:
-            print("  {}} {} results for overlap or kendall tau calculations @{}.".format(
+            print("  {} {} results for overlap or kendall tau calculations @{}.".format(
                 len(phased_results), phase, threshold
             ))
 
